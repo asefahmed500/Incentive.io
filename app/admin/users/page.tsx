@@ -31,7 +31,7 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { useForm } from "react-hook-form";
+import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
@@ -136,6 +136,12 @@ export default function AdminUsers() {
                     Loading...
                   </TableCell>
                 </TableRow>
+              ) : users.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground">
+                    No users found
+                  </TableCell>
+                </TableRow>
               ) : users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.name}</TableCell>
@@ -148,44 +154,44 @@ export default function AdminUsers() {
                       {user.isActive ? "active" : "inactive"}
                     </Badge>
                   </TableCell>
-                  <TableCell>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={async () => {
-                          await toggleUserStatus(user.id);
+                  <TableCell className="flex gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        await toggleUserStatus(user.id);
+                        fetchUsers();
+                      }}
+                    >
+                      {user.isActive ? (
+                        <ShieldOff className="h-4 w-4 text-red-500" />
+                      ) : (
+                        <Shield className="h-4 w-4 text-green-500" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={async () => {
+                        if (confirm("Reset password to 'Password123'? This cannot be undone.")) {
+                          await resetPassword({ userId: user.id, newPassword: "Password123" });
                           fetchUsers();
-                        }}
-                      >
-                        {user.isActive ? (
-                          <ShieldOff className="h-4 w-4 text-red-500" />
-                        ) : (
-                          <Shield className="h-4 w-4 text-green-500" />
-                        )}
-                      </Button>
-                      <Button 
-                        variant="ghost" 
-                        size="sm"
-                        onClick={async () => {
-                          if (confirm("Reset password to 'Password123'? This cannot be undone.")) {
-                            await resetPassword({ userId: user.id, newPassword: "Password123" });
-                            fetchUsers();
-                          }
-                        }}
-                      >
-                        <RotateCcw className="h-4 w-4" />
-                      </Button>
-                      <Button variant="ghost" size="sm" 
-                        onClick={async () => {
-                          if (confirm("Delete this user? This cannot be undone.")) {
-                            await deleteUser(user.id);
-                            fetchUsers();
-                          }
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </TableCell>
+                        }
+                      }}
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                    </Button>
+                    <Button variant="ghost" size="sm"
+                      onClick={async () => {
+                        if (confirm("Delete this user? This cannot be undone.")) {
+                          await deleteUser(user.id);
+                          fetchUsers();
+                        }
+                      }}
+                    >
+                      Delete
+                    </Button>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
@@ -198,24 +204,26 @@ export default function AdminUsers() {
 
 function UserForm({ onSuccess }: { onSuccess: () => void }) {
   const [isPending, startTransition] = useTransition();
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { register, handleSubmit, control, formState: { errors } } = useForm({
     resolver: zodResolver(userSchema),
     defaultValues: {
       role: "salesExecutive",
     },
   });
 
-  const onSubmit = async (data: any) => {
-    const result = await createUser({
-      name: data.name,
-      email: data.email,
-      password: data.password,
-      role: data.role,
-      phone: data.phone,
+  const onSubmit = async (data: z.infer<typeof userSchema>) => {
+    startTransition(async () => {
+      const result = await createUser({
+        name: data.name,
+        email: data.email,
+        password: data.password || "TempPass123!",
+        role: data.role,
+        phone: data.phone,
+      });
+      if (result.success) {
+        onSuccess();
+      }
     });
-    if (result.success) {
-      onSuccess();
-    }
   };
 
   return (
@@ -223,32 +231,39 @@ function UserForm({ onSuccess }: { onSuccess: () => void }) {
       <div>
         <Label htmlFor="name">Name</Label>
         <Input id="name" {...register("name")} />
-        {errors.name && <p className="text-sm text-red-500">{errors.name.message as string}</p>}
+        {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
       </div>
       <div>
         <Label htmlFor="email">Email</Label>
         <Input id="email" type="email" {...register("email")} />
-        {errors.email && <p className="text-sm text-red-500">{errors.email.message as string}</p>}
+        {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
       </div>
       <div>
         <Label htmlFor="password">Password</Label>
         <Input id="password" type="password" {...register("password")} />
-        {errors.password && <p className="text-sm text-red-500">{errors.password.message as string}</p>}
+        {errors.password && <p className="text-sm text-red-500">{errors.password.message}</p>}
       </div>
       <div>
         <Label htmlFor="role">Role</Label>
-        <Select>
-          <SelectTrigger>
-            <SelectValue {...register("role")} />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="salesExecutive">Sales Executive</SelectItem>
-            <SelectItem value="salesManager">Sales Manager</SelectItem>
-            <SelectItem value="accountant">Accountant</SelectItem>
-            <SelectItem value="finance">Finance</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-          </SelectContent>
-        </Select>
+        <Controller
+          name="role"
+          control={control}
+          render={({ field }) => (
+            <Select onValueChange={field.onChange} defaultValue={field.value}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select role" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="salesExecutive">Sales Executive</SelectItem>
+                <SelectItem value="salesManager">Sales Manager</SelectItem>
+                <SelectItem value="accountant">Accountant</SelectItem>
+                <SelectItem value="finance">Finance</SelectItem>
+                <SelectItem value="admin">Admin</SelectItem>
+              </SelectContent>
+            </Select>
+          )}
+        />
+        {errors.role && <p className="text-sm text-red-500">{errors.role.message}</p>}
       </div>
       <div>
         <Label htmlFor="phone">Phone</Label>
