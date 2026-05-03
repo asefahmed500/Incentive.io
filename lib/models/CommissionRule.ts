@@ -9,6 +9,7 @@ export interface ICommissionRule extends Document {
   isActive: boolean;
   validFrom?: Date;
   validTo?: Date;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -23,9 +24,13 @@ const CommissionRuleSchema = new Schema<ICommissionRule>(
     isActive: { type: Boolean, default: true },
     validFrom: { type: Date },
     validTo: { type: Date },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );
 
-const CommissionRule = mongoose.models.CommissionRule || mongoose.model<ICommissionRule>("CommissionRule", CommissionRuleSchema);
-export default CommissionRule;
+CommissionRuleSchema.index({ isActive: 1, priority: -1 });
+CommissionRuleSchema.index({ categoryId: 1 });
+CommissionRuleSchema.index({ targetPercentageFrom: 1, targetPercentageTo: 1 });
+
+export default mongoose.models.CommissionRule || mongoose.model<ICommissionRule>("CommissionRule", CommissionRuleSchema);

@@ -7,7 +7,8 @@ import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
 import CommissionRule from "@/lib/models/CommissionRule";
 import { sendNotificationEmail } from "@/lib/email";
-import { notifyManagerApproved, notifyManagerRejected, notifyAccountantProcessed, notifyFinanceApproved, notifyFinanceRejected } from "@/lib/actions/notification.actions";
+import { notifyManagerApproved, notifyManagerRejected, notifyAccountantProcessed, notifyFinanceApproved } from "@/lib/actions/notification.actions";
+import { logAudit } from "@/lib/actions/audit.actions";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -40,16 +41,19 @@ export async function getPendingManagerApprovals() {
   const records = await SalesRecord.find({ status: "Pending_Manager" })
     .populate("managerId", "name")
     .lean();
-  
-  return records.map((r) => ({
-    id: r._id.toString(),
-    employeeName: r.employeeName,
-    companyName: r.companyName,
-    productCount: r.products.length,
-    totalAmount: r.products.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0),
-    commission: r.calculatedCommission,
-    createdAt: r.createdAt,
-  }));
+
+  return records.map((r) => {
+    const totalAmount = r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0);
+    return {
+      id: r._id.toString(),
+      employeeName: r.employeeName,
+      companyName: r.companyName,
+      productCount: r.products.length,
+      totalAmount,
+      commission: r.calculatedCommission,
+      createdAt: r.createdAt,
+    };
+  });
 }
 
 export async function approveSale(id: string, paidBy?: string) {
@@ -58,24 +62,35 @@ export async function approveSale(id: string, paidBy?: string) {
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  const record = await SalesRecord.findById(id);
+  const record = await SalesRecord.findById(parsed.data.id);
   if (!record) return { error: "Record not found" };
-  
+
   if (record.status !== "Pending_Manager") {
     return { error: "Record is not pending manager approval" };
   }
-  
+
+  const previousStatus = record.status;
   record.status = "Pending_Accountant";
   record.approvalStatus = "Approved";
   record.approvedBy = record.managerId;
   record.approvedAt = new Date();
-  
+
   const commission = await calculateCommission(record);
   record.calculatedCommission = commission;
   record.commission = commission;
-  
+
   await record.save();
-  
+
+  await logAudit({
+    userId: record.managerId?.toString() || "",
+    userEmail: "",
+    userRole: "salesManager",
+    action: "APPROVE_SALE",
+    entity: "SalesRecord",
+    entityId: parsed.data.id,
+    details: { previousStatus, newStatus: "Pending_Accountant", commission },
+  });
+
   try {
     const employee = await User.findById(record.employeeId);
     if (employee?.email) {
@@ -104,52 +119,62 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  const record = await SalesRecord.findByIdAndUpdate(id, {
+  const record = await SalesRecord.findByIdAndUpdate(parsed.data.id, {
     status: "Draft",
     approvalStatus: "Rejected",
-    rejectionReason: reason,
-  });
-  
+    rejectionReason: parsed.data.reason,
+  }, { new: true });
+
   if (record) {
+    await logAudit({
+      userId: record.managerId?.toString() || "",
+      userEmail: "",
+      userRole: rejectedBy === "finance" ? "finance" : "salesManager",
+      action: "REJECT_SALE",
+      entity: "SalesRecord",
+      entityId: parsed.data.id,
+      details: { reason: parsed.data.reason, rejectedBy },
+    });
+
     try {
       const employee = await User.findById(record.employeeId);
       if (employee?.email) {
-        const rejectorLabel = rejectedBy === "finance" ? "Finance" : "Manager";
+        const rejectorLabel = parsed.data.rejectedBy === "finance" ? "Finance" : "Manager";
         await sendNotificationEmail(
           employee.email,
           "Sale Rejected",
-          `Your sale for <strong>${record.companyName}</strong> has been rejected by ${rejectorLabel}. Reason: ${reason}`
+          `Your sale for <strong>${record.companyName}</strong> has been rejected by ${rejectorLabel}. Reason: ${parsed.data.reason}`
         );
       }
     } catch (emailError) {
       console.error("Failed to send rejection email:", emailError);
     }
     try {
-      await notifyManagerRejected(record.employeeId.toString(), record.companyName, reason);
+      await notifyManagerRejected(record.employeeId.toString(), record.companyName, parsed.data.reason);
     } catch (notifError) {
       console.error("Failed to send in-app notification:", notifError);
     }
   }
-  
+
   return { success: true };
 }
 
 export async function getPendingAccountantApprovals() {
   await connectToDatabase();
-  const records = await SalesRecord.find({ 
+  const records = await SalesRecord.find({
     status: "Pending_Accountant",
     approvalStatus: "Approved"
   })
     .populate("employeeId", "name")
     .lean();
-  
+
   return records.map((r) => ({
     id: r._id.toString(),
-    employeeId: (r.employeeId as any)?._id?.toString(),
-    employeeName: (r.employeeId as any)?.name || r.employeeName,
+    employeeId: (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString(),
+    employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
     companyName: r.companyName,
     products: r.products,
-    totalAmount: r.products.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0),
+    totalAmount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0),
     commission: r.calculatedCommission,
     taxEnabled: r.taxEnabled,
     vatEnabled: r.vatEnabled,
@@ -181,41 +206,51 @@ export async function processByAccountant({
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  const record = await SalesRecord.findById(id);
+  const record = await SalesRecord.findById(parsed.data.id);
   if (!record) return { error: "Record not found" };
-  
+
   if (record.status !== "Pending_Accountant" || record.approvalStatus !== "Approved") {
     return { error: "Record is not pending accountant processing" };
   }
-  
-  const grossAmount = record.products.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0);
-  
+
+  const grossAmount = record.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0);
+
   let taxAmount = 0;
-  if (taxRate && !record.taxEnabled) {
-    taxAmount = grossAmount * (taxRate / 100);
-    record.taxRate = taxRate;
+  if (parsed.data.taxRate && !record.taxEnabled) {
+    taxAmount = grossAmount * (parsed.data.taxRate / 100);
+    record.taxRate = parsed.data.taxRate;
     record.taxAmount = taxAmount;
   }
-  
+
   let vatAmount = 0;
-  if (vatRate && !record.vatEnabled) {
-    vatAmount = grossAmount * (vatRate / 100);
-    record.vatRate = vatRate;
+  if (parsed.data.vatRate && !record.vatEnabled) {
+    vatAmount = grossAmount * (parsed.data.vatRate / 100);
+    record.vatRate = parsed.data.vatRate;
     record.vatAmount = vatAmount;
   }
-  
-  record.eoBpAmount = eoBpAmount || 0;
-  record.eoBpReason = eoBpReason || "";
-  
-  const netSales = grossAmount - taxAmount - vatAmount - (eoBpAmount || 0);
+
+  record.eoBpAmount = parsed.data.eoBpAmount || 0;
+  record.eoBpReason = parsed.data.eoBpReason || "";
+
+  const netSales = grossAmount - taxAmount - vatAmount - (parsed.data.eoBpAmount || 0);
   record.netSales = netSales;
-  
+
   record.status = "Pending_Finance";
   record.accountantStatus = "Approved";
   record.processedAt = new Date();
-  
+
   await record.save();
-  
+
+  await logAudit({
+    userId: "",
+    userEmail: "",
+    userRole: "accountant",
+    action: "PROCESS_SALE",
+    entity: "SalesRecord",
+    entityId: parsed.data.id,
+    details: { eoBpAmount: parsed.data.eoBpAmount, taxRate: parsed.data.taxRate, vatRate: parsed.data.vatRate, netSales },
+  });
+
   try {
     const financeUsers = await User.find({ role: "finance", isActive: true });
     for (const financeUser of financeUsers) {
@@ -244,19 +279,19 @@ export async function processByAccountant({
 
 export async function getPendingFinanceApprovals() {
   await connectToDatabase();
-  const records = await SalesRecord.find({ 
+  const records = await SalesRecord.find({
     status: "Pending_Finance",
     accountantStatus: "Approved"
   })
     .populate("employeeId", "name")
     .lean();
-  
+
   return records.map((r) => ({
     id: r._id.toString(),
-    employeeId: (r.employeeId as any)?._id?.toString(),
-    employeeName: (r.employeeId as any)?.name || r.employeeName,
+    employeeId: (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString(),
+    employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
     companyName: r.companyName,
-    netSales: r.netSales || r.products.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0),
+    netSales: r.netSales || r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0),
     commission: r.calculatedCommission,
     eoBpAmount: r.eoBpAmount,
     eoBpReason: r.eoBpReason,
@@ -270,45 +305,55 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  const record = await SalesRecord.findById(id);
+  const record = await SalesRecord.findById(parsed.data.id);
   if (!record) return { error: "Record not found" };
-  
+
   if (record.status !== "Pending_Finance" || record.accountantStatus !== "Approved") {
     return { error: "Record is not pending finance approval" };
   }
   if (record.paymentStatus === "Paid") {
     return { error: "Record has already been paid" };
   }
-  
+
   record.status = "Approved";
   record.financeStatus = "Approved";
   record.finalApprovedAt = new Date();
   record.paymentStatus = "Paid";
   record.isPaid = true;
   record.paymentDate = new Date();
-  record.paidBy = new mongoose.Types.ObjectId(paidBy);
-  
+  record.paidBy = new mongoose.Types.ObjectId(parsed.data.paidBy);
+
   await record.save();
-  
+
+  await logAudit({
+    userId: parsed.data.paidBy,
+    userEmail: "",
+    userRole: "finance",
+    action: "FINAL_APPROVE_SALE",
+    entity: "SalesRecord",
+    entityId: parsed.data.id,
+    details: { commission: record.commission || record.calculatedCommission, netSales: record.netSales },
+  });
+
   try {
     const { markCommissionPaid } = await import("@/lib/actions/wallet.actions");
     await markCommissionPaid({
       employeeId: record.employeeId.toString(),
       amount: record.commission || record.calculatedCommission,
-      salesRecordId: id,
-      paidBy,
+      salesRecordId: parsed.data.id,
+      paidBy: parsed.data.paidBy,
     });
   } catch (walletError) {
     console.error("Failed to credit wallet:", walletError);
   }
-  
+
   try {
     const { checkEligibility: checkEmpEligibility } = await import("@/lib/actions/commission.actions");
     await checkEmpEligibility(record.employeeId.toString());
   } catch (eligError) {
     console.error("Failed to check eligibility:", eligError);
   }
-  
+
   try {
     const employee = await User.findById(record.employeeId);
     if (employee?.email) {
@@ -318,7 +363,7 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
         `Your sale for <strong>${record.companyName}</strong> has been final approved! Commission: ৳${(record.commission || record.calculatedCommission).toLocaleString()}`
       );
     }
-    
+
     if (record.managerId) {
       const manager = await User.findById(record.managerId);
       if (manager?.email) {
@@ -347,33 +392,47 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
   return { success: true };
 }
 
-async function calculateCommission(record: any) {
-  const employee = await User.findById(record.employeeId);
-  
+interface ProductType {
+  unitPrice: number;
+  quantity: number;
+}
+
+interface SalesRecordType {
+  products: ProductType[];
+  employeeId: mongoose.Types.ObjectId;
+}
+
+interface UserType {
+  targetAmount: number;
+}
+
+async function calculateCommission(record: SalesRecordType): Promise<number> {
+  const employee = await User.findById(record.employeeId) as UserType | null;
+
   if (!employee || !employee.targetAmount) return 0;
-  
-  const currentSaleAmount = record.products.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0);
-  
+
+  const currentSaleAmount = record.products.reduce((sum: number, p: ProductType) => sum + p.unitPrice * p.quantity, 0);
+
   const allApprovedSales = await SalesRecord.find({
     employeeId: record.employeeId,
     financeStatus: "Approved",
   }).lean();
-  
-  const cumulativeSales = allApprovedSales.reduce((sum: number, r: any) => {
-    return sum + r.products.reduce((s: number, p: any) => s + p.unitPrice * p.quantity, 0);
+
+  const cumulativeSales = allApprovedSales.reduce((sum: number, r: { products: ProductType[] }) => {
+    return sum + r.products.reduce((s: number, p: ProductType) => s + p.unitPrice * p.quantity, 0);
   }, 0);
-  
+
   const totalSales = cumulativeSales + currentSaleAmount;
   const achievement = (totalSales / employee.targetAmount) * 100;
-  
+
   const rule = await CommissionRule.findOne({
     targetPercentageFrom: { $lte: achievement },
     targetPercentageTo: { $gte: achievement },
     isActive: true,
   }).sort({ priority: -1 });
-  
+
   if (!rule) return 0;
-  
+
   const commission = (currentSaleAmount * rule.commissionRate) / 100;
   return commission;
 }

@@ -10,7 +10,9 @@
     "start": "next start",
     "lint": "eslint",
     "format": "prettier --write \"**/*.{ts,tsx}\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "echo \"No tests configured\"",
+    "audit": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

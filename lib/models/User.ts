@@ -1,6 +1,6 @@
 import mongoose, { Schema, Document } from "mongoose";
 
-export interface IUser {
+export interface IUser extends Document {
   name: string;
   email: string;
   password: string;
@@ -13,6 +13,7 @@ export interface IUser {
   managerId?: mongoose.Types.ObjectId;
   targetAmount: number;
   targetPeriod?: string;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,8 +36,24 @@ const UserSchema = new Schema<IUser>(
     managerId: { type: Schema.Types.ObjectId, ref: "User" },
     targetAmount: { type: Number, default: 0 },
     targetPeriod: { type: String },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );
+
+UserSchema.index({ email: 1 });
+UserSchema.index({ employeeId: 1 });
+UserSchema.index({ role: 1 });
+UserSchema.index({ managerId: 1 });
+UserSchema.index({ teamId: 1 });
+UserSchema.index({ isActive: 1 });
+UserSchema.index({ deletedAt: 1 });
+
+UserSchema.pre("find", function () {
+  this.where({ deletedAt: null });
+});
+UserSchema.pre("findOne", function () {
+  this.where({ deletedAt: null });
+});
 
 export const User = mongoose.models.User || mongoose.model<IUser>("User", UserSchema);

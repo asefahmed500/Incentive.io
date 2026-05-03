@@ -38,6 +38,7 @@ export interface ISalesRecord extends Document {
   isPaid: boolean;
   paymentStatus: "Pending" | "Paid";
   paymentDate?: Date;
+  deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -87,8 +88,25 @@ const SalesRecordSchema = new Schema<ISalesRecord>(
     isPaid: { type: Boolean, default: false },
     paymentStatus: { type: String, enum: ["Pending", "Paid"], default: "Pending" },
     paymentDate: { type: Date },
+    deletedAt: { type: Date },
   },
   { timestamps: true }
 );
+
+SalesRecordSchema.index({ employeeId: 1 });
+SalesRecordSchema.index({ companyName: 1 });
+SalesRecordSchema.index({ status: 1 });
+SalesRecordSchema.index({ managerId: 1 });
+SalesRecordSchema.index({ financeStatus: 1, employeeId: 1 });
+SalesRecordSchema.index({ isPaid: 1 });
+SalesRecordSchema.index({ deletedAt: 1 });
+SalesRecordSchema.index({ createdAt: -1 });
+
+SalesRecordSchema.pre("find", function () {
+  this.where({ deletedAt: null });
+});
+SalesRecordSchema.pre("findOne", function () {
+  this.where({ deletedAt: null });
+});
 
 export const SalesRecord = mongoose.models.SalesRecord || mongoose.model<ISalesRecord>("SalesRecord", SalesRecordSchema);
