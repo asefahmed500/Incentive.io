@@ -1,4 +1,4 @@
-# incentiveio — Agent Guide
+# Incentive.io — Agent Guide
 
 Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, NextAuth v5, Tailwind CSS 4.
 
@@ -13,7 +13,7 @@ Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, 
 | Audit | `npm run audit` (typecheck + lint + test) |
 | Format | `npm run format` |
 
-**CRITICAL:** Always use `npm run build:webpack` — Mongoose native bindings fail with Turbopack (`npm run dev` uses turbopack, but webpack build is required for production).
+**CRITICAL:** Always use `npm run build:webpack` — Mongoose native bindings fail with Turbopack.
 
 ## Setup
 
@@ -33,6 +33,7 @@ Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, 
 8. **Wallet auto-credit** — `finalApproveByFinance` auto-credits wallet + calls `checkEligibility`
 9. **Approval guards** — `processByAccountant` checks `approvalStatus === "Approved"`; `finalApproveByFinance` checks `paymentStatus !== "Paid"`
 10. **Middleware allows through on DB failure** — caught and logged, requests proceed
+11. **App name** — Always "Incentive.io" (not "incentiveio" or "IncentiveIO")
 
 ## Architecture
 
@@ -78,7 +79,7 @@ All models have:
 
 ## Env Validation
 
-`lib/env.ts` — Zod schema validates all env vars on startup. Copy `.env.example` exactly; NEXTAUTH_SECRET must be ≥32 chars.
+`lib/env.ts` — Zod v4 schema validates all env vars on startup. Copy `.env.example` exactly; NEXTAUTH_SECRET must be ≥32 chars.
 
 ## Auth & RBAC
 
@@ -95,9 +96,10 @@ All models have:
 - `middleware.ts` — route guards for all 6 roles
 - `lib/mongodb.ts` — connection singleton with cache
 - `lib/email.ts` — nodemailer (ESM), all failures caught
-- `lib/env.ts` — env validation
+- `lib/env.ts` — env validation with Zod
 - `.github/workflows/audit.yml` — CI (typecheck + lint + test + build on every push)
 - `stores/auth.store.ts` — Zustand client-side auth mirror
+- `TODO_FEATURES.md` — step-by-step feature verification checklist
 
 ## Test Accounts
 
