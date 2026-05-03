@@ -1,28 +1,42 @@
-# incentiveio
+# incentiveio — Agent Guide
 
-Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, NextAuth v5.
+Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, NextAuth v5, Tailwind CSS 4.
 
 ## Commands
 
 | Task | Command |
 |------|---------|
 | Dev | `npm run dev` |
-| Build | `npm run build:webpack` |
+| Build (required) | `npm run build:webpack` |
 | Typecheck | `npm run typecheck` |
 | Lint | `npm run lint` |
+| Audit | `npm run audit` (typecheck + lint + test) |
 | Format | `npm run format` |
 
-**CRITICAL:** Use `npm run build:webpack` — Mongoose is a native Node module and fails with Turbopack.
+**CRITICAL:** Always use `npm run build:webpack` — Mongoose native bindings fail with Turbopack (`npm run dev` uses turbopack, but webpack build is required for production).
 
 ## Setup
 
-1. Copy `.env.example` → `.env.local`
-2. MongoDB must be running locally on `mongodb://localhost:27017/incentiveio`
+1. `cp .env.example .env.local`
+2. MongoDB must run at `mongodb://localhost:27017/incentiveio`
 3. `npm run dev` — falls back to port 3003+ if 3000 is busy
+
+## Critical Gotchas
+
+1. **Build** — `npm run build:webpack` NOT `next build`
+2. **Model exports** — All models use named exports (`export const User = ...`) EXCEPT `CommissionRule` (`export default`)
+3. **Auth pattern** — `export const { handlers, auth } = NextAuth(config)` in `lib/auth/auth.ts`; route handler: `export const GET = handlers.GET; export const POST = handlers.POST;`
+4. **Role names** — DB uses camelCase: `salesManager`, `salesExecutive` (NOT underscores/snake_case)
+5. **Notifications** — 30s polling via `notification-bell.tsx`; Socket.IO packages installed but NOT used
+6. **Email failures** — wrapped in try/catch, never block workflows
+7. **Commission calculation** — cumulative approved sales per employee (not just current sale)
+8. **Wallet auto-credit** — `finalApproveByFinance` auto-credits wallet + calls `checkEligibility`
+9. **Approval guards** — `processByAccountant` checks `approvalStatus === "Approved"`; `finalApproveByFinance` checks `paymentStatus !== "Paid"`
+10. **Middleware allows through on DB failure** — caught and logged, requests proceed
 
 ## Architecture
 
-### Role-based route structure
+### Role-based routes
 | Path | Role |
 |------|------|
 | `/admin/*` | admin |
@@ -37,42 +51,53 @@ Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, 
 Draft → Pending_Manager → Pending_Accountant → Pending_Finance → Approved
          (Manager)          (Accountant)          (Finance)
 ```
-Rejection at any stage returns to `Draft` with a reason.
+Rejection → `Draft` with `rejectionReason`.
 
-## Critical Gotchas
+## Data Layer (server actions)
 
-1. **Build command** — `npm run build:webpack` (NOT `next build`). Webpack is required for Mongoose native bindings.
-2. **Model exports** — All models use named exports (`export const User = ...`) EXCEPT `CommissionRule` which uses `export default`. Import accordingly.
-3. **Never use default imports on models** — `import { User }` not `import User from`.
-4. **Auth pattern** — `export const { handlers, auth } = NextAuth(config)` in `lib/auth/auth.ts`; route handler uses `export const GET = handlers.GET; export const POST = handlers.POST;`.
-5. **Role names** — DB uses camelCase: `salesManager`, `salesExecutive` (NOT underscores).
-6. **Middleware allows through on DB failure** — `checkDatabaseConnection` errors are caught and logged; requests proceed even if DB is down.
-7. **Notifications use polling** — 30-second polling via `notification-bell.tsx`. Socket.IO packages are installed but not used.
-8. **File uploads** — max 10MB, JPG/PNG/PDF only, stored at `public/uploads/sales-records/`.
-9. **Email failures never block** — all `sendEmail` calls are wrapped in try/catch with console.error only.
-10. **Commission calculation** — Uses cumulative approved sales per employee, not just the current sale amount.
-11. **Wallet credits on finance approval** — `finalApproveByFinance` auto-credits the employee's wallet and calls `checkEligibility`.
-12. **Approval actions have guards** — `processByAccountant` checks `approvalStatus === "Approved"`; `finalApproveByFinance` checks `paymentStatus !== "Paid"` before processing.
+All in `lib/actions/` — every action has Zod validation via `parsed.error.issues[0].message`.
 
-## Setup
+| File | Key functions |
+|------|--------------|
+| `user.actions.ts` | createUser, getUsers, updateUser, deleteUser, resetPassword, toggleUserStatus, getManagerForUser |
+| `sales.actions.ts` | createSalesRecord, submitSalesRecord, getSalesRecords, getSalesRecord, getSalesStats |
+| `approval.actions.ts` | approveSale, rejectSale, processByAccountant, finalApproveByFinance, getPending* |
+| `commission.actions.ts` | getCommissions, getCommissionsByEmployee, checkEligibility, create/update/deleteCommissionRule |
+| `notification.actions.ts` | createNotification, notifySaleSubmitted, notifyManagerApproved, notifyFinanceApproved, notifyCommissionEligible, notifyUserCreated |
+| `wallet.actions.ts` | getWallet, getOrCreateWallet, creditWallet, markCommissionPaid, getAllWallets, getWalletTransactions |
+| `audit.actions.ts` | logAudit, getAuditLogs |
+| `target.actions.ts` | getTargets, assignTarget, removeTarget |
 
-1. Copy `.env.example` → `.env.local`
-2. MongoDB must be running locally on `mongodb://localhost:27017/incentiveio`
-3. `npm run dev`
+## Models (9 total)
 
-## Key Directories
+All in `lib/models/`. `User`, `SalesRecord`, `Team`, `Category`, `Product`, `Wallet`, `AuditLog` use named exports; `CommissionRule` uses `export default`.
 
-```
-app/api/              # Route handlers
-app/{role}/           # Role-specific dashboards and pages
-lib/actions/          # Server actions (data layer)
-lib/models/           # 8 Mongoose models
-lib/auth/auth.ts      # NextAuth v5 config
-lib/email.ts          # Nodemailer (ESM)
-lib/mongodb.ts       # Mongoose connection
-lib/utils/export.ts  # CSV export utility
-stores/auth.store.ts  # Zustand client-side auth mirror
-```
+All models have:
+- `deletedAt` soft delete field + pre-find hooks (auto-filters deleted records)
+- Database indexes on frequently queried fields
+
+## Env Validation
+
+`lib/env.ts` — Zod schema validates all env vars on startup. Copy `.env.example` exactly; NEXTAUTH_SECRET must be ≥32 chars.
+
+## Auth & RBAC
+
+- NextAuth v5 JWT strategy, 60s session recheck via `session-recheck.tsx`
+- Middleware in `middleware.ts` validates role from JWT payload cookie
+- SuperAdmin (administrator) can access all role routes
+
+## Audit Logging
+
+`logAudit()` in `lib/actions/audit.actions.ts` records all state changes. Audit log entries include: userId, userEmail, userRole, action, entity, entityId, details, ipAddress, userAgent, createdAt.
+
+## Key Files
+
+- `middleware.ts` — route guards for all 6 roles
+- `lib/mongodb.ts` — connection singleton with cache
+- `lib/email.ts` — nodemailer (ESM), all failures caught
+- `lib/env.ts` — env validation
+- `.github/workflows/audit.yml` — CI (typecheck + lint + test + build on every push)
+- `stores/auth.store.ts` — Zustand client-side auth mirror
 
 ## Test Accounts
 
@@ -85,69 +110,15 @@ stores/auth.store.ts  # Zustand client-side auth mirror
 | iomaccountant@iomltd.com | IOMaccount123! | accountant |
 | iomfinance@iomltd.com | IOMfinance123! | finance |
 
-## Server Actions (data layer)
+## Tech Stack
 
-| File | Key functions |
-|------|--------------|
-| `lib/actions/user.actions.ts` | createUser, getUsers, updateUser, deleteUser, resetPassword, toggleUserStatus |
-| `lib/actions/sales.actions.ts` | createSalesRecord, submitSalesRecord, getSalesRecords, getSalesRecord, getSalesStats |
-| `lib/actions/approval.actions.ts` | approveSale, rejectSale, processByAccountant, finalApproveByFinance |
-| `lib/actions/commission.actions.ts` | getCommissions, getCommissionsByEmployee, checkEligibility, create/update/deleteCommissionRule |
-| `lib/actions/notification.actions.ts` | createNotification, getNotifications, notifySaleSubmitted, notifyManagerApproved, notifyFinanceApproved, notifyCommissionEligible |
-| `lib/actions/wallet.actions.ts` | getWallet, getOrCreateWallet, creditWallet, markCommissionPaid, getAllWallets, getWalletTransactions |
-| `lib/actions/category.actions.ts` | getCategories, createCategory, updateCategory, deleteCategory |
-| `lib/actions/product.actions.ts` | getProducts, createProduct, updateProduct, deleteProduct |
-| `lib/actions/team.actions.ts` | getTeams, createTeam, updateTeam, deleteTeam |
-| `lib/actions/target.actions.ts` | getTargets, assignTarget, removeTarget |
+- Next.js 16 (App Router), TypeScript 5.9 strict
+- MongoDB/Mongoose 9, NextAuth v5 beta
+- Tailwind CSS 4, shadcn/ui, Radix UI, Lucide icons
+- Zustand (client auth), Sonner (toasts), Zod v4 (validation)
+- bcryptjs, nodemailer, Socket.IO (installed but unused)
 
-## Models (8 total)
+## File Upload
 
-`User`, `SalesRecord`, `Team`, `Category`, `Product`, `CommissionRule`, `Wallet`, `AuditLog` — all in `lib/models/`.
-
-CommissionRule and AuditLog use `export default`; all others use named exports.
-
-## API Endpoints
-
-| Endpoint | Methods | Description |
-|----------|---------|-------------|
-| `/api/health` | GET | DB health check |
-| `/api/upload` | POST, DELETE | File upload/delete |
-| `/api/users` | GET, POST | User management |
-| `/api/categories` | GET, POST | Product categories |
-| `/api/products` | GET, POST | Products |
-| `/api/teams` | GET, POST | Teams |
-| `/api/commission-rules` | GET, POST | Commission rules |
-| `/api/sales-records` | GET, POST, PATCH | Sales records |
-| `/api/sales-records/[id]` | GET, PUT, DELETE | Individual record |
-| `/api/approvals/manager` | POST | Manager approve/reject |
-| `/api/approvals/accountant` | POST | Accountant process |
-| `/api/approvals/finance` | POST | Finance final approve |
-| `/api/commissions` | GET | Commissions |
-| `/api/notifications` | GET, PATCH | Notifications |
-| `/api/backups` | GET, POST, DELETE | Backup list/create/delete |
-| `/api/backups/restore` | GET, POST | Backup restore |
-| `/api/sync` | GET, POST | Database sync (commissions/targets/teams/wallets/eligibility/all) |
-| `/api/settings` | GET, PUT, POST | System settings |
-| `/api/audit-logs` | GET, POST | Audit logs |
-
-## Email Notifications
-
-All sent via `lib/email.ts` (ESM, nodemailer). Failures are caught and logged, never block workflows.
-
-| Event | Trigger | Recipient |
-|-------|---------|-----------|
-| SALE_SUBMITTED | Executive submits | Manager |
-| MANAGER_APPROVED | Manager approves | Executive |
-| MANAGER_REJECTED | Manager rejects | Executive |
-| ACCOUNTANT_PROCESSED | Accountant processes | Finance team |
-| FINANCE_APPROVED | Finance approves | Executive + Manager |
-| COMMISSION_ELIGIBLE | Achievement crosses 50% | Executive |
-| USER_CREATED | Admin creates user | New user |
-| PASSWORD_RESET | Admin resets password | User |
-
-## Config
-
-- TypeScript: strict mode, `moduleResolution: "bundler"`, `@/*` path alias
-- Tailwind CSS 4 with `@tailwindcss/postcss`
-- Prettier with `prettier-plugin-tailwindcss`
-- ESLint via `eslint-config-next`
+- Max 10MB per file, JPG/PNG/PDF only
+- Stored at `public/uploads/sales-records/`
