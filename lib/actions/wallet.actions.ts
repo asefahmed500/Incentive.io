@@ -1,25 +1,62 @@
 "use server";
 
+import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Wallet } from "@/lib/models/Wallet";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import mongoose from "mongoose";
 
+const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
+
+const getWalletSchema = objectIdSchema;
+const getOrCreateWalletSchema = objectIdSchema;
+const getAllWalletsSchema = z.object({});
+
+const creditWalletSchema = z.object({
+  employeeId: objectIdSchema,
+  amount: z.number().min(0, "Amount must be non-negative"),
+  salesRecordId: objectIdSchema.optional(),
+  description: z.string().min(1, "Description is required"),
+});
+
+const debitWalletSchema = z.object({
+  employeeId: objectIdSchema,
+  amount: z.number().min(0, "Amount must be non-negative"),
+  salesRecordId: objectIdSchema.optional(),
+  description: z.string().min(1, "Description is required"),
+});
+
+const markCommissionPaidSchema = z.object({
+  employeeId: objectIdSchema,
+  amount: z.number().min(0, "Amount must be non-negative"),
+  salesRecordId: objectIdSchema,
+  paidBy: objectIdSchema,
+});
+
+const getWalletTransactionsSchema = z.object({
+  employeeId: objectIdSchema,
+  limit: z.number().int().min(1).max(200).optional(),
+});
+
 export async function getWallet(employeeId: string) {
+  const parsed = getWalletSchema.safeParse(employeeId);
+  if (!parsed.success) return null;
   await connectToDatabase();
-  let wallet = await Wallet.findOne({ employeeId: new mongoose.Types.ObjectId(employeeId) }).lean();
+  let wallet = await Wallet.findOne({ employeeId: new mongoose.Types.ObjectId(parsed.data) }).lean();
   if (!wallet) {
-    wallet = await Wallet.findOne({ employeeId }).lean();
+    wallet = await Wallet.findOne({ employeeId: parsed.data }).lean();
   }
   return wallet;
 }
 
 export async function getOrCreateWallet(employeeId: string) {
+  const parsed = getOrCreateWalletSchema.safeParse(employeeId);
+  if (!parsed.success) return null;
   await connectToDatabase();
-  let wallet = await Wallet.findOne({ employeeId: new mongoose.Types.ObjectId(employeeId) }).lean();
+  let wallet = await Wallet.findOne({ employeeId: new mongoose.Types.ObjectId(parsed.data) }).lean();
   if (!wallet) {
     const newWallet = await Wallet.create({
-      employeeId: new mongoose.Types.ObjectId(employeeId),
+      employeeId: new mongoose.Types.ObjectId(parsed.data),
       balance: 0,
       pendingBalance: 0,
       totalEarned: 0,
@@ -42,11 +79,16 @@ export async function creditWallet({
   salesRecordId?: string;
   description: string;
 }) {
+  const parsed = creditWalletSchema.safeParse({ employeeId, amount, salesRecordId, description });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
-  const wallet = await getOrCreateWallet(employeeId);
-  const newBalance = wallet.balance + amount;
-  const newTotalEarned = wallet.totalEarned + amount;
-  const newPendingBalance = wallet.pendingBalance + amount;
+  const wallet = await getOrCreateWallet(parsed.data.employeeId);
+  if (!wallet) return { error: "Wallet not found" };
+  const newBalance = wallet.balance + parsed.data.amount;
+  const newTotalEarned = wallet.totalEarned + parsed.data.amount;
+  const newPendingBalance = wallet.pendingBalance + parsed.data.amount;
 
   await Wallet.findByIdAndUpdate(wallet._id, {
     balance: newBalance,
@@ -55,9 +97,9 @@ export async function creditWallet({
     $push: {
       transactions: {
         type: "credit",
-        amount,
-        salesRecordId: salesRecordId ? new mongoose.Types.ObjectId(salesRecordId) : undefined,
-        description,
+        amount: parsed.data.amount,
+        salesRecordId: parsed.data.salesRecordId ? new mongoose.Types.ObjectId(parsed.data.salesRecordId) : undefined,
+        description: parsed.data.description,
         balanceAfter: newBalance,
         createdAt: new Date(),
       },
@@ -78,10 +120,15 @@ export async function debitWallet({
   salesRecordId?: string;
   description: string;
 }) {
+  const parsed = debitWalletSchema.safeParse({ employeeId, amount, salesRecordId, description });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
-  const wallet = await getOrCreateWallet(employeeId);
-  const newBalance = wallet.balance - amount;
-  const newPendingBalance = wallet.pendingBalance - amount;
+  const wallet = await getOrCreateWallet(parsed.data.employeeId);
+  if (!wallet) return { error: "Wallet not found" };
+  const newBalance = wallet.balance - parsed.data.amount;
+  const newPendingBalance = wallet.pendingBalance - parsed.data.amount;
 
   await Wallet.findByIdAndUpdate(wallet._id, {
     balance: newBalance,
@@ -89,9 +136,9 @@ export async function debitWallet({
     $push: {
       transactions: {
         type: "debit",
-        amount,
-        salesRecordId: salesRecordId ? new mongoose.Types.ObjectId(salesRecordId) : undefined,
-        description,
+        amount: parsed.data.amount,
+        salesRecordId: parsed.data.salesRecordId ? new mongoose.Types.ObjectId(parsed.data.salesRecordId) : undefined,
+        description: parsed.data.description,
         balanceAfter: newBalance,
         createdAt: new Date(),
       },
@@ -112,11 +159,16 @@ export async function markCommissionPaid({
   salesRecordId: string;
   paidBy: string;
 }) {
+  const parsed = markCommissionPaidSchema.safeParse({ employeeId, amount, salesRecordId, paidBy });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
-  const wallet = await getOrCreateWallet(employeeId);
-  const newBalance = wallet.balance + amount;
-  const newTotalPaid = wallet.totalPaid + amount;
-  const newPendingBalance = wallet.pendingBalance - amount;
+  const wallet = await getOrCreateWallet(parsed.data.employeeId);
+  if (!wallet) return { error: "Wallet not found" };
+  const newBalance = wallet.balance + parsed.data.amount;
+  const newTotalPaid = wallet.totalPaid + parsed.data.amount;
+  const newPendingBalance = wallet.pendingBalance - parsed.data.amount;
 
   await Wallet.findByIdAndUpdate(wallet._id, {
     balance: newBalance,
@@ -125,8 +177,8 @@ export async function markCommissionPaid({
     $push: {
       transactions: {
         type: "credit",
-        amount,
-        salesRecordId: new mongoose.Types.ObjectId(salesRecordId),
+        amount: parsed.data.amount,
+        salesRecordId: new mongoose.Types.ObjectId(parsed.data.salesRecordId),
         description: `Commission paid for sale`,
         balanceAfter: newBalance,
         createdAt: new Date(),
@@ -134,11 +186,11 @@ export async function markCommissionPaid({
     },
   });
 
-  await SalesRecord.findByIdAndUpdate(salesRecordId, {
+  await SalesRecord.findByIdAndUpdate(parsed.data.salesRecordId, {
     isPaid: true,
     paymentStatus: "Paid",
     paymentDate: new Date(),
-    paidBy: new mongoose.Types.ObjectId(paidBy),
+    paidBy: new mongoose.Types.ObjectId(parsed.data.paidBy),
   });
 
   return { success: true, newBalance };
@@ -149,9 +201,9 @@ export async function getAllWallets() {
   const wallets = await Wallet.find().populate("employeeId", "name email role").lean();
   return wallets.map((w) => ({
     id: w._id.toString(),
-    employeeId: (w.employeeId as any)?._id?.toString(),
-    employeeName: (w.employeeId as any)?.name || "Unknown",
-    employeeEmail: (w.employeeId as any)?.email || "",
+    employeeId: (w.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString() || "",
+    employeeName: (w.employeeId as unknown as { name?: string })?.name || "Unknown",
+    employeeEmail: (w.employeeId as unknown as { email?: string })?.email || "",
     balance: w.balance,
     pendingBalance: w.pendingBalance,
     totalEarned: w.totalEarned,
@@ -161,16 +213,21 @@ export async function getAllWallets() {
 }
 
 export async function getWalletTransactions(employeeId: string, limit = 50) {
+  const parsed = getWalletTransactionsSchema.safeParse({ employeeId, limit });
+  if (!parsed.success) return [];
   await connectToDatabase();
-  const wallet = await Wallet.findOne({ employeeId: new mongoose.Types.ObjectId(employeeId) }).lean();
+  const wallet = await Wallet.findOne({ employeeId: new mongoose.Types.ObjectId(parsed.data.employeeId) }).lean();
   if (!wallet) return [];
-  return (wallet.transactions || []).slice(-limit).reverse().map((t: any) => ({
-    id: t._id?.toString() || "",
-    type: t.type,
-    amount: t.amount,
-    salesRecordId: t.salesRecordId?.toString() || "",
-    description: t.description,
-    balanceAfter: t.balanceAfter,
-    createdAt: t.createdAt,
-  }));
+  return (wallet.transactions || []).slice(-(parsed.data.limit || 50)).reverse().map((t: unknown) => {
+    const tx = t as { _id?: { toString?: () => string }; type: string; amount: number; salesRecordId?: { toString?: () => string }; description: string; balanceAfter: number; createdAt: Date };
+    return {
+      id: tx._id?.toString?.() || "",
+      type: tx.type,
+      amount: tx.amount,
+      salesRecordId: tx.salesRecordId?.toString?.() || "",
+      description: tx.description,
+      balanceAfter: tx.balanceAfter,
+      createdAt: tx.createdAt,
+    };
+  });
 }

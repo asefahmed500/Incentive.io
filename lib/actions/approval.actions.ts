@@ -1,12 +1,39 @@
 "use server";
 
 import mongoose from "mongoose";
+import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
 import CommissionRule from "@/lib/models/CommissionRule";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifyManagerApproved, notifyManagerRejected, notifyAccountantProcessed, notifyFinanceApproved, notifyFinanceRejected } from "@/lib/actions/notification.actions";
+
+const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
+
+const approveSaleSchema = z.object({
+  id: objectIdSchema,
+  paidBy: z.string().optional(),
+});
+
+const rejectSaleSchema = z.object({
+  id: objectIdSchema,
+  reason: z.string().min(1, "Rejection reason is required").max(1000),
+  rejectedBy: z.enum(["manager", "finance"]).optional(),
+});
+
+const processByAccountantSchema = z.object({
+  id: objectIdSchema,
+  eoBpAmount: z.number().min(0).optional(),
+  eoBpReason: z.string().max(500).optional(),
+  taxRate: z.number().min(0).max(100).optional(),
+  vatRate: z.number().min(0).max(100).optional(),
+});
+
+const finalApproveByFinanceSchema = z.object({
+  id: objectIdSchema,
+  paidBy: z.string().min(1, "paidBy is required"),
+});
 
 export async function getPendingManagerApprovals() {
   await connectToDatabase();
@@ -26,6 +53,10 @@ export async function getPendingManagerApprovals() {
 }
 
 export async function approveSale(id: string, paidBy?: string) {
+  const parsed = approveSaleSchema.safeParse({ id, paidBy });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
   const record = await SalesRecord.findById(id);
   if (!record) return { error: "Record not found" };
@@ -68,6 +99,10 @@ export async function approveSale(id: string, paidBy?: string) {
 }
 
 export async function rejectSale(id: string, reason: string, rejectedBy?: "manager" | "finance") {
+  const parsed = rejectSaleSchema.safeParse({ id, reason, rejectedBy });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
   const record = await SalesRecord.findByIdAndUpdate(id, {
     status: "Draft",
@@ -141,6 +176,10 @@ export async function processByAccountant({
   taxRate?: number;
   vatRate?: number;
 }) {
+  const parsed = processByAccountantSchema.safeParse({ id, eoBpAmount, eoBpReason, taxRate, vatRate });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
   const record = await SalesRecord.findById(id);
   if (!record) return { error: "Record not found" };
@@ -226,6 +265,10 @@ export async function getPendingFinanceApprovals() {
 }
 
 export async function finalApproveByFinance(id: string, paidBy: string) {
+  const parsed = finalApproveByFinanceSchema.safeParse({ id, paidBy });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
   const record = await SalesRecord.findById(id);
   if (!record) return { error: "Record not found" };

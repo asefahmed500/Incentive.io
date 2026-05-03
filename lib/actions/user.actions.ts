@@ -1,32 +1,79 @@
+"use server";
+
+import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
 import { sendWelcomeEmail, sendNotificationEmail } from "@/lib/email";
 import { notifyUserCreated } from "@/lib/actions/notification.actions";
 
+const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
+
+const getUsersSchema = z.object({
+  search: z.string().optional(),
+  role: z.string().optional(),
+});
+
+const createUserSchema = z.object({
+  name: z.string().min(1, "Name is required").max(200),
+  email: z.string().email("Invalid email format"),
+  password: z.string().min(6, "Password must be at least 6 characters"),
+  role: z.enum(["admin", "administrator", "salesManager", "salesExecutive", "accountant", "finance"]),
+  phone: z.string().max(50).optional(),
+});
+
+const updateUserSchema = z.object({
+  id: objectIdSchema,
+  name: z.string().min(1).max(200).optional(),
+  email: z.string().email("Invalid email format").optional(),
+  role: z.string().optional(),
+  phone: z.string().max(50).optional(),
+  isActive: z.boolean().optional(),
+});
+
+const deleteUserSchema = z.object({
+  id: objectIdSchema,
+});
+
+const getUserByIdSchema = objectIdSchema;
+
+const getManagerForUserSchema = objectIdSchema;
+
+const toggleUserStatusSchema = objectIdSchema;
+
+const changePasswordSchema = z.object({
+  userId: objectIdSchema,
+  currentPassword: z.string().min(1, "Current password is required"),
+  newPassword: z.string().min(6, "New password must be at least 6 characters"),
+});
+
+const resetPasswordSchema = z.object({
+  userId: objectIdSchema,
+  newPassword: z.string().min(6, "New password must be at least 6 characters"),
+});
+
 export async function getUsers({
-  search = "",
-  role = "all",
+  search,
+  role,
 }: {
   search?: string;
   role?: string;
 }) {
+  const parsed = getUsersSchema.safeParse({ search, role });
+  if (!parsed.success) return [];
   await connectToDatabase();
 
-  const query: any = {};
-
-  if (search) {
+  const query: Record<string, unknown> = {};
+  if (parsed.data.search) {
     query.$or = [
-      { name: { $regex: search, $options: "i" } },
-      { email: { $regex: search, $options: "i" } },
+      { name: { $regex: parsed.data.search, $options: "i" } },
+      { email: { $regex: parsed.data.search, $options: "i" } },
     ];
   }
-
-  if (role !== "all") {
-    query.role = role;
+  if (parsed.data.role && parsed.data.role !== "all") {
+    query.role = parsed.data.role;
   }
 
   const users = await User.find(query).sort({ createdAt: -1 }).lean();
-
   return users.map((u) => ({
     id: u._id.toString(),
     name: u.name,
@@ -52,40 +99,42 @@ export async function createUser({
   role: string;
   phone?: string;
 }) {
+  const parsed = createUserSchema.safeParse({ name, email, password, role, phone });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
 
-  const existingUser = await User.findOne({ email: email.toLowerCase() });
+  const existingUser = await User.findOne({ email: parsed.data.email.toLowerCase() });
   if (existingUser) {
     return { error: "Email already registered" };
   }
 
   const bcrypt = require("bcryptjs");
-  const hashedPassword = await bcrypt.hash(password, 10);
+  const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
   const employeeId = Math.floor(10000 + Math.random() * 90000).toString();
 
   await User.create({
-    name,
-    email: email.toLowerCase(),
+    name: parsed.data.name,
+    email: parsed.data.email.toLowerCase(),
     password: hashedPassword,
-    role,
-    phone: phone || "",
+    role: parsed.data.role,
+    phone: parsed.data.phone || "",
     employeeId,
     isActive: true,
     targetAmount: 0,
   });
 
-  // Send welcome email
   try {
-    await sendWelcomeEmail(email.toLowerCase(), name);
+    await sendWelcomeEmail(parsed.data.email.toLowerCase(), parsed.data.name);
   } catch (emailError) {
     console.error("Failed to send welcome email:", emailError);
   }
 
-  // Get created user to send in-app notification
-  const createdUser = await User.findOne({ email: email.toLowerCase() });
+  const createdUser = await User.findOne({ email: parsed.data.email.toLowerCase() });
   if (createdUser) {
     try {
-      await notifyUserCreated(createdUser._id.toString(), name, role);
+      await notifyUserCreated(createdUser._id.toString(), parsed.data.name, parsed.data.role);
     } catch (notifError) {
       console.error("Failed to send in-app notification:", notifError);
     }
@@ -109,29 +158,38 @@ export async function updateUser({
   phone?: string;
   isActive?: boolean;
 }) {
+  const parsed = updateUserSchema.safeParse({ id, name, email, role, phone, isActive });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
 
-  const updateData: any = {};
-  if (name) updateData.name = name;
-  if (email) updateData.email = email.toLowerCase();
-  if (role) updateData.role = role;
-  if (phone !== undefined) updateData.phone = phone;
-  if (isActive !== undefined) updateData.isActive = isActive;
+  const updateData: Record<string, unknown> = {};
+  if (parsed.data.name) updateData.name = parsed.data.name;
+  if (parsed.data.email) updateData.email = parsed.data.email.toLowerCase();
+  if (parsed.data.role) updateData.role = parsed.data.role;
+  if (parsed.data.phone !== undefined) updateData.phone = parsed.data.phone;
+  if (parsed.data.isActive !== undefined) updateData.isActive = parsed.data.isActive;
 
-  await User.findByIdAndUpdate(id, updateData);
-
+  await User.findByIdAndUpdate(parsed.data.id, updateData);
   return { success: true };
 }
 
 export async function deleteUser(id: string) {
+  const parsed = deleteUserSchema.safeParse({ id });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
-  await User.findByIdAndDelete(id);
+  await User.findByIdAndDelete(parsed.data.id);
   return { success: true };
 }
 
 export async function getUserById(id: string) {
+  const parsed = getUserByIdSchema.safeParse(id);
+  if (!parsed.success) return null;
   await connectToDatabase();
-  const user = await User.findById(id).lean();
+  const user = await User.findById(parsed.data).lean();
   if (!user) return null;
   return {
     id: user._id.toString(),
@@ -146,10 +204,12 @@ export async function getUserById(id: string) {
 }
 
 export async function getManagerForUser(userId: string) {
+  const parsed = getManagerForUserSchema.safeParse(userId);
+  if (!parsed.success) return null;
   await connectToDatabase();
-  const user = await User.findById(userId).populate("managerId", "name email phone").lean();
+  const user = await User.findById(parsed.data).populate("managerId", "name email phone").lean();
   if (!user || !user.managerId) return null;
-  const mgr = user.managerId as any;
+  const mgr = user.managerId as unknown as { _id: { toString: () => string }; name: string; email: string; phone?: string };
   return {
     id: mgr._id.toString(),
     name: mgr.name,
@@ -159,11 +219,14 @@ export async function getManagerForUser(userId: string) {
 }
 
 export async function toggleUserStatus(id: string) {
+  const parsed = toggleUserStatusSchema.safeParse(id);
+  if (!parsed.success) {
+    return { error: "Invalid user ID" };
+  }
   await connectToDatabase();
-  const user = await User.findById(id);
+  const user = await User.findById(parsed.data);
   if (!user) return { error: "User not found" };
-  
-  await User.findByIdAndUpdate(id, { isActive: !user.isActive });
+  await User.findByIdAndUpdate(parsed.data, { isActive: !user.isActive });
   return { success: true };
 }
 
@@ -176,22 +239,25 @@ export async function changePassword({
   currentPassword: string;
   newPassword: string;
 }) {
+  const parsed = changePasswordSchema.safeParse({ userId, currentPassword, newPassword });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
 
-  const user = await User.findById(userId);
+  const user = await User.findById(parsed.data.userId);
   if (!user) {
     return { error: "User not found" };
   }
 
   const bcrypt = require("bcryptjs");
-  const isValid = await bcrypt.compare(currentPassword, user.password);
+  const isValid = await bcrypt.compare(parsed.data.currentPassword, user.password);
   if (!isValid) {
     return { error: "Current password is incorrect" };
   }
 
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-  await User.findByIdAndUpdate(userId, { password: hashedPassword });
-
+  const hashedPassword = await bcrypt.hash(parsed.data.newPassword, 10);
+  await User.findByIdAndUpdate(parsed.data.userId, { password: hashedPassword });
   return { success: true };
 }
 
@@ -202,17 +268,20 @@ export async function resetPassword({
   userId: string;
   newPassword: string;
 }) {
+  const parsed = resetPasswordSchema.safeParse({ userId, newPassword });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
   await connectToDatabase();
 
   const bcrypt = require("bcryptjs");
-  const hashedPassword = await bcrypt.hash(newPassword, 10);
-  
-  const user = await User.findById(userId);
-  if (!user) return { error: "User not found" };
-  
-  await User.findByIdAndUpdate(userId, { password: hashedPassword });
+  const hashedPassword = await bcrypt.hash(parsed.data.newPassword, 10);
 
-  // Send password reset notification email
+  const user = await User.findById(parsed.data.userId);
+  if (!user) return { error: "User not found" };
+
+  await User.findByIdAndUpdate(parsed.data.userId, { password: hashedPassword });
+
   try {
     await sendNotificationEmail(
       user.email,
