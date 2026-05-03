@@ -4,23 +4,18 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Users, UserPlus, Target, TrendingUp, CircleCheck, CircleX, DollarSign, Mail } from "lucide-react";
+import { Users, Target } from "lucide-react";
 import { getUsers } from "@/lib/actions/user.actions";
-import { assignTarget, removeTarget } from "@/lib/actions/target.actions";
-import { useSession } from "next-auth/react";
+import { assignTarget } from "@/lib/actions/target.actions";
 import { useRouter } from "next/navigation";
 import {
   Dialog,
   DialogContent,
-  DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 
 export default function TeamPage() {
-  const { data: session } = useSession();
   const router = useRouter();
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);

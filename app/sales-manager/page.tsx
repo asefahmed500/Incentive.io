@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, FileText, Wallet, TrendingUp, DollarSign, Clock, CircleCheck, AlertCircle } from "lucide-react";
+import { Users, TrendingUp, DollarSign, Clock, AlertCircle } from "lucide-react";
 import { getPendingManagerApprovals } from "@/lib/actions/approval.actions";
 import { getUsers } from "@/lib/actions/user.actions";
 import { getSalesRecordsByManagerId } from "@/lib/actions/sales.actions";

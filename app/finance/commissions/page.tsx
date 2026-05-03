@@ -5,7 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, DollarSign, Percent, CheckCircle, XCircle } from "lucide-react";
+import { Search } from "lucide-react";
 import { getCommissions } from "@/lib/actions/commission.actions";
 
 export default function FinanceCommissions() {

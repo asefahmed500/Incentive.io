@@ -13,8 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Check, X, Eye, AlertCircle } from "lucide-react";
+import { Check, X, Eye } from "lucide-react";
 import { getPendingManagerApprovals, approveSale, rejectSale } from "@/lib/actions/approval.actions";
 import {
   Dialog,
@@ -22,15 +21,12 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
-import { useSession } from "next-auth/react";
 
 export default function ManagerApprovals() {
-  const { data: session } = useSession();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [_isPending, startTransition] = useTransition();
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);

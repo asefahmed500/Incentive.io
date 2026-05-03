@@ -6,7 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, DollarSign, Calendar, User, Download } from "lucide-react";
+import { Search, Download } from "lucide-react";
 import { getCommissions } from "@/lib/actions/commission.actions";
 import { exportTableToCSV } from "@/lib/utils/export";
 

@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutDashboard, FileText, Target, Wallet, Users, BarChart3, LogOut, User, Bell } from "lucide-react";
+import { LayoutDashboard, FileText, Target, Wallet, Users, LogOut, User } from "lucide-react";
 import { signOut } from "next-auth/react";
 import {
   Sidebar,

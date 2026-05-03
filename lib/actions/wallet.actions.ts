@@ -10,7 +10,6 @@ const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
 const getWalletSchema = objectIdSchema;
 const getOrCreateWalletSchema = objectIdSchema;
-const getAllWalletsSchema = z.object({});
 
 const creditWalletSchema = z.object({
   employeeId: objectIdSchema,
@@ -53,7 +52,7 @@ export async function getOrCreateWallet(employeeId: string) {
   const parsed = getOrCreateWalletSchema.safeParse(employeeId);
   if (!parsed.success) return null;
   await connectToDatabase();
-  let wallet = await Wallet.findOne({ employeeId: new mongoose.Types.ObjectId(parsed.data) }).lean();
+  const wallet = await Wallet.findOne({ employeeId: new mongoose.Types.ObjectId(parsed.data) }).lean();
   if (!wallet) {
     const newWallet = await Wallet.create({
       employeeId: new mongoose.Types.ObjectId(parsed.data),

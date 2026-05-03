@@ -43,7 +43,7 @@ export default async function LoginPage() {
           <Button type="submit" className="w-full">Sign in</Button>
 
           <p className="text-center text-sm">
-            Don't have an account? <Link href="/register" className="text-primary hover:underline">Register</Link>
+            Don&apos;t have an account? <Link href="/register" className="text-primary hover:underline">Register</Link>
           </p>
         </form>
       </div>

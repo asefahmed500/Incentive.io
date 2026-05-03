@@ -30,7 +30,6 @@ export default async function RegisterPage() {
     }
 
     const hashedPassword = await bcrypt.hash(password, 10);
-    const employeeId = Math.floor(10000 + Math.random() * 90000).toString();
 
     await User.create({
       name,

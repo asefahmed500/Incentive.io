@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { DollarSign, Wallet, CreditCard, TrendingUp, CircleCheck, CircleX, ArrowDownLeft, Check, X } from "lucide-react";
+import { DollarSign, CreditCard, CircleCheck, CircleX, ArrowDownLeft } from "lucide-react";
 import { getCommissionsByEmployee, checkEligibility } from "@/lib/actions/commission.actions";
 import { useSession } from "next-auth/react";
 

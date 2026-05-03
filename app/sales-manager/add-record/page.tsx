@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, Save, Send } from "lucide-react";
 import { getCategories } from "@/lib/actions/category.actions";
-import { createSalesRecord, submitSalesRecord, updateSalesRecord } from "@/lib/actions/sales.actions";
+import { createSalesRecord, submitSalesRecord } from "@/lib/actions/sales.actions";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 

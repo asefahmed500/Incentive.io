@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -23,7 +23,7 @@ export default function SalesRecords() {
   const { data: session } = useSession();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [_isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const router = useRouter();

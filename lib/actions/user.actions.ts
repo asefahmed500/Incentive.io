@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
 import { sendWelcomeEmail, sendNotificationEmail } from "@/lib/email";
@@ -110,7 +111,6 @@ export async function createUser({
     return { error: "Email already registered" };
   }
 
-  const bcrypt = require("bcryptjs");
   const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
   const employeeId = Math.floor(10000 + Math.random() * 90000).toString();
 
@@ -250,7 +250,6 @@ export async function changePassword({
     return { error: "User not found" };
   }
 
-  const bcrypt = require("bcryptjs");
   const isValid = await bcrypt.compare(parsed.data.currentPassword, user.password);
   if (!isValid) {
     return { error: "Current password is incorrect" };
@@ -274,7 +273,6 @@ export async function resetPassword({
   }
   await connectToDatabase();
 
-  const bcrypt = require("bcryptjs");
   const hashedPassword = await bcrypt.hash(parsed.data.newPassword, 10);
 
   const user = await User.findById(parsed.data.userId);

@@ -13,8 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Check, X, DollarSign } from "lucide-react";
+import { Check, X } from "lucide-react";
 import { getPendingFinanceApprovals, finalApproveByFinance, rejectSale } from "@/lib/actions/approval.actions";
 import {
   Dialog,
@@ -22,7 +21,6 @@ import {
   DialogDescription,
   DialogHeader,
   DialogTitle,
-  DialogTrigger,
 } from "@/components/ui/dialog";
 import { useSession } from "next-auth/react";
 
@@ -30,7 +28,7 @@ export default function FinancePaymentQueue() {
   const { data: session } = useSession();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
-  const [isPending, startTransition] = useTransition();
+  const [, startTransition] = useTransition();
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
