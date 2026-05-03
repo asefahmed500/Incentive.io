@@ -39,7 +39,7 @@ export default function AdministratorLayout({
         <SidebarHeader className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">incentiveio</h2>
+              <h2 className="text-lg font-semibold">Incentive.io</h2>
               <p className="text-sm text-muted-foreground">SuperAdmin</p>
             </div>
             <NotificationBell />

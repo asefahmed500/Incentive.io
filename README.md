@@ -36,6 +36,10 @@ npm run build:webpack
 
 **Important:** Always use `npm run build:webpack` — Mongoose native bindings fail with Turbopack.
 
+## App Name
+
+The application is named **Incentive.io** (not "incentiveio" or "IncentiveIO").
+
 ## Test Accounts
 
 | Email | Password | Role |

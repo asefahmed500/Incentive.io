@@ -24,7 +24,7 @@ const fontMono = Roboto_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "incentiveio",
+  title: "Incentive.io",
   description: "Sales Commission Management System",
 };
 

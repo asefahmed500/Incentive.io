@@ -32,7 +32,7 @@ function FloatingNav() {
     <nav className="fixed top-4 left-1/2 -translate-x-1/2 z-50">
       <div className="flex items-center gap-1 px-2 py-2 bg-white/80 backdrop-blur-md rounded-full shadow-lg border border-gray-200/50">
         <Link href="/" className="px-4 py-2 font-semibold text-gray-900 hover:text-sky-600 transition-colors">
-          incentiveio
+          Incentive.io
         </Link>
         {navLinks.map((link) => (
           <Link
@@ -168,7 +168,7 @@ function MockDashboard() {
           <aside className="w-56 shrink-0">
             <div className="bg-gray-900 rounded-lg p-4 text-white">
               <div className="mb-6 pb-4 border-b border-gray-700">
-                <h3 className="font-semibold">incentiveio</h3>
+                <h3 className="font-semibold">Incentive.io</h3>
               </div>
               <nav className="space-y-1">
                 {["Dashboard", "Sales", "Team", "Commissions", "Wallets", "Analytics", "Settings"].map((item) => (
@@ -248,7 +248,7 @@ function Footer() {
       <div className="max-w-6xl mx-auto px-4">
         <div className="grid grid-cols-5 gap-8 mb-12">
           <div className="col-span-1">
-            <h3 className="text-white font-bold text-xl mb-2">incentiveio</h3>
+            <h3 className="text-white font-bold text-xl mb-2">Incentive.io</h3>
             <p className="text-sm">Sales commission management made simple.</p>
           </div>
           {Object.entries(footerLinks).map(([title, links]) => (
@@ -267,7 +267,7 @@ function Footer() {
           ))}
         </div>
         <div className="pt-8 border-t border-gray-800 text-sm text-center">
-          © 2026 incentiveio. All rights reserved.
+          © 2026 Incentive.io. All rights reserved.
         </div>
       </div>
     </footer>
