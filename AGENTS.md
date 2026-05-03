@@ -2,7 +2,7 @@
 
 Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, NextAuth v5, Tailwind CSS 4.
 
-## Commands
+## Developer Commands
 
 | Task | Command |
 |------|---------|
@@ -10,7 +10,7 @@ Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, 
 | Build (required) | `npm run build:webpack` |
 | Typecheck | `npm run typecheck` |
 | Lint | `npm run lint` |
-| Audit | `npm run audit` (typecheck + lint + test) |
+| Audit | `npm run audit` (typecheck + lint + test + build) |
 | Format | `npm run format` |
 
 **CRITICAL:** Always use `npm run build:webpack` — Mongoose native bindings fail with Turbopack.
@@ -34,6 +34,13 @@ Sales Commission Management System — Next.js 16 app router, MongoDB/Mongoose, 
 9. **Approval guards** — `processByAccountant` checks `approvalStatus === "Approved"`; `finalApproveByFinance` checks `paymentStatus !== "Paid"`
 10. **Middleware allows through on DB failure** — caught and logged, requests proceed
 11. **App name** — Always "Incentive.io" (not "incentiveio" or "IncentiveIO")
+12. **bcryptjs import** — Use `import bcrypt from "bcryptjs"` (ESM), NOT `require("bcryptjs")`
+
+## ESLint Config (`eslint.config.mjs`)
+
+- `set-state-in-effect` rule is **off** — intentional pattern for data fetching with `useTransition`
+- `no-explicit-any` is **warn** (not error) — 334 warnings acceptable
+- Unused args with `_` prefix are allowed (e.g., `const [_isPending, startTransition]`)
 
 ## Architecture
 
