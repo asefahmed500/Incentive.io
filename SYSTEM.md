@@ -24,12 +24,12 @@
 
 | Email | Password | Role |
 |-------|----------|------|
-| iomadmin@iomltd.com | IOMadmin123! | admin |
-| jamal.hassan@iomltd.com | Jamal123! | sales executive |
-| iomadministrator@iomltd.com | IOMadministratort123! | administrator |
-| iommanager@iomltd.com | iom123@!A | sales manager |
-| iomaccountant@iomltd.com | IOMaccount123! | accountant |
-| iomfinance@iomltd.com | IOMfinance123! | finance |
+| admin@incentive.io | Admin123! | admin |
+| jamal@incentive.io | Jamal123! | sales executive |
+| superadmin@incentive.io | Superadmin123! | administrator |
+| manager@incentive.io | Manager123! | sales manager |
+| accountant@incentive.io | Accountant123! | accountant |
+| finance@incentive.io | Finance123! | finance |
 
 ---
 

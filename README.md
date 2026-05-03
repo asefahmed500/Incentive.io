@@ -44,12 +44,12 @@ The application is named **Incentive.io** (not "incentiveio" or "IncentiveIO").
 
 | Email | Password | Role |
 |-------|----------|------|
-| iomadmin@iomltd.com | IOMadmin123! | admin |
-| jamal.hassan@iomltd.com | Jamal123! | sales executive |
-| iomadministrator@iomltd.com | IOMadministratort123! | administrator (super admin) |
-| iommanager@iomltd.com | iom123@!A | sales manager |
-| iomaccountant@iomltd.com | IOMaccount123! | accountant |
-| iomfinance@iomltd.com | IOMfinance123! | finance |
+| admin@incentive.io | Admin123! | admin |
+| jamal@incentive.io | Jamal123! | sales executive |
+| superadmin@incentive.io | Superadmin123! | administrator (super admin) |
+| manager@incentive.io | Manager123! | sales manager |
+| accountant@incentive.io | Accountant123! | accountant |
+| finance@incentive.io | Finance123! | finance |
 
 ## Role-Based Access
 
