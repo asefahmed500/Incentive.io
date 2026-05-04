@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
@@ -59,6 +60,12 @@ const notifyFinanceRejectedSchema = z.object({
   reason: z.string().min(1).max(1000),
 });
 
+const notifyAccountantRejectedSchema = z.object({
+  employeeId: z.string(),
+  companyName: z.string().min(1).max(500),
+  reason: z.string().min(1).max(1000),
+});
+
 const notifyTargetAssignedSchema = z.object({
   employeeId: objectIdSchema,
   targetAmount: z.number().min(0),
@@ -100,6 +107,8 @@ export async function createNotification({
   message: string;
   link?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = createNotificationSchema.safeParse({ userId, type, title, message, link });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -110,6 +119,13 @@ export async function createNotification({
 }
 
 export async function getNotifications(userId: string, limit = 20) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const sessionUserId = session.user.id as string;
+  const userRole = (session.user as any).role as string;
+  if (userId !== sessionUserId && !["admin", "administrator"].includes(userRole)) {
+    return { error: "Forbidden: You can only access your own notifications" };
+  }
   const parsed = getNotificationsSchema.safeParse({ userId, limit });
   if (!parsed.success) return [];
   await connectToDatabase();
@@ -130,6 +146,13 @@ export async function getNotifications(userId: string, limit = 20) {
 }
 
 export async function getUnreadCount(userId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return 0;
+  const sessionUserId = session.user.id as string;
+  const userRole = (session.user as any).role as string;
+  if (userId !== sessionUserId && !["admin", "administrator"].includes(userRole)) {
+    return 0;
+  }
   const parsed = getUnreadCountSchema.safeParse(userId);
   if (!parsed.success) return 0;
   await connectToDatabase();
@@ -138,16 +161,32 @@ export async function getUnreadCount(userId: string) {
 }
 
 export async function markAsRead(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const sessionUserId = session.user.id as string;
+  const userRole = (session.user as any).role as string;
   const parsed = markAsReadSchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid ID format" };
   }
   await connectToDatabase();
+  const notification = await Notification.findById(parsed.data);
+  if (!notification) return { error: "Notification not found" };
+  if (notification.userId !== sessionUserId && !["admin", "administrator"].includes(userRole)) {
+    return { error: "Forbidden: You can only mark your own notifications as read" };
+  }
   await Notification.findByIdAndUpdate(parsed.data, { isRead: true });
   return { success: true };
 }
 
 export async function markAllAsRead(userId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const sessionUserId = session.user.id as string;
+  const userRole = (session.user as any).role as string;
+  if (userId !== sessionUserId && !["admin", "administrator"].includes(userRole)) {
+    return { error: "Forbidden: You can only mark your own notifications as read" };
+  }
   const parsed = markAllAsReadSchema.safeParse(userId);
   if (!parsed.success) {
     return { error: "Invalid ID format" };
@@ -158,16 +197,27 @@ export async function markAllAsRead(userId: string) {
 }
 
 export async function deleteNotification(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const sessionUserId = session.user.id as string;
+  const userRole = (session.user as any).role as string;
   const parsed = deleteNotificationSchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid ID format" };
   }
   await connectToDatabase();
-  await Notification.findByIdAndDelete(parsed.data);
+  const notification = await Notification.findById(parsed.data);
+  if (!notification) return { error: "Notification not found" };
+  if (notification.userId !== sessionUserId && !["admin", "administrator"].includes(userRole)) {
+    return { error: "Forbidden: You can only delete your own notifications" };
+  }
+  await Notification.findByIdAndUpdate(parsed.data, { deletedAt: new Date() });
   return { success: true };
 }
 
 export async function notifySaleSubmitted(employeeId: string, managerId: string, companyName: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifySaleSubmittedSchema.safeParse({ employeeId, managerId, companyName });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return createNotification({
@@ -180,6 +230,8 @@ export async function notifySaleSubmitted(employeeId: string, managerId: string,
 }
 
 export async function notifyManagerApproved(employeeId: string, companyName: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifyManagerApprovedSchema.safeParse({ employeeId, companyName });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return createNotification({
@@ -192,6 +244,8 @@ export async function notifyManagerApproved(employeeId: string, companyName: str
 }
 
 export async function notifyManagerRejected(employeeId: string, companyName: string, reason: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifyManagerRejectedSchema.safeParse({ employeeId, companyName, reason });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return createNotification({
@@ -204,6 +258,8 @@ export async function notifyManagerRejected(employeeId: string, companyName: str
 }
 
 export async function notifyAccountantProcessed(managerId: string, companyName: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifyAccountantProcessedSchema.safeParse({ managerId, companyName });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return createNotification({
@@ -216,6 +272,8 @@ export async function notifyAccountantProcessed(managerId: string, companyName: 
 }
 
 export async function notifyFinanceApproved(employeeId: string, managerId: string, companyName: string, commission: number) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifyFinanceApprovedSchema.safeParse({ employeeId, managerId, companyName, commission });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   await createNotification({
@@ -236,6 +294,8 @@ export async function notifyFinanceApproved(employeeId: string, managerId: strin
 }
 
 export async function notifyFinanceRejected(employeeId: string, companyName: string, reason: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifyFinanceRejectedSchema.safeParse({ employeeId, companyName, reason });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return createNotification({
@@ -247,7 +307,23 @@ export async function notifyFinanceRejected(employeeId: string, companyName: str
   });
 }
 
+export async function notifyAccountantRejected(employeeId: string, companyName: string, reason: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const parsed = notifyAccountantRejectedSchema.safeParse({ employeeId, companyName, reason });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return createNotification({
+    userId: parsed.data.employeeId,
+    type: "ACCOUNTANT_REJECTED",
+    title: "Sale Rejected",
+    message: `${parsed.data.companyName} - Rejected by accountant: ${parsed.data.reason}`,
+    link: "/sales-dashboard/records",
+  });
+}
+
 export async function notifyTargetAssigned(employeeId: string, targetAmount: number) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifyTargetAssignedSchema.safeParse({ employeeId, targetAmount });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return createNotification({
@@ -260,6 +336,8 @@ export async function notifyTargetAssigned(employeeId: string, targetAmount: num
 }
 
 export async function notifyCommissionEligible(employeeId: string, achievement: number) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifyCommissionEligibleSchema.safeParse({ employeeId, achievement });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return createNotification({
@@ -272,6 +350,8 @@ export async function notifyCommissionEligible(employeeId: string, achievement: 
 }
 
 export async function notifyUserCreated(employeeId: string, userName: string, role: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = notifyUserCreatedSchema.safeParse({ employeeId, userName, role });
   if (!parsed.success) return { error: parsed.error.issues[0].message };
   return createNotification({

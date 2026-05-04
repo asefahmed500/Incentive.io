@@ -30,14 +30,21 @@ export default function FinanceDashboard() {
         getCommissions(),
       ]);
       
-      const totalCommissions = commissions.reduce((sum: number, c: any) => sum + (c.commission || 0), 0);
+      const safePending = Array.isArray(pending) ? pending : [];
+      const safeCommissions = Array.isArray(commissions) ? commissions : [];
+      const safeSalesStats = salesStats && !("error" in salesStats) ? salesStats : { approvedToday: 0, approved: 0, pendingPayments: 0 };
+      if (!Array.isArray(pending)) console.error((pending as any)?.error || "Failed to fetch pending approvals");
+      if (!Array.isArray(commissions)) console.error((commissions as any)?.error || "Failed to fetch commissions");
+      if ("error" in salesStats) console.error((salesStats as any).error || "Failed to fetch sales stats");
+      
+      const totalCommissions = safeCommissions.reduce((sum: number, c: any) => sum + (c.commission || 0), 0);
       
       setStats({
-        pending: pending.length,
-        approvedToday: salesStats.approved,
-        totalApproved: salesStats.approved,
+        pending: safePending.length,
+        approvedToday: safeSalesStats.approvedToday,
+        totalApproved: safeSalesStats.approved,
         totalCommissions,
-        pendingPayments: salesStats.approved,
+        pendingPayments: safeSalesStats.pendingPayments,
       });
       setLoading(false);
     };

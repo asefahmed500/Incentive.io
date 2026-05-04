@@ -29,15 +29,18 @@ export default function AccountantDashboard() {
         getSalesStats(),
         getCommissions(),
       ]);
-      
-      const today = new Date().toDateString();
-      
+
+      const safePending = Array.isArray(pending) ? pending : [];
+      const safeStats = salesStats && !("error" in salesStats) ? salesStats : { processedToday: 0, approved: 0, pendingFinance: 0, totalDeductions: 0 };
+      if (!Array.isArray(pending)) console.error((pending as any)?.error || "Failed to fetch pending approvals");
+      if ("error" in salesStats) console.error((salesStats as any).error || "Failed to fetch sales stats");
+
       setStats({
-        pending: pending.length,
-        processedToday: salesStats.pendingFinance,
-        totalProcessed: salesStats.approved + salesStats.pendingFinance,
-        totalDeductions: pending.reduce((sum: number, p: any) => sum + (p.eoBpAmount || 0), 0),
-        pendingFinance: salesStats.pendingFinance,
+        pending: safePending.length,
+        processedToday: safeStats.processedToday,
+        totalProcessed: safeStats.approved + safeStats.pendingFinance,
+        totalDeductions: safeStats.totalDeductions,
+        pendingFinance: safeStats.pendingFinance,
       });
       setLoading(false);
     };

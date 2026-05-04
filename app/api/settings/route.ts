@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { SystemSettings } from "@/lib/models/SystemSettings";
+import { requireAdminOrAbove } from "@/lib/auth/role-guard";
 
 const DEFAULT_SETTINGS = [
   { key: "companyName", value: "AlgoIncentive", category: "system", description: "Company name displayed in the application" },
@@ -14,6 +15,8 @@ const DEFAULT_SETTINGS = [
 ];
 
 export async function GET() {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     await connectToDatabase();
     const settings = await SystemSettings.find().lean();
@@ -36,6 +39,8 @@ export async function GET() {
 }
 
 export async function PUT(request: Request) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     await connectToDatabase();
     const body = await request.json();
@@ -63,6 +68,8 @@ export async function PUT(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     await connectToDatabase();
     const body = await request.json();

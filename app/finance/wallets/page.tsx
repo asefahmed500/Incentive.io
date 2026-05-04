@@ -42,7 +42,12 @@ export default function FinanceWallets() {
     setLoading(true);
     try {
       const data = await getAllWallets();
-      setWallets(data);
+      if (Array.isArray(data)) {
+        setWallets(data);
+      } else {
+        setWallets([]);
+        console.error((data as any)?.error || "Failed to fetch wallets");
+      }
     } catch (error) {
       console.error("Failed to fetch wallets:", error);
     } finally {
@@ -58,7 +63,12 @@ export default function FinanceWallets() {
     setLoadingTransactions(true);
     try {
       const data = await getWalletTransactions(employeeId, 50);
-      setTransactions(data);
+      if (Array.isArray(data)) {
+        setTransactions(data);
+      } else {
+        setTransactions([]);
+        console.error((data as any)?.error || "Failed to fetch transactions");
+      }
     } catch (error) {
       console.error("Failed to fetch transactions:", error);
       setTransactions([]);

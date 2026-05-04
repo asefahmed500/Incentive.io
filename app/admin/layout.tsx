@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Building2, Tag, Percent, Target, FileText, Wallet, BarChart3, Settings, LogOut, User, HardDrive, Bell } from "lucide-react";
 import { signOut } from "next-auth/react";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -27,6 +29,7 @@ const sidebarItems = [
   { href: "/admin/targets", label: "Targets", icon: Target },
   { href: "/admin/sales", label: "Sales Records", icon: FileText },
   { href: "/admin/commissions", label: "Commissions", icon: Wallet },
+  { href: "/admin/wallets", label: "Wallets", icon: Wallet },
   { href: "/admin/analytics", label: "Analytics", icon: BarChart3 },
   { href: "/admin/backups", label: "Backups", icon: HardDrive },
   { href: "/admin/settings", label: "Settings", icon: Settings },
@@ -38,6 +41,7 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   return (
     <SidebarProvider>
       <Sidebar>
@@ -57,7 +61,7 @@ export default function AdminLayout({
               return (
                 <SidebarMenuItem key={item.href}>
                   <Link href={item.href}>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild isActive={pathname === item.href}>
                       <span>
                         <Icon className="mr-2 h-4 w-4" />
                         {item.label}
@@ -72,7 +76,7 @@ export default function AdminLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => signOut()}>
+              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>

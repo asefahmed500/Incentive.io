@@ -15,7 +15,9 @@ export default function SalesExecutiveApprovedSales() {
   useEffect(() => {
     const fetchRecords = async () => {
       const data = await getAllSalesRecords({ status: "Approved" });
-      const myRecords = data.filter((r: any) => r.employeeId === session?.user?.id);
+      const safeData = Array.isArray(data) ? data : [];
+      if (!Array.isArray(data)) console.error((data as any)?.error || "Failed to fetch records");
+      const myRecords = safeData.filter((r: any) => r.employeeId === session?.user?.id);
       setRecords(myRecords);
       setLoading(false);
     };

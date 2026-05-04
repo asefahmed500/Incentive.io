@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { LayoutDashboard, FileText, Wallet, BarChart3, Settings, LogOut, User } from "lucide-react";
+import { usePathname } from "next/navigation";
+import { LayoutDashboard, FileText, Wallet, BarChart3, Settings, LogOut, User, Percent } from "lucide-react";
 import { signOut } from "next-auth/react";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -23,6 +25,7 @@ const sidebarItems = [
   { href: "/accountant/payments", label: "Payments", icon: Wallet },
   { href: "/accountant/records", label: "Records", icon: FileText },
   { href: "/accountant/analytics", label: "Analytics", icon: BarChart3 },
+  { href: "/accountant/commission-rules", label: "Commission Rules", icon: Percent },
   { href: "/accountant/profile", label: "Profile", icon: User },
 ];
 
@@ -31,13 +34,14 @@ export default function AccountantLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   return (
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader className="p-4">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">incentivio</h2>
+              <h2 className="text-lg font-semibold">Incentive.io</h2>
               <p className="text-sm text-muted-foreground">Accountant</p>
             </div>
             <NotificationBell />
@@ -50,7 +54,7 @@ export default function AccountantLayout({
               return (
                 <SidebarMenuItem key={item.href}>
                   <Link href={item.href}>
-                    <SidebarMenuButton asChild>
+                    <SidebarMenuButton asChild isActive={pathname === item.href}>
                       <span>
                         <Icon className="mr-2 h-4 w-4" />
                         {item.label}
@@ -65,7 +69,7 @@ export default function AccountantLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => signOut()}>
+              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>

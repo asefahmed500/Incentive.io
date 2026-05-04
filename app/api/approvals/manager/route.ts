@@ -1,8 +1,11 @@
 import { approveSale, rejectSale } from "@/lib/actions/approval.actions";
 import { notifyManagerApproved, notifyManagerRejected } from "@/lib/actions/notification.actions";
 import { NextResponse } from "next/server";
+import { requireManagerOrAbove } from "@/lib/auth/role-guard";
 
 export async function POST(request: Request) {
+  const authResult = await requireManagerOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const body = await request.json();
   const { id, action, reason } = body;
 

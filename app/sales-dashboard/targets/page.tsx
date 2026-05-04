@@ -18,14 +18,18 @@ export default function SalesTargets() {
       if (!session?.user?.id) return;
       
       const targets = await getTargets();
-      const myTarget = targets.find((t: any) => t.id === session.user.id?.toString());
+      const safeTargets = Array.isArray(targets) ? targets : [];
+      if (!Array.isArray(targets)) console.error((targets as any)?.error || "Failed to fetch targets");
+      const myTarget = safeTargets.find((t: any) => t.id === session.user.id?.toString());
       
       if (myTarget) {
         setTarget(myTarget);
         
         // Calculate achievement from approved sales
         const records = await getSalesRecords({ employeeId: session.user.id });
-        const approvedSales = records.filter((r: any) => r.status === "Approved");
+        const safeRecords = Array.isArray(records) ? records : [];
+        if (!Array.isArray(records)) console.error((records as any)?.error || "Failed to fetch records");
+        const approvedSales = safeRecords.filter((r: any) => r.status === "Approved");
         const totalSales = approvedSales.reduce((sum: number, r: any) => sum + (r.totalAmount || 0), 0);
         
         const ach = myTarget.targetAmount > 0 ? (totalSales / myTarget.targetAmount) * 100 : 0;

@@ -10,6 +10,8 @@ const transporter = nodemailer.createTransport({
   },
 });
 
+const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
+
 interface EmailResult {
   success: boolean;
   messageId?: string;
@@ -61,7 +63,7 @@ export async function sendWelcomeEmail(to: string, name: string): Promise<EmailR
         <h2 style="color: #0ea5e9;">Welcome to Incentive.io!</h2>
         <p>Hi ${name},</p>
         <p>Your account has been created. You can now log in and start managing your sales team commissions.</p>
-        <p>Login at: <a href="http://localhost:3000/login">http://localhost:3000/login</a></p>
+        <p>Login at: <a href="${baseUrl}/login">${baseUrl}/login</a></p>
         <hr />
         <p style="color: #666; font-size: 12px;">This is an automated message from Incentive.io.</p>
       </div>

@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
+
 import {
   Select,
   SelectContent,
@@ -21,8 +21,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, Eye, Filter } from "lucide-react";
+import { Search, Eye, Filter, Download } from "lucide-react";
 import { getAllSalesRecords } from "@/lib/actions/sales.actions";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function AdminSales() {
   const [sales, setSales] = useState<any[]>([]);
@@ -31,12 +32,22 @@ export default function AdminSales() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [selectedSale, setSelectedSale] = useState<any>(null);
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
 
   const fetchSales = () => {
     startTransition(async () => {
       setLoading(true);
       const data = await getAllSalesRecords({ search, status: statusFilter });
-      setSales(data);
+      if (Array.isArray(data)) {
+        setSales(data);
+      } else {
+        setSales([]);
+        console.error((data as any)?.error || "Failed to fetch sales records");
+      }
       setLoading(false);
     });
   };
@@ -46,25 +57,61 @@ export default function AdminSales() {
   }, []);
 
   const getStatusBadge = (status: string) => {
-    const variants: Record<string, string> = {
-      Draft: "secondary",
-      Pending_Manager: "yellow",
-      Pending_Accountant: "orange",
-      Pending_Finance: "blue",
-      Approved: "default",
-      Rejected: "red",
+    const classes: Record<string, string> = {
+      Draft: "bg-gray-100 text-gray-800",
+      Pending_Manager: "bg-yellow-100 text-yellow-800",
+      Pending_Accountant: "bg-orange-100 text-orange-800",
+      Pending_Finance: "bg-blue-100 text-blue-800",
+      Approved: "bg-green-100 text-green-800",
+      Rejected: "bg-red-100 text-red-800",
     };
-    return <Badge>{status.replace(/_/g, " ")}</Badge>;
+    return (
+      <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${classes[status] || "bg-gray-100 text-gray-800"}`}>
+        {status.replace(/_/g, " ")}
+      </span>
+    );
+  };
+
+  const exportToCSV = () => {
+    if (sales.length === 0) return;
+    const rows = sales.map((s) => ({
+      Employee: s.employeeName || "",
+      Company: s.companyName || "",
+      Amount: s.products?.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0) || 0,
+      Status: s.approvalStatus || s.status || "",
+      Commission: s.commission || s.calculatedCommission || 0,
+      Date: s.date
+        ? new Date(s.date).toLocaleDateString()
+        : "",
+    }));
+    const headers = Object.keys(rows[0]).join(",");
+    const csvRows = rows.map((row) =>
+      Object.values(row)
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [headers, ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sales.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Sales Records</h1>
-          <p className="text-muted-foreground">View all sales records</p>
+          <div>
+            <h1 className="text-3xl font-bold">Sales Records</h1>
+            <p className="text-muted-foreground">View all sales records</p>
+          </div>
+          <Button variant="outline" onClick={exportToCSV} disabled={sales.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
         </div>
-      </div>
 
       <Card>
         <CardHeader>
@@ -97,6 +144,11 @@ export default function AdminSales() {
           </div>
         </CardHeader>
         <CardContent>
+          {(() => {
+            const totalPages = Math.max(1, Math.ceil(sales.length / 20));
+            const paginatedSales = sales.slice((page - 1) * 20, page * 20);
+            return (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
@@ -122,12 +174,12 @@ export default function AdminSales() {
                   </TableCell>
                 </TableRow>
               ) : (
-                sales.map((s) => (
+                paginatedSales.map((s) => (
                   <TableRow key={s.id}>
                     <TableCell>{s.date ? new Date(s.date).toLocaleDateString() : "—"}</TableCell>
                     <TableCell className="font-medium">{s.companyName}</TableCell>
                     <TableCell>{s.employeeName}</TableCell>
-                    <TableCell>৳{s.amount.toLocaleString()}</TableCell>
+                    <TableCell>৳{(s.products?.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0) || 0).toLocaleString()}</TableCell>
                     <TableCell>{getStatusBadge(s.approvalStatus)}</TableCell>
                     <TableCell>
                       <Button
@@ -143,6 +195,10 @@ export default function AdminSales() {
               )}
             </TableBody>
           </Table>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          </>
+          );
+          })()}
         </CardContent>
       </Card>
     </div>

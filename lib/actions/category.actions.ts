@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Category } from "@/lib/models/Category";
@@ -21,6 +22,8 @@ const updateCategorySchema = z.object({
 const deleteCategorySchema = objectIdSchema;
 
 export async function getCategories(): Promise<ICategory[]> {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" } as unknown as ICategory[];
   await connectToDatabase();
   const categories = await Category.find().lean();
   return categories.map((c) => ({
@@ -38,6 +41,10 @@ export async function createCategory({
   name: string;
   description?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createCategorySchema.safeParse({ name, description });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -62,6 +69,10 @@ export async function updateCategory({
   name?: string;
   description?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateCategorySchema.safeParse({ id, name, description });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -75,11 +86,15 @@ export async function updateCategory({
 }
 
 export async function deleteCategory(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteCategorySchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid ID format" };
   }
   await connectToDatabase();
-  await Category.findByIdAndDelete(parsed.data);
+  await Category.findByIdAndUpdate(parsed.data, { deletedAt: new Date() });
   return { success: true };
 }

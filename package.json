@@ -12,7 +12,8 @@
     "format": "prettier --write \"**/*.{ts,tsx}\"",
     "typecheck": "tsc --noEmit",
     "test": "echo \"No tests configured\"",
-    "audit": "npm run typecheck && npm run lint && npm test"
+    "audit": "npm run typecheck && npm run lint && npm test",
+    "seed": "npx tsx scripts/seed.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

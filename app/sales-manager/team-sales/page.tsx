@@ -22,8 +22,18 @@ export default function TeamSalesPage() {
         getSalesRecords({}),
         getUsers({ role: "salesExecutive", search: "" }),
       ]);
-      setSales(salesData);
-      setUsers(usersData);
+      if (Array.isArray(salesData)) {
+        setSales(salesData);
+      } else {
+        setSales([]);
+        console.error((salesData as any)?.error || "Failed to fetch sales");
+      }
+      if (Array.isArray(usersData)) {
+        setUsers(usersData);
+      } else {
+        setUsers([]);
+        console.error((usersData as any)?.error || "Failed to fetch users");
+      }
       setLoading(false);
     };
     fetchData();

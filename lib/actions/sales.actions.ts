@@ -7,12 +7,13 @@ import { Product } from "@/lib/models/Product";
 import { User } from "@/lib/models/User";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifySaleSubmitted } from "@/lib/actions/notification.actions";
+import { auth } from "@/lib/auth/auth";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
 const productLineSchema = z.object({
   productName: z.string().min(1, "Product name is required"),
-  category: z.string().min(1, "Category is required"),
+  categoryId: z.string().min(1, "Category is required"),
   unitPrice: z.number().min(0, "Unit price must be non-negative"),
   originalPrice: z.number().min(0).optional(),
   quantity: z.number().int().min(1, "Quantity must be at least 1"),
@@ -49,9 +50,18 @@ const deleteSalesRecordSchema = z.object({
   id: objectIdSchema,
 });
 
+const updateSalesRecordDataSchema = z.object({
+  companyName: z.string().min(1).optional(),
+  companyEmail: z.string().email().optional(),
+  products: z.array(productLineSchema).optional(),
+  taxEnabled: z.boolean().optional(),
+  vatEnabled: z.boolean().optional(),
+  date: z.string().optional(),
+});
+
 const updateSalesRecordSchema = z.object({
   id: objectIdSchema,
-  data: z.record(z.string(), z.any()),
+  data: updateSalesRecordDataSchema,
 });
 
 export async function getSalesRecords({
@@ -63,6 +73,8 @@ export async function getSalesRecords({
   status?: string;
   search?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = getSalesRecordsSchema.safeParse({ employeeId, status, search });
   if (!parsed.success) return [];
   await connectToDatabase();
@@ -71,9 +83,10 @@ export async function getSalesRecords({
   if (parsed.data.employeeId) query.employeeId = parsed.data.employeeId;
   if (parsed.data.status) query.status = parsed.data.status;
   if (parsed.data.search) {
+    const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     query.$or = [
-      { companyName: { $regex: parsed.data.search, $options: "i" } },
-      { employeeName: { $regex: parsed.data.search, $options: "i" } },
+      { companyName: { $regex: escapedSearch, $options: "i" } },
+      { employeeName: { $regex: escapedSearch, $options: "i" } },
     ];
   }
 
@@ -91,6 +104,8 @@ export async function getSalesRecords({
 }
 
 export async function getSalesRecord(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = objectIdSchema.safeParse(id);
   if (!parsed.success) return null;
   await connectToDatabase();
@@ -127,8 +142,14 @@ export async function getSalesRecord(id: string) {
 }
 
 export async function getSalesStats() {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   await connectToDatabase();
   const records = await SalesRecord.find().lean();
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
 
   const stats = {
     total: records.length,
@@ -137,14 +158,20 @@ export async function getSalesStats() {
     pendingAccountant: records.filter(r => r.status === "Pending_Accountant").length,
     pendingFinance: records.filter(r => r.status === "Pending_Finance").length,
     approved: records.filter(r => r.status === "Approved").length,
-    rejected: records.filter(r => r.status === "Rejected").length,
+    rejected: records.filter(r => r.approvalStatus === "Rejected").length,
     totalAmount: records.reduce((sum, r) => sum + r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + p.unitPrice * p.quantity, 0), 0),
     totalCommission: records.reduce((sum, r) => sum + (r.calculatedCommission || 0), 0),
+    approvedToday: records.filter(r => r.status === "Approved" && r.finalApprovedAt && new Date(r.finalApprovedAt) >= today).length,
+    processedToday: records.filter(r => r.accountantStatus === "Approved" && r.processedAt && new Date(r.processedAt) >= today).length,
+    pendingPayments: records.filter(r => r.status === "Approved" && !r.isPaid).length,
+    totalDeductions: records.reduce((sum, r) => sum + (r.eoBpAmount || 0) + (r.taxAmount || 0) + (r.vatAmount || 0), 0),
   };
   return stats;
 }
 
 export async function getSalesRecordsByManagerId(managerId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = objectIdSchema.safeParse(managerId);
   if (!parsed.success) return [];
   await connectToDatabase();
@@ -180,6 +207,10 @@ export async function getAllSalesRecords({
   status?: string;
   search?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator", "accountant", "finance", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = getAllSalesRecordsSchema.safeParse({ status, search });
   if (!parsed.success) return [];
   await connectToDatabase();
@@ -187,9 +218,10 @@ export async function getAllSalesRecords({
   const query: Record<string, unknown> = {};
   if (parsed.data.status && parsed.data.status !== "all") query.approvalStatus = parsed.data.status;
   if (parsed.data.search) {
+    const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     query.$or = [
-      { companyName: { $regex: parsed.data.search, $options: "i" } },
-      { employeeName: { $regex: parsed.data.search, $options: "i" } },
+      { companyName: { $regex: escapedSearch, $options: "i" } },
+      { employeeName: { $regex: escapedSearch, $options: "i" } },
     ];
   }
 
@@ -234,6 +266,10 @@ export async function createSalesRecord({
   vatEnabled: boolean;
   proofOfSale?: string[];
 }): Promise<{ success?: boolean; error?: string; id?: string }> {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["salesExecutive", "salesManager", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createSalesRecordSchema.safeParse({
     employeeId,
     employeeName,
@@ -272,6 +308,10 @@ export async function createSalesRecord({
 }
 
 export async function submitSalesRecord(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userId = session.user.id as string;
+  const userRole = (session.user as any).role as string;
   const parsed = submitSalesRecordSchema.safeParse({ id });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -280,6 +320,10 @@ export async function submitSalesRecord(id: string) {
 
   const record = await SalesRecord.findById(parsed.data.id);
   if (!record) return { error: "Record not found" };
+  if (record.employeeId.toString() !== userId && !["admin", "administrator", "salesManager"].includes(userRole)) {
+    return { error: "Forbidden: You can only submit your own records" };
+  }
+  if (record.status !== "Draft") return { error: "Only draft records can be submitted" };
 
   await SalesRecord.findByIdAndUpdate(parsed.data.id, {
     status: "Pending_Manager",
@@ -313,21 +357,54 @@ export async function submitSalesRecord(id: string) {
 }
 
 export async function deleteSalesRecord(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userId = session.user.id as string;
+  const userRole = (session.user as any).role as string;
   const parsed = deleteSalesRecordSchema.safeParse({ id });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  await SalesRecord.findByIdAndDelete(parsed.data.id);
+  const record = await SalesRecord.findById(parsed.data.id);
+  if (!record) return { error: "Record not found" };
+  if (record.employeeId.toString() !== userId && !["admin", "administrator", "salesManager"].includes(userRole)) {
+    return { error: "Forbidden: You can only delete your own records" };
+  }
+  if (record.status !== "Draft") return { error: "Only draft records can be deleted" };
+  await SalesRecord.findByIdAndUpdate(parsed.data.id, { deletedAt: new Date() });
   return { success: true };
 }
 
 export async function updateSalesRecord(id: string, data: unknown) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userId = session.user.id as string;
+  const userRole = (session.user as any).role as string;
   const parsed = updateSalesRecordSchema.safeParse({ id, data });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  await SalesRecord.findByIdAndUpdate(parsed.data.id, parsed.data.data);
+
+  const record = await SalesRecord.findById(parsed.data.id);
+  if (!record) return { error: "Record not found" };
+  if (record.employeeId.toString() !== userId && !["admin", "administrator", "salesManager"].includes(userRole)) {
+    return { error: "Forbidden: You can only update your own records" };
+  }
+  if (record.status !== "Draft") {
+    return { error: "Only draft records can be edited" };
+  }
+
+  const updateData: Record<string, unknown> = {};
+  const { companyName, companyEmail, products, taxEnabled, vatEnabled, date } = parsed.data.data;
+  if (companyName !== undefined) updateData.companyName = companyName;
+  if (companyEmail !== undefined) updateData.companyEmail = companyEmail;
+  if (products !== undefined) updateData.products = products;
+  if (taxEnabled !== undefined) updateData.taxEnabled = taxEnabled;
+  if (vatEnabled !== undefined) updateData.vatEnabled = vatEnabled;
+  if (date !== undefined) updateData.date = date;
+
+  await SalesRecord.findByIdAndUpdate(parsed.data.id, updateData);
   return { success: true };
 }

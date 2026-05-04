@@ -20,7 +20,9 @@ export default function FinancePayments() {
   const fetchPayments = async () => {
     setLoading(true);
     const data = await getCommissions();
-    const paid = data.filter((c: any) => c.isPaid);
+    const safeData = Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) console.error((data as any)?.error || "Failed to fetch commissions");
+    const paid = safeData.filter((c: any) => c.isPaid);
     setPayments(paid);
     setLoading(false);
   };

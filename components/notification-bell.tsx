@@ -28,8 +28,9 @@ export function NotificationBell() {
         getNotifications(session.user.id, 10),
         getUnreadCount(session.user.id),
       ]);
-      setNotifications(notifs);
-      setUnreadCount(count);
+      setNotifications(Array.isArray(notifs) ? notifs : []);
+      setUnreadCount(typeof count === "number" ? count : 0);
+      if (!Array.isArray(notifs)) console.error((notifs as any)?.error || "Failed to fetch notifications");
     };
     
     fetchNotifications();
@@ -53,7 +54,7 @@ export function NotificationBell() {
       await markAllAsRead(session.user.id);
       setUnreadCount(0);
       const notifs = await getNotifications(session.user.id, 10);
-      setNotifications(notifs);
+      setNotifications(Array.isArray(notifs) ? notifs : []);
     }
   };
 

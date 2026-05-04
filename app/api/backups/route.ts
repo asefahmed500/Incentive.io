@@ -3,6 +3,7 @@ import { exec } from "child_process";
 import { promisify } from "util";
 import path from "path";
 import fs from "fs";
+import { requireAdminOrAbove } from "@/lib/auth/role-guard";
 
 const execAsync = promisify(exec);
 const BACKUP_DIR = path.join(process.cwd(), "backups");
@@ -14,6 +15,8 @@ async function ensureBackupDir() {
 }
 
 export async function GET() {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   await ensureBackupDir();
   const files = fs.readdirSync(BACKUP_DIR)
     .filter(f => f.endsWith(".json"))
@@ -31,6 +34,8 @@ export async function GET() {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     await ensureBackupDir();
     const timestamp = new Date().toISOString().replace(/[:.]/g, "-");
@@ -79,6 +84,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function DELETE(request: NextRequest) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     const { searchParams } = new URL(request.url);
     const filename = searchParams.get("filename");

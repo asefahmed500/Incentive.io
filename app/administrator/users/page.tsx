@@ -17,11 +17,14 @@ import {
 } from "@/components/ui/select";
 import { Plus, Search, Edit, Trash2, ToggleLeft, ToggleRight, RefreshCw } from "lucide-react";
 import { getUsers, createUser, updateUser, deleteUser, toggleUserStatus, resetPassword } from "@/lib/actions/user.actions";
+import { getTeams } from "@/lib/actions/team.actions";
 import { useSession } from "next-auth/react";
 
 export default function SuperAdminUsers() {
   const { data: session } = useSession();
   const [users, setUsers] = useState<any[]>([]);
+  const [managers, setManagers] = useState<any[]>([]);
+  const [teams, setTeams] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [search, setSearch] = useState("");
@@ -39,25 +42,52 @@ export default function SuperAdminUsers() {
     managerId: "",
   });
 
+  const fetchManagers = async () => {
+    const data = await getUsers({ role: "salesManager" });
+    setManagers(Array.isArray(data) ? data : []);
+    if (!Array.isArray(data)) console.error((data as any)?.error || "Failed to fetch managers");
+  };
+
+  const fetchTeamsData = async () => {
+    const data = await getTeams();
+    setTeams(Array.isArray(data) ? data : []);
+    if (!Array.isArray(data)) console.error((data as any)?.error || "Failed to fetch teams");
+  };
+
   const fetchUsers = () => {
     startTransition(async () => {
       setLoading(true);
       const data = await getUsers({ search, role: roleFilter !== "all" ? roleFilter : undefined });
-      setUsers(data);
+      if (Array.isArray(data)) {
+        setUsers(data);
+      } else {
+        setUsers([]);
+        console.error((data as any)?.error || "Failed to fetch users");
+      }
       setLoading(false);
     });
   };
 
   useEffect(() => {
+    fetchManagers();
+    fetchTeamsData();
     fetchUsers();
   }, [search, roleFilter]);
 
   const handleSubmit = async () => {
     startTransition(async () => {
       if (editingUser) {
-        await updateUser({ id: editingUser.id, ...formData });
+        const result = await updateUser({ id: editingUser.id, ...formData });
+        if (result?.error) {
+          alert(result.error);
+          return;
+        }
       } else {
-        await createUser(formData);
+        const result = await createUser(formData);
+        if (result?.error) {
+          alert(result.error);
+          return;
+        }
       }
       setOpenDialog(false);
       setEditingUser(null);
@@ -68,19 +98,31 @@ export default function SuperAdminUsers() {
 
   const handleDelete = async (id: string) => {
     if (confirm("Are you sure you want to delete this user?")) {
-      await deleteUser(id);
+      const result = await deleteUser(id);
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       fetchUsers();
     }
   };
 
   const handleToggleStatus = async (id: string) => {
-    await toggleUserStatus(id);
+    const result = await toggleUserStatus(id);
+    if (result?.error) {
+      alert(result.error);
+      return;
+    }
     fetchUsers();
   };
 
   const handleResetPassword = async (id: string) => {
     const defaultPassword = "Password123!";
-    await resetPassword({ userId: id, newPassword: defaultPassword });
+    const result = await resetPassword({ userId: id, newPassword: defaultPassword });
+    if (result?.error) {
+      alert(result.error);
+      return;
+    }
     alert("Password reset to default. User will be prompted to change on next login.");
   };
 
@@ -158,6 +200,30 @@ export default function SuperAdminUsers() {
               <div>
                 <Label>Phone</Label>
                 <Input value={formData.phone} onChange={(e) => setFormData({ ...formData, phone: e.target.value })} placeholder="Phone number" />
+              </div>
+              <div>
+                <Label>Manager</Label>
+                <Select value={formData.managerId || "__none__"} onValueChange={(v) => setFormData({ ...formData, managerId: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Select manager" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {managers.map((m) => (
+                      <SelectItem key={m.id} value={m.id}>{m.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div>
+                <Label>Team</Label>
+                <Select value={formData.teamId || "__none__"} onValueChange={(v) => setFormData({ ...formData, teamId: v === "__none__" ? "" : v })}>
+                  <SelectTrigger><SelectValue placeholder="Select team" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">None</SelectItem>
+                    {teams.map((t) => (
+                      <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
             <DialogFooter>

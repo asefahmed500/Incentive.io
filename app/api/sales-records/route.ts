@@ -1,7 +1,10 @@
 import { getSalesRecords, createSalesRecord, submitSalesRecord } from "@/lib/actions/sales.actions";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth/role-guard";
 
 export async function GET(request: Request) {
+  const authResult = await requireAuth();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const { searchParams } = new URL(request.url);
   const employeeId = searchParams.get("employeeId") || undefined;
   const status = searchParams.get("status") || undefined;
@@ -12,6 +15,8 @@ export async function GET(request: Request) {
 }
 
 export async function POST(request: Request) {
+  const authResult = await requireAuth();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const body = await request.json();
   const result = await createSalesRecord(body) as { success?: boolean; error?: string };
   if (result.error) {
@@ -21,6 +26,8 @@ export async function POST(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const authResult = await requireAuth();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const body = await request.json();
   const { id, action } = body;
 

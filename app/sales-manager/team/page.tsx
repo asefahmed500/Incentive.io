@@ -5,9 +5,10 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Users, Target } from "lucide-react";
-import { getUsers } from "@/lib/actions/user.actions";
+import { getTeamMembers, getTeams } from "@/lib/actions/team.actions";
 import { assignTarget } from "@/lib/actions/target.actions";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import {
   Dialog,
   DialogContent,
@@ -16,33 +17,56 @@ import {
 } from "@/components/ui/dialog";
 
 export default function TeamPage() {
+  const { data: session } = useSession();
   const router = useRouter();
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
+  const [teamName, setTeamName] = useState<string>("");
+  const [teamId, setTeamId] = useState<string>("");
   const [loading, setLoading] = useState(true);
   const [targetDialogOpen, setTargetDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [targetAmount, setTargetAmount] = useState("");
 
+  const fetchTeam = async () => {
+    if (!session?.user?.id) return;
+    const teams = await getTeams();
+    const safeTeams = Array.isArray(teams) ? teams : [];
+    if (!Array.isArray(teams)) console.error((teams as any)?.error || "Failed to fetch teams");
+    const myTeam = safeTeams.find((t) => t.managerId === session.user.id);
+    if (myTeam) {
+      setTeamName(myTeam.name);
+      setTeamId(myTeam.id);
+      const members = await getTeamMembers(myTeam.id);
+      if (Array.isArray(members)) {
+        setTeamMembers(members);
+      } else {
+        setTeamMembers([]);
+        console.error((members as any)?.error || "Failed to fetch team members");
+      }
+    } else {
+      setTeamMembers([]);
+    }
+    setLoading(false);
+  };
+
   useEffect(() => {
-    const fetchTeam = async () => {
-      const users = await getUsers({ role: "salesExecutive", search: "" });
-      setTeamMembers(users);
-      setLoading(false);
-    };
     fetchTeam();
-  }, []);
+  }, [session]);
 
   const handleAssignTarget = async () => {
     if (selectedMember && targetAmount) {
-      await assignTarget({
+      const result = await assignTarget({
         userId: selectedMember.id,
         targetAmount: parseFloat(targetAmount),
         period: "monthly",
       });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       setTargetDialogOpen(false);
       setTargetAmount("");
-      const users = await getUsers({ role: "salesExecutive", search: "" });
-      setTeamMembers(users);
+      await fetchTeam();
     }
   };
 
@@ -52,7 +76,9 @@ export default function TeamPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Team Management</h1>
-        <p className="text-muted-foreground">Manage your team members and targets</p>
+        <p className="text-muted-foreground">
+          {teamName ? `Managing: ${teamName}` : "Manage your team members and targets"}
+        </p>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">

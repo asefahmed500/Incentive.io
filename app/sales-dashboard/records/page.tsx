@@ -14,10 +14,11 @@ import {
 } from "@/components/ui/table";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Plus, Search, Eye, Pencil, Trash2, Send } from "lucide-react";
+import { Plus, Search, Eye, Pencil, Trash2, Send, Download } from "lucide-react";
 import { getSalesRecords, deleteSalesRecord, submitSalesRecord } from "@/lib/actions/sales.actions";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function SalesRecords() {
   const { data: session } = useSession();
@@ -27,6 +28,11 @@ export default function SalesRecords() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const router = useRouter();
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter]);
 
   const fetchRecords = () => {
     startTransition(async () => {
@@ -36,7 +42,12 @@ export default function SalesRecords() {
         search,
         status: statusFilter !== "all" ? statusFilter : undefined
       });
-      setRecords(data);
+      if (Array.isArray(data)) {
+        setRecords(data);
+      } else {
+        setRecords([]);
+        console.error((data as any)?.error || "Failed to fetch records");
+      }
       setLoading(false);
     });
   };
@@ -47,13 +58,21 @@ export default function SalesRecords() {
 
   const handleDelete = async (id: string) => {
     if (confirm("Delete this record? This cannot be undone.")) {
-      await deleteSalesRecord(id);
+      const result = await deleteSalesRecord(id);
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       fetchRecords();
     }
   };
 
   const handleSubmit = async (id: string) => {
-    await submitSalesRecord(id);
+    const result = await submitSalesRecord(id);
+    if (result?.error) {
+      alert(result.error);
+      return;
+    }
     fetchRecords();
   };
 
@@ -70,6 +89,35 @@ export default function SalesRecords() {
     return <Badge variant={variant}>{status.replace(/_/g, " ")}</Badge>;
   };
 
+  const exportToCSV = () => {
+    if (records.length === 0) return;
+    const rows = records.map((r) => ({
+      Company: r.companyName || "",
+      Email: r.companyEmail || "",
+      "Products Count": r.productCount || 0,
+      "Total Amount": r.totalAmount || 0,
+      Status: r.status || "",
+      Commission: r.commission || 0,
+      "Created Date": r.createdAt
+        ? new Date(r.createdAt).toLocaleDateString()
+        : "",
+    }));
+    const headers = Object.keys(rows[0]).join(",");
+    const csvRows = rows.map((row) =>
+      Object.values(row)
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [headers, ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sales-records.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -77,10 +125,16 @@ export default function SalesRecords() {
           <h1 className="text-3xl font-bold">My Sales Records</h1>
           <p className="text-muted-foreground">View and manage your sales records</p>
         </div>
-        <Button onClick={() => router.push("/sales-dashboard/add-record")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Add Sale
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={exportToCSV} disabled={records.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
+          <Button onClick={() => router.push("/sales-dashboard/add-record")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Add Sale
+          </Button>
+        </div>
       </div>
 
       <Card>
@@ -114,6 +168,11 @@ export default function SalesRecords() {
           </div>
         </CardHeader>
         <CardContent>
+          {(() => {
+            const totalPages = Math.max(1, Math.ceil(records.length / 20));
+            const paginatedRecords = records.slice((page - 1) * 20, page * 20);
+            return (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
@@ -139,7 +198,7 @@ export default function SalesRecords() {
                   </TableCell>
                 </TableRow>
               ) : (
-                records.map((record) => (
+                paginatedRecords.map((record) => (
                   <TableRow key={record.id}>
                     <TableCell className="font-medium">{record.companyName}</TableCell>
                     <TableCell>{record.productCount} products</TableCell>
@@ -169,6 +228,10 @@ export default function SalesRecords() {
               )}
             </TableBody>
           </Table>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          </>
+          );
+          })()}
         </CardContent>
       </Card>
     </div>

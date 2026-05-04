@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Product } from "@/lib/models/Product";
@@ -34,6 +35,8 @@ const updateProductSchema = z.object({
 const deleteProductSchema = objectIdSchema;
 
 export async function getProducts({ categoryId, search }: { categoryId?: string; search?: string }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = getProductsSchema.safeParse({ categoryId, search });
   if (!parsed.success) return [];
   await connectToDatabase();
@@ -76,6 +79,10 @@ export async function createProduct({
   stock?: number;
   image?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createProductSchema.safeParse({ name, sku, categoryId, price, stock, image });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -112,6 +119,10 @@ export async function updateProduct({
   stock?: number;
   image?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateProductSchema.safeParse({ id, name, sku, categoryId, price, stock, image });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -129,11 +140,15 @@ export async function updateProduct({
 }
 
 export async function deleteProduct(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteProductSchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid ID format" };
   }
   await connectToDatabase();
-  await Product.findByIdAndDelete(parsed.data);
+  await Product.findByIdAndUpdate(parsed.data, { deletedAt: new Date() });
   return { success: true };
 }

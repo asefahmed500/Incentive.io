@@ -28,13 +28,20 @@ export default function AdminAnalytics() {
         getTargets(),
       ]);
       
+      const safeUsers = Array.isArray(users) ? users : [];
+      const safeTeams = Array.isArray(teams) ? teams : [];
+      const safeCommissions = Array.isArray(commissionsData) ? commissionsData : [];
+      if (!Array.isArray(users)) console.error((users as any)?.error || "Failed to fetch users");
+      if (!Array.isArray(teams)) console.error((teams as any)?.error || "Failed to fetch teams");
+      if (!Array.isArray(commissionsData)) console.error((commissionsData as any)?.error || "Failed to fetch commissions");
+      
       setStats({
-        totalUsers: users.length,
-        totalTeams: teams.length,
-        totalSales: commissionsData.length,
-        totalCommissions: commissionsData.reduce((sum: number, c: any) => sum + (c.commission || 0), 0),
-        pendingSales: commissionsData.filter((c: any) => c.status === "Pending").length,
-        approvedSales: commissionsData.filter((c: any) => c.status === "Approved").length,
+        totalUsers: safeUsers.length,
+        totalTeams: safeTeams.length,
+        totalSales: safeCommissions.length,
+        totalCommissions: safeCommissions.reduce((sum: number, c: any) => sum + (c.commission || 0), 0),
+        pendingSales: safeCommissions.filter((c: any) => c.status === "Pending").length,
+        approvedSales: safeCommissions.filter((c: any) => c.status === "Approved").length,
       });
       setLoading(false);
     };

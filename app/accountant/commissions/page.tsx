@@ -17,7 +17,12 @@ export default function AccountantCommissions() {
   const fetchCommissions = async () => {
     setLoading(true);
     const data = await getCommissions();
-    setCommissions(data);
+    if (Array.isArray(data)) {
+      setCommissions(data);
+    } else {
+      setCommissions([]);
+      console.error((data as any)?.error || "Failed to fetch commissions");
+    }
     setLoading(false);
   };
 
@@ -26,15 +31,15 @@ export default function AccountantCommissions() {
   }, []);
 
   const filtered = commissions.filter((c: any) => {
-    if (eligibilityFilter !== "all") {
-      // Filter logic
-    }
+    if (eligibilityFilter === "eligible" && !c.isEligible) return false;
+    if (eligibilityFilter === "not_eligible" && c.isEligible) return false;
     if (search && !c.employeeName?.toLowerCase().includes(search.toLowerCase())) {
       return false;
     }
     return true;
   });
 
+  const totalEligible = commissions.filter((c: any) => c.isEligible).length;
   const totalCommission = filtered.reduce((sum: number, c: any) => sum + (c.calculatedCommission || 0), 0);
 
   return (
@@ -58,7 +63,7 @@ export default function AccountantCommissions() {
             <CardTitle className="text-sm font-medium">Eligible</CardTitle>
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold text-green-600">{filtered.length}</div>
+            <div className="text-2xl font-bold text-green-600">{totalEligible}</div>
           </CardContent>
         </Card>
         <Card>
@@ -119,8 +124,8 @@ export default function AccountantCommissions() {
                     <TableCell className="font-medium">{c.employeeName}</TableCell>
                     <TableCell>৳{c.calculatedCommission?.toLocaleString() || 0}</TableCell>
                     <TableCell>
-                      <Badge variant={c.status === "Approved" ? "default" : "secondary"}>
-                        {c.status}
+                      <Badge variant={c.isEligible ? "default" : "secondary"}>
+                        {c.isEligible ? "ELIGIBLE" : "NOT_ELIGIBLE"}
                       </Badge>
                     </TableCell>
                     <TableCell>{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}</TableCell>

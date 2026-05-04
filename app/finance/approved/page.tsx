@@ -16,7 +16,12 @@ export default function FinanceApprovedPage() {
   useEffect(() => {
     const fetchData = async () => {
       const data = await getCommissions();
-      setCommissions(data);
+      if (Array.isArray(data)) {
+        setCommissions(data);
+      } else {
+        setCommissions([]);
+        console.error((data as any)?.error || "Failed to fetch commissions");
+      }
       setLoading(false);
     };
     fetchData();

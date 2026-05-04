@@ -32,7 +32,6 @@ export default function ProfilePage() {
 
     setIsPending(true);
     const result = await changePassword({
-      userId: session?.user?.id || "",
       currentPassword,
       newPassword,
     }) as { success?: boolean; error?: string };

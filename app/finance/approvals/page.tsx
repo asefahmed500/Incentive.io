@@ -9,9 +9,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Check, X, DollarSign, FileText, User, Calendar, Eye } from "lucide-react";
-import { getAllSalesRecords } from "@/lib/actions/sales.actions";
-import { processByAccountant, finalApproveByFinance, rejectSale } from "@/lib/actions/approval.actions";
-import { createNotification } from "@/lib/actions/notification.actions";
+import { getPendingFinanceApprovals, finalApproveByFinance, rejectSale } from "@/lib/actions/approval.actions";
 import { toast } from "sonner";
 import { useSession } from "next-auth/react";
 
@@ -26,11 +24,13 @@ export default function FinanceApprovals() {
 
   const fetchRecords = async () => {
     setLoading(true);
-    const allRecords = await getAllSalesRecords({});
-    const pendingFinance = allRecords.filter(
-      (r: any) => r.financeStatus === "Pending"
-    );
-    setRecords(pendingFinance);
+    const data = await getPendingFinanceApprovals();
+    if (Array.isArray(data)) {
+      setRecords(data);
+    } else {
+      setRecords([]);
+      console.error((data as any)?.error || "Failed to fetch approvals");
+    }
     setLoading(false);
   };
 
@@ -41,13 +41,11 @@ export default function FinanceApprovals() {
   const handleApprove = async (recordId: string) => {
     try {
       const paidBy = (session?.user as any)?.id || "";
-      await finalApproveByFinance(recordId, paidBy);
-      await createNotification({
-        userId: records.find(r => r.id === recordId)?.employeeId || "",
-        title: "Finance Approved",
-        message: "Your sales record has been approved by Finance and is now ready for payment.",
-        type: "FINANCE_APPROVED",
-      });
+      const approveResult = await finalApproveByFinance(recordId, paidBy);
+      if (approveResult?.error) {
+        toast.error(approveResult.error);
+        return;
+      }
       toast.success("Record approved successfully");
       setShowApproveDialog(false);
       setSelectedRecord(null);
@@ -60,13 +58,11 @@ export default function FinanceApprovals() {
   const handleReject = async () => {
     if (!selectedRecord) return;
     try {
-      await rejectSale(selectedRecord.id, rejectReason);
-      await createNotification({
-        userId: selectedRecord.employeeId,
-        title: "Finance Rejected",
-        message: `Your sales record was rejected: ${rejectReason}`,
-        type: "error",
-      });
+      const rejectResult = await rejectSale(selectedRecord.id, rejectReason, "finance");
+      if (rejectResult?.error) {
+        toast.error(rejectResult.error);
+        return;
+      }
       toast.success("Record rejected");
       setShowRejectDialog(false);
       setSelectedRecord(null);

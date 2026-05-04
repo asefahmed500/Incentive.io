@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, Suspense } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,8 +32,8 @@ import {
 } from "@/components/ui/select";
 import { Plus, Trash2, Save, Send, Upload, X, FileText } from "lucide-react";
 import { getCategories } from "@/lib/actions/category.actions";
-import { createSalesRecord, submitSalesRecord } from "@/lib/actions/sales.actions";
-import { useRouter } from "next/navigation";
+import { createSalesRecord, submitSalesRecord, getSalesRecord, updateSalesRecord } from "@/lib/actions/sales.actions";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useSession } from "next-auth/react";
 
 interface UploadedFile {
@@ -42,8 +42,20 @@ interface UploadedFile {
   size: number;
 }
 
-export default function AddSalesRecord() {
+export default function AddSalesRecordPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[400px]"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div></div>}>
+      <AddSalesRecord />
+    </Suspense>
+  );
+}
+
+function AddSalesRecord() {
   const { data: session } = useSession();
+  const searchParams = useSearchParams();
+  const editId = searchParams.get("id");
+  const isEditing = !!editId;
+  const [isLoading, setIsLoading] = useState(false);
   const [companyName, setCompanyName] = useState("");
   const [companyEmail, setCompanyEmail] = useState("");
   const [taxEnabled, setTaxEnabled] = useState(false);
@@ -64,6 +76,43 @@ export default function AddSalesRecord() {
     };
     loadCategories();
   }, []);
+
+  useEffect(() => {
+    if (!editId) return;
+    const loadRecord = async () => {
+      setIsLoading(true);
+      const record = await getSalesRecord(editId);
+      if (record) {
+        setCompanyName(record.companyName || "");
+        setCompanyEmail(record.companyEmail || "");
+        setTaxEnabled(record.taxEnabled || false);
+        setVatEnabled(record.vatEnabled || false);
+        if (record.products && record.products.length > 0) {
+          setProducts(
+            record.products.map((p: any) => ({
+              productName: p.productName || "",
+              categoryId: p.categoryId?.toString() || p.category || "",
+              unitPrice: p.unitPrice?.toString() || "",
+              quantity: p.quantity?.toString() || "1",
+              originalPrice: p.originalPrice?.toString() || "",
+              dealNotes: p.dealNotes || "",
+            }))
+          );
+        }
+        if (record.proofOfSale && record.proofOfSale.length > 0) {
+          setUploadedFiles(
+            record.proofOfSale.map((url: string) => ({
+              url,
+              fileName: url.split("/").pop() || "file",
+              size: 0,
+            }))
+          );
+        }
+      }
+      setIsLoading(false);
+    };
+    loadRecord();
+  }, [editId]);
 
   const addProduct = () => {
     if (products.length < 20) {
@@ -129,24 +178,33 @@ export default function AddSalesRecord() {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
   };
 
+  const buildRecordData = () => ({
+    employeeId: session?.user?.id || "",
+    employeeName: session?.user?.name || "Current User",
+    companyName,
+    companyEmail,
+    products: products.map(p => ({
+      productName: p.productName,
+      categoryId: p.categoryId,
+      unitPrice: parseFloat(p.unitPrice) || 0,
+      quantity: parseInt(p.quantity) || 1,
+      originalPrice: p.originalPrice ? parseFloat(p.originalPrice) : undefined,
+      dealNotes: p.dealNotes,
+    })),
+    taxEnabled,
+    vatEnabled,
+    proofOfSale: uploadedFiles.map(f => f.url),
+  });
+
   const handleSaveDraft = () => {
     startTransition(async () => {
-      const result = await createSalesRecord({
-        employeeName: session?.user?.name || "Current User",
-        companyName,
-        companyEmail,
-        products: products.map(p => ({
-          productName: p.productName,
-          categoryId: p.categoryId,
-          unitPrice: parseFloat(p.unitPrice) || 0,
-          quantity: parseInt(p.quantity) || 1,
-          originalPrice: p.originalPrice ? parseFloat(p.originalPrice) : undefined,
-          dealNotes: p.dealNotes,
-        })),
-        taxEnabled,
-        vatEnabled,
-        proofOfSale: uploadedFiles.map(f => f.url),
-      });
+      const data = buildRecordData();
+      let result;
+      if (isEditing) {
+        result = await updateSalesRecord(editId, data);
+      } else {
+        result = await createSalesRecord(data);
+      }
       if (result.success) {
         router.push("/sales-dashboard/records");
       }
@@ -155,25 +213,19 @@ export default function AddSalesRecord() {
 
   const handleSubmitForApproval = () => {
     startTransition(async () => {
-      const result = await createSalesRecord({
-        employeeName: session?.user?.name || "Current User",
-        companyName,
-        companyEmail,
-        products: products.map(p => ({
-          productName: p.productName,
-          categoryId: p.categoryId,
-          unitPrice: parseFloat(p.unitPrice) || 0,
-          quantity: parseInt(p.quantity) || 1,
-          originalPrice: p.originalPrice ? parseFloat(p.originalPrice) : undefined,
-          dealNotes: p.dealNotes,
-        })),
-        taxEnabled,
-        vatEnabled,
-        proofOfSale: uploadedFiles.map(f => f.url),
-      });
-      if (result.success && result.id) {
-        await submitSalesRecord(result.id);
-        router.push("/sales-dashboard/records");
+      const data = buildRecordData();
+      if (isEditing) {
+        const result = await updateSalesRecord(editId, data);
+        if (result.success) {
+          await submitSalesRecord(editId);
+          router.push("/sales-dashboard/records");
+        }
+      } else {
+        const result = await createSalesRecord(data);
+        if (result.success && result.id) {
+          await submitSalesRecord(result.id);
+          router.push("/sales-dashboard/records");
+        }
       }
     });
   };
@@ -188,9 +240,15 @@ export default function AddSalesRecord() {
 
   return (
     <div className="space-y-6">
+      {isLoading ? (
+        <div className="flex items-center justify-center py-12">
+          <p className="text-muted-foreground">Loading record...</p>
+        </div>
+      ) : (
+      <>
       <div>
-        <h1 className="text-3xl font-bold">Add Sales Record</h1>
-        <p className="text-muted-foreground">Create a new sales record with multiple products</p>
+        <h1 className="text-3xl font-bold">{isEditing ? "Edit Sales Record" : "Add Sales Record"}</h1>
+        <p className="text-muted-foreground">{isEditing ? "Modify the sales record details" : "Create a new sales record with multiple products"}</p>
       </div>
 
       <Card>
@@ -413,6 +471,8 @@ export default function AddSalesRecord() {
           </div>
         </CardContent>
       </Card>
+      </>
+      )}
     </div>
   );
 }

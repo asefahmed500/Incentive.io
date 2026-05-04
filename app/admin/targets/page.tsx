@@ -56,8 +56,12 @@ export default function AdminTargets() {
         getTargets(),
         getUsers({ search: "", role: "all" }),
       ]);
-      setTargets(targetsData);
-      const executives = usersData.filter(
+      const safeTargets = Array.isArray(targetsData) ? targetsData : [];
+      const safeUsers = Array.isArray(usersData) ? usersData : [];
+      if (!Array.isArray(targetsData)) console.error((targetsData as any)?.error || "Failed to fetch targets");
+      if (!Array.isArray(usersData)) console.error((usersData as any)?.error || "Failed to fetch users");
+      setTargets(safeTargets);
+      const executives = safeUsers.filter(
         (u: any) => u.role === "salesExecutive" || u.role === "salesManager"
       );
       setAvailableUsers(executives);
@@ -71,7 +75,11 @@ export default function AdminTargets() {
 
   const handleRemove = async (id: string) => {
     if (confirm("Remove target from this user?")) {
-      await removeTarget(id);
+      const result = await removeTarget(id);
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       fetchTargets();
     }
   };
@@ -212,17 +220,25 @@ function TargetForm({
 
   const onSubmit = async (data: any) => {
     if (editTarget) {
-      await assignTarget({
+      const result = await assignTarget({
         userId: editTarget.id,
         targetAmount: data.targetAmount,
         period: data.period,
       });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
     } else {
-      await assignTarget({
+      const result = await assignTarget({
         userId: data.userId,
         targetAmount: data.targetAmount,
         period: data.period,
       });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
     }
     onSuccess();
   };

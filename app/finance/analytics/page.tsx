@@ -36,7 +36,12 @@ export default function FinanceAnalytics() {
       periodStart = new Date(0);
     }
 
-    const periodCommissions = commissions.filter(
+    const safeCommissions = Array.isArray(commissions) ? commissions : [];
+    const safeSales = Array.isArray(sales) ? sales : [];
+    if (!Array.isArray(commissions)) console.error((commissions as any)?.error || "Failed to fetch commissions");
+    if (!Array.isArray(sales)) console.error((sales as any)?.error || "Failed to fetch sales");
+
+    const periodCommissions = safeCommissions.filter(
       (c: any) => new Date(c.createdAt) >= periodStart
     );
 
@@ -59,7 +64,7 @@ export default function FinanceAnalytics() {
       avgCommission: periodCommissions.length > 0 
         ? totalPayout / periodCommissions.length 
         : 0,
-      recordsProcessed: sales.filter((s: any) => s.financeStatus === "Approved").length,
+      recordsProcessed: safeSales.filter((s: any) => s.financeStatus === "Approved").length,
       eligibleCount,
     });
     setLoading(false);

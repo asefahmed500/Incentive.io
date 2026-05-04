@@ -35,8 +35,15 @@ export default function SalesManagerDashboard() {
         getSalesRecordsByManagerId(session.user.id),
       ]);
       
+      const safePending = Array.isArray(pending) ? pending : [];
+      const safeUsers = Array.isArray(users) ? users : [];
+      const safeSales = Array.isArray(sales) ? sales : [];
+      if (!Array.isArray(pending)) console.error((pending as any)?.error || "Failed to fetch pending approvals");
+      if (!Array.isArray(users)) console.error((users as any)?.error || "Failed to fetch users");
+      if (!Array.isArray(sales)) console.error((sales as any)?.error || "Failed to fetch sales");
+      
       // Filter users to only those managed by this manager
-      const teamMembers = users.filter((u: any) => u.managerId === session.user.id);
+      const teamMembers = safeUsers.filter((u: any) => u.managerId === session.user.id);
       
       // Calculate team commissions
       let totalCommissions = 0;
@@ -50,12 +57,12 @@ export default function SalesManagerDashboard() {
         if (elig.eligible) eligibleCount++;
       }
       
-      const teamSalesAmount = sales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
+      const teamSalesAmount = safeSales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
       
       setStats({
         teamSize: teamMembers.length,
-        pendingApprovals: pending.length,
-        teamSales: sales.length,
+        pendingApprovals: safePending.length,
+        teamSales: safeSales.length,
         teamSalesAmount,
         teamCommissions: totalCommissions,
         teamEligible: eligibleCount,

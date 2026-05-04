@@ -13,7 +13,12 @@ export default function ManagerCommissionRules() {
   useEffect(() => {
     const fetchRules = async () => {
       const data = await getCommissionRules();
-      setRules(data);
+      if (Array.isArray(data)) {
+        setRules(data);
+      } else {
+        setRules([]);
+        console.error((data as any)?.error || "Failed to fetch commission rules");
+      }
       setLoading(false);
     };
     fetchRules();

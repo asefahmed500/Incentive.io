@@ -1,10 +1,13 @@
 import { getSalesRecord, updateSalesRecord, deleteSalesRecord } from "@/lib/actions/sales.actions";
 import { NextResponse } from "next/server";
+import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireAuth();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const { id } = await params;
   const record = await getSalesRecord(id);
   
@@ -19,6 +22,8 @@ export async function PUT(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireAuth();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const { id } = await params;
   const body = await request.json();
   
@@ -35,6 +40,8 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const { id } = await params;
   
   const result = await deleteSalesRecord(id) as { success?: boolean; error?: string };

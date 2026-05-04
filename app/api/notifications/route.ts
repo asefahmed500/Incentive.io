@@ -1,7 +1,10 @@
 import { getNotifications, getUnreadCount, markAsRead, markAllAsRead } from "@/lib/actions/notification.actions";
 import { NextResponse } from "next/server";
+import { requireAuth } from "@/lib/auth/role-guard";
 
 export async function GET(request: Request) {
+  const authResult = await requireAuth();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
   const action = searchParams.get("action");
@@ -21,6 +24,8 @@ export async function GET(request: Request) {
 }
 
 export async function PATCH(request: Request) {
+  const authResult = await requireAuth();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const body = await request.json();
   const { id, userId, action } = body;
 

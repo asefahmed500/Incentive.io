@@ -76,12 +76,17 @@ export async function DELETE(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const filePath = searchParams.get("path");
-
-    if (!filePath) {
-      return NextResponse.json({ error: "No file path provided" }, { status: 400 });
+    
+    if (!filePath || filePath.includes("..") || filePath.startsWith("/")) {
+      return NextResponse.json({ error: "Invalid file path" }, { status: 400 });
     }
-
+    
     const fullPath = join(process.cwd(), "public", filePath);
+    const uploadsDir = join(process.cwd(), "public", "uploads");
+    
+    if (!fullPath.startsWith(uploadsDir)) {
+      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    }
 
     if (!existsSync(fullPath)) {
       return NextResponse.json({ error: "File not found" }, { status: 404 });

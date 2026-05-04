@@ -5,11 +5,13 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search, DollarSign, TrendingUp, Check } from "lucide-react";
+import { Search, DollarSign, TrendingUp } from "lucide-react";
 import { getUsers } from "@/lib/actions/user.actions";
 import { getCommissions } from "@/lib/actions/commission.actions";
+import { useSession } from "next-auth/react";
 
 export default function TeamCommissionsPage() {
+  const { data: session } = useSession();
   const [commissions, setCommissions] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -18,16 +20,34 @@ export default function TeamCommissionsPage() {
 
   useEffect(() => {
     const fetchData = async () => {
-      const [commissionsData, usersData] = await Promise.all([
+      const [allCommissions, allExecutives] = await Promise.all([
         getCommissions(),
         getUsers({ role: "salesExecutive", search: "" }),
       ]);
-      setCommissions(commissionsData);
-      setUsers(usersData);
+
+      const safeCommissions = Array.isArray(allCommissions) ? allCommissions : [];
+      const safeExecutives = Array.isArray(allExecutives) ? allExecutives : [];
+      if (!Array.isArray(allCommissions)) console.error((allCommissions as any)?.error || "Failed to fetch commissions");
+      if (!Array.isArray(allExecutives)) console.error((allExecutives as any)?.error || "Failed to fetch users");
+
+      const managerId = session?.user?.id;
+      const teamMembers = safeExecutives.filter(
+        (u: any) => u.managerId === managerId
+      );
+      const teamMemberIds = new Set(teamMembers.map((u: any) => u.id));
+
+      const teamCommissions = safeCommissions.filter((c: any) =>
+        teamMemberIds.has(c.employeeId)
+      );
+
+      setCommissions(teamCommissions);
+      setUsers(teamMembers);
       setLoading(false);
     };
-    fetchData();
-  }, []);
+    if (session?.user?.id) {
+      fetchData();
+    }
+  }, [session?.user?.id]);
 
   const filteredCommissions = commissions.filter((c: any) => {
     if (employeeFilter !== "all" && c.employeeId !== employeeFilter) return false;

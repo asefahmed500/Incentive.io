@@ -29,12 +29,15 @@ export interface ISalesRecord extends Document {
   commission: number;
   calculatedCommission: number;
   rejectionReason?: string;
+  rejectedBy?: "manager" | "accountant" | "finance";
+  eligibilityStatus?: "Eligible" | "Not_Eligible" | "Pending";
   proofOfSale: string[];
   managerId: mongoose.Types.ObjectId;
   approvedBy?: mongoose.Types.ObjectId;
   approvedAt?: Date;
   processedAt?: Date;
   finalApprovedAt?: Date;
+  paidBy?: mongoose.Types.ObjectId;
   isPaid: boolean;
   paymentStatus: "Pending" | "Paid";
   paymentDate?: Date;
@@ -79,12 +82,15 @@ const SalesRecordSchema = new Schema<ISalesRecord>(
     commission: { type: Number, default: 0 },
     calculatedCommission: { type: Number, default: 0 },
     rejectionReason: { type: String },
+    rejectedBy: { type: String, enum: ["manager", "accountant", "finance"] },
+    eligibilityStatus: { type: String, enum: ["Eligible", "Not_Eligible", "Pending"], default: "Pending" },
     proofOfSale: [String],
     managerId: { type: Schema.Types.ObjectId, ref: "User" },
     approvedBy: { type: Schema.Types.ObjectId, ref: "User" },
     approvedAt: { type: Date },
     processedAt: { type: Date },
     finalApprovedAt: { type: Date },
+    paidBy: { type: Schema.Types.ObjectId, ref: "User" },
     isPaid: { type: Boolean, default: false },
     paymentStatus: { type: String, enum: ["Pending", "Paid"], default: "Pending" },
     paymentDate: { type: Date },

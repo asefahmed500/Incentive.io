@@ -17,7 +17,12 @@ export default function AccountantRecords() {
   const fetchRecords = async () => {
     setLoading(true);
     const data = await getAllSalesRecords({ status: statusFilter !== "all" ? statusFilter : undefined });
-    setRecords(data);
+    if (Array.isArray(data)) {
+      setRecords(data);
+    } else {
+      setRecords([]);
+      console.error((data as any)?.error || "Failed to fetch records");
+    }
     setLoading(false);
   };
 

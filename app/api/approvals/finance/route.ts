@@ -1,8 +1,11 @@
 import { finalApproveByFinance } from "@/lib/actions/approval.actions";
 import { notifyFinanceApproved } from "@/lib/actions/notification.actions";
 import { NextResponse } from "next/server";
+import { requireFinanceOrAbove } from "@/lib/auth/role-guard";
 
 export async function POST(request: Request) {
+  const authResult = await requireFinanceOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   const body = await request.json();
   const { id, employeeId, managerId, companyName, commission, paidBy } = body;
 

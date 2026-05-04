@@ -23,12 +23,14 @@ export default function AdminCommissions() {
   const fetchCommissions = async () => {
     setLoading(true);
     const data = await getCommissions();
+    const safeData = Array.isArray(data) ? data : [];
+    if (!Array.isArray(data)) console.error((data as any)?.error || "Failed to fetch commissions");
     if (search) {
-      setCommissions(data.filter((c: any) => 
+      setCommissions(safeData.filter((c: any) => 
         c.employeeName?.toLowerCase().includes(search.toLowerCase())
       ));
     } else {
-      setCommissions(data);
+      setCommissions(safeData);
     }
     setLoading(false);
   };
@@ -37,7 +39,7 @@ export default function AdminCommissions() {
     fetchCommissions();
   }, []);
 
-  const totalEligible = commissions.length;
+  const totalEligible = commissions.filter((c: any) => c.isEligible).length;
   const totalCommission = commissions.reduce((sum: number, c: any) => sum + (c.calculatedCommission || 0), 0);
 
   return (
@@ -114,8 +116,8 @@ export default function AdminCommissions() {
                     <TableCell className="font-medium">{c.employeeName}</TableCell>
                     <TableCell>৳{c.calculatedCommission?.toLocaleString() || 0}</TableCell>
                     <TableCell>
-                      <Badge variant={c.status === "Approved" ? "default" : "secondary"}>
-                        {c.status}
+                      <Badge variant={c.isEligible ? "default" : "secondary"}>
+                        {c.isEligible ? "ELIGIBLE" : "NOT_ELIGIBLE"}
                       </Badge>
                     </TableCell>
                     <TableCell>{c.createdAt ? new Date(c.createdAt).toLocaleDateString() : "—"}</TableCell>

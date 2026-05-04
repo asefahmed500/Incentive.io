@@ -1,8 +1,10 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Building2, Tag, Percent, Target, FileText, Wallet, BarChart3, Settings, LogOut, User, HardDrive, Bell, RefreshCw, Database, Activity, ClipboardList } from "lucide-react";
 import { signOut } from "next-auth/react";
+import { cn } from "@/lib/utils";
 import {
   Sidebar,
   SidebarContent,
@@ -33,6 +35,7 @@ export default function AdministratorLayout({
 }: {
   children: React.ReactNode;
 }) {
+  const pathname = usePathname();
   return (
     <SidebarProvider>
       <Sidebar>
@@ -49,7 +52,7 @@ export default function AdministratorLayout({
           <SidebarMenu>
             {sidebarItems.map((item) => (
               <SidebarMenuItem key={item.href}>
-                <SidebarMenuButton asChild>
+                <SidebarMenuButton asChild isActive={pathname === item.href}>
                   <Link href={item.href} className="flex items-center gap-3 px-3 py-2">
                     <item.icon className="h-4 w-4" />
                     <span>{item.label}</span>

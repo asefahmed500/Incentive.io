@@ -2,8 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { AuditLog } from "@/lib/models/AuditLog";
+import { requireAdminOrAbove } from "@/lib/auth/role-guard";
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     await connectToDatabase();
     const { searchParams } = new URL(request.url);
@@ -46,6 +49,8 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     await connectToDatabase();
     const body = await request.json();

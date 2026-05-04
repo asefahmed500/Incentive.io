@@ -22,13 +22,18 @@ export default function AccountantAnalytics() {
         getAllSalesRecords({}),
       ]);
       
-      const totalCommission = commissions.reduce((sum: number, c: any) => sum + (c.calculatedCommission || 0), 0);
+      const safeCommissions = Array.isArray(commissions) ? commissions : [];
+      const safeSales = Array.isArray(sales) ? sales : [];
+      if (!Array.isArray(commissions)) console.error((commissions as any)?.error || "Failed to fetch commissions");
+      if (!Array.isArray(sales)) console.error((sales as any)?.error || "Failed to fetch sales");
+      
+      const totalCommission = safeCommissions.reduce((sum: number, c: any) => sum + (c.calculatedCommission || 0), 0);
       
       setStats({
-        totalSales: sales.length,
+        totalSales: safeSales.length,
         totalCommission,
-        avgDeduction: 0, // Would calculate from sales with deductions
-        processedCount: commissions.length,
+        avgDeduction: 0,
+        processedCount: safeCommissions.length,
       });
       setLoading(false);
     };

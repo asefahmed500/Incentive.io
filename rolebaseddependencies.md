@@ -114,6 +114,7 @@ This document organizes all features by **user role** and shows **dependencies**
 - [ ] Same as Executive wallet (1.8)  
 - **Dependencies:** Module 13
 
+
 ---
 
 ## 3. Accountant (Acc)
@@ -162,7 +163,7 @@ This document organizes all features by **user role** and shows **dependencies**
 **Dependencies for the entire role:**  
 - Module 10 (Finance approval and commission trigger)  
 - Accountant approvals complete (status Pending_Finance)  
-
+ro
 ### Sub‑features
 
 **4.1 Finance Approval Queue**  

@@ -59,8 +59,18 @@ export default function AdminCommissionRules() {
         getCommissionRules(),
         getCategories(),
       ]);
-      setRules(rulesData);
-      setCategories(categoriesData);
+      if (Array.isArray(rulesData)) {
+        setRules(rulesData);
+      } else {
+        setRules([]);
+        console.error((rulesData as any)?.error || "Failed to fetch rules");
+      }
+      if (Array.isArray(categoriesData)) {
+        setCategories(categoriesData);
+      } else {
+        setCategories([]);
+        console.error((categoriesData as any)?.error || "Failed to fetch categories");
+      }
       setLoading(false);
     });
   };
@@ -71,13 +81,21 @@ export default function AdminCommissionRules() {
 
   const handleDelete = async (id: string) => {
     if (confirm("Delete this rule?")) {
-      await deleteCommissionRule(id);
+      const result = await deleteCommissionRule(id);
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       fetchRules();
     }
   };
 
   const toggleActive = async (id: string, isActive: boolean) => {
-    await updateCommissionRule({ id, isActive: !isActive });
+    const result = await updateCommissionRule({ id, isActive: !isActive });
+    if (result?.error) {
+      alert(result.error);
+      return;
+    }
     fetchRules();
   };
 
@@ -220,7 +238,7 @@ function RuleForm({
 
   const onSubmit = async (data: any) => {
     if (editRule) {
-      await updateCommissionRule({
+      const result = await updateCommissionRule({
         id: editRule.id,
         targetPercentageFrom: data.targetPercentageFrom,
         targetPercentageTo: data.targetPercentageTo,
@@ -228,14 +246,22 @@ function RuleForm({
         priority: data.priority,
         categoryId: data.categoryId,
       });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
     } else {
-      await createCommissionRule({
+      const result = await createCommissionRule({
         targetPercentageFrom: data.targetPercentageFrom,
         targetPercentageTo: data.targetPercentageTo,
         commissionRate: data.commissionRate,
         priority: data.priority,
         categoryId: data.categoryId,
       });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
     }
     onSuccess();
   };

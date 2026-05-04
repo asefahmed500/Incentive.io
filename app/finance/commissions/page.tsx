@@ -5,19 +5,31 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Search } from "lucide-react";
+import { Search, Download } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import { getCommissions } from "@/lib/actions/commission.actions";
+import { Pagination } from "@/components/ui/pagination";
 
 export default function FinanceCommissions() {
   const [commissions, setCommissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [eligibilityFilter, setEligibilityFilter] = useState("all");
+  const [page, setPage] = useState(1);
+
+  useEffect(() => {
+    setPage(1);
+  }, [search, eligibilityFilter]);
 
   const fetchCommissions = async () => {
     setLoading(true);
     const data = await getCommissions();
-    setCommissions(data);
+    if (Array.isArray(data)) {
+      setCommissions(data);
+    } else {
+      setCommissions([]);
+      console.error((data as any)?.error || "Failed to fetch commissions");
+    }
     setLoading(false);
   };
 
@@ -26,8 +38,8 @@ export default function FinanceCommissions() {
   }, []);
 
   const filtered = commissions.filter((c: any) => {
-    if (eligibilityFilter === "eligible" && c.status !== "ELIGIBLE") return false;
-    if (eligibilityFilter === "not_eligible" && c.status !== "NOT_ELIGIBLE") return false;
+    if (eligibilityFilter === "eligible" && !c.isEligible) return false;
+    if (eligibilityFilter === "not_eligible" && c.isEligible) return false;
     if (
       search &&
       !c.employeeName?.toLowerCase().includes(search.toLowerCase())
@@ -37,15 +49,52 @@ export default function FinanceCommissions() {
     return true;
   });
 
-  const totalEligible = commissions.filter((c: any) => c.status === "ELIGIBLE").length;
-  const totalNotEligible = commissions.filter((c: any) => c.status === "NOT_ELIGIBLE").length;
+  const totalEligible = commissions.filter((c: any) => c.isEligible).length;
+  const totalNotEligible = commissions.filter((c: any) => !c.isEligible).length;
   const totalCommission = filtered.reduce((sum: number, c: any) => sum + (c.calculatedCommission || 0), 0);
+
+  const exportToCSV = () => {
+    if (commissions.length === 0) return;
+    const rows = filtered.map((c) => ({
+      Employee: c.employeeName || "",
+      Company: c.companyName || "",
+      Amount: c.netAmount || c.grossAmount || 0,
+      Commission: c.calculatedCommission || 0,
+      Eligibility: c.isEligible ? "ELIGIBLE" : "NOT_ELIGIBLE",
+      Status: c.status || "",
+      Date: c.createdAt
+        ? new Date(c.createdAt).toLocaleDateString()
+        : "",
+    }));
+    const headers = Object.keys(rows[0]).join(",");
+    const csvRows = rows.map((row) =>
+      Object.values(row)
+        .map((v) => `"${String(v).replace(/"/g, '""')}"`)
+        .join(",")
+    );
+    const csv = [headers, ...csvRows].join("\n");
+    const blob = new Blob([csv], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "commissions.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  };
 
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-3xl font-bold">Commissions</h1>
-        <p className="text-muted-foreground">View all commissions and eligibility</p>
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Commissions</h1>
+            <p className="text-muted-foreground">View all commissions and eligibility</p>
+          </div>
+          <Button variant="outline" onClick={exportToCSV} disabled={commissions.length === 0}>
+            <Download className="mr-2 h-4 w-4" />
+            Export
+          </Button>
+        </div>
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -99,6 +148,11 @@ export default function FinanceCommissions() {
           </div>
         </CardHeader>
         <CardContent>
+          {(() => {
+            const totalPages = Math.max(1, Math.ceil(filtered.length / 20));
+            const paginatedFiltered = filtered.slice((page - 1) * 20, page * 20);
+            return (
+          <>
           <Table>
             <TableHeader>
               <TableRow>
@@ -123,16 +177,16 @@ export default function FinanceCommissions() {
                   </TableCell>
                 </TableRow>
               ) : (
-                filtered.map((c) => (
+                paginatedFiltered.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{c.employeeName}</TableCell>
                     <TableCell>{c.achievementPercent?.toFixed(1) || 0}%</TableCell>
                     <TableCell>৳{c.calculatedCommission?.toLocaleString() || 0}</TableCell>
                     <TableCell>
                       <Badge
-                        variant={c.status === "ELIGIBLE" ? "default" : "secondary"}
+                        variant={c.isEligible ? "default" : "secondary"}
                       >
-                        {c.status}
+                        {c.isEligible ? "ELIGIBLE" : "NOT_ELIGIBLE"}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -145,6 +199,10 @@ export default function FinanceCommissions() {
               )}
             </TableBody>
           </Table>
+          <Pagination currentPage={page} totalPages={totalPages} onPageChange={setPage} />
+          </>
+          );
+          })()}
         </CardContent>
       </Card>
     </div>

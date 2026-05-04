@@ -4,6 +4,7 @@ import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
 import CommissionRule from "@/lib/models/CommissionRule";
 import { Wallet } from "@/lib/models/Wallet";
+import { requireAdminOrAbove } from "@/lib/auth/role-guard";
 
 async function syncCommissions() {
   const records = await SalesRecord.find({
@@ -110,6 +111,8 @@ async function syncEligibility() {
 }
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     const { searchParams } = new URL(request.url);
     const type = searchParams.get("type");
@@ -155,6 +158,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET() {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   return NextResponse.json({
     types: ["commissions", "targets", "teams", "wallets", "eligibility", "all"],
     description: {

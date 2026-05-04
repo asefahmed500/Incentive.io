@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Users, Building2, FileText, Wallet, TrendingUp, DollarSign, CheckCircle, Clock, XCircle, AlertCircle } from "lucide-react";
+import { Users, Building2, DollarSign, CheckCircle, Clock, XCircle, Database, TrendingUp } from "lucide-react";
 import { getUsers } from "@/lib/actions/user.actions";
 import { getTeams } from "@/lib/actions/team.actions";
 import { getSalesStats } from "@/lib/actions/sales.actions";
@@ -21,6 +21,11 @@ export default function AdminDashboard() {
     rejectedSales: 0,
     totalCommissions: 0,
   });
+  const [health, setHealth] = useState({
+    database: false,
+    api: false,
+    auth: false,
+  });
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -32,17 +37,37 @@ export default function AdminDashboard() {
         getCommissions(),
       ]);
       
-      const totalCommissions = commissions.reduce((sum: number, c: any) => sum + (c.commission || 0), 0);
+      const safeCommissions = Array.isArray(commissions) ? commissions : [];
+      const safeSalesStats = salesStats && !("error" in salesStats) ? salesStats : { total: 0, pendingManager: 0, pendingAccountant: 0, pendingFinance: 0, approved: 0, rejected: 0 };
+      if (!Array.isArray(users)) console.error((users as any)?.error || "Failed to fetch users");
+      if (!Array.isArray(teams)) console.error((teams as any)?.error || "Failed to fetch teams");
+      if (!Array.isArray(commissions)) console.error((commissions as any)?.error || "Failed to fetch commissions");
+      if ("error" in salesStats) console.error((salesStats as any).error || "Failed to fetch sales stats");
+      
+      const totalCommissions = safeCommissions.reduce((sum: number, c: any) => sum + (c.commission || 0), 0);
       
       setStats({
-        totalUsers: users.length,
-        totalTeams: teams.length,
-        totalSales: salesStats.total,
-        pendingSales: salesStats.pendingManager + salesStats.pendingAccountant + salesStats.pendingFinance,
-        approvedSales: salesStats.approved,
-        rejectedSales: salesStats.rejected,
+        totalUsers: Array.isArray(users) ? users.length : 0,
+        totalTeams: Array.isArray(teams) ? teams.length : 0,
+        totalSales: safeSalesStats.total,
+        pendingSales: safeSalesStats.pendingManager + safeSalesStats.pendingAccountant + safeSalesStats.pendingFinance,
+        approvedSales: safeSalesStats.approved,
+        rejectedSales: safeSalesStats.rejected,
         totalCommissions,
       });
+
+      try {
+        const res = await fetch("/api/health");
+        const data = await res.json();
+        setHealth({
+          database: data.database?.connected || false,
+          api: data.overall === "healthy",
+          auth: true,
+        });
+      } catch {
+        setHealth({ database: false, api: false, auth: false });
+      }
+
       setLoading(false);
     };
     
@@ -148,20 +173,34 @@ export default function AdminDashboard() {
         
         <Card>
           <CardHeader>
-            <CardTitle>System Status</CardTitle>
+            <CardTitle className="flex items-center gap-2">
+              <Database className="h-5 w-5" />
+              System Status
+            </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-2">
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Database Connected</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>Auth System Active</span>
-            </div>
-            <div className="flex items-center gap-2">
-              <CheckCircle className="h-4 w-4 text-green-500" />
-              <span>API Running</span>
+          <CardContent>
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Database</span>
+                <span className={`text-sm flex items-center gap-1 ${health.database ? "text-green-600" : "text-red-600"}`}>
+                  {health.database ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                  {health.database ? "Connected" : "Disconnected"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">API Server</span>
+                <span className={`text-sm flex items-center gap-1 ${health.api ? "text-green-600" : "text-red-600"}`}>
+                  {health.api ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                  {health.api ? "Running" : "Error"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-sm">Auth Service</span>
+                <span className={`text-sm flex items-center gap-1 ${health.auth ? "text-green-600" : "text-red-600"}`}>
+                  {health.auth ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
+                  {health.auth ? "Active" : "Error"}
+                </span>
+              </div>
             </div>
           </CardContent>
         </Card>

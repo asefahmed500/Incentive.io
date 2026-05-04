@@ -38,6 +38,7 @@ export default function AdminCategories() {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editCategory, setEditCategory] = useState<any>(null);
+  const [search, setSearch] = useState("");
 
   const fetchCategories = () => {
     startTransition(async () => {
@@ -96,7 +97,7 @@ export default function AdminCategories() {
           <div className="flex items-center gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search categories..." className="pl-8" />
+              <Input placeholder="Search categories..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
         </CardHeader>
@@ -123,7 +124,11 @@ export default function AdminCategories() {
                   </TableCell>
                 </TableRow>
               ) : (
-                categories.map((cat) => (
+                categories
+                  .filter((cat) =>
+                    !search || cat.name.toLowerCase().includes(search.toLowerCase()) || (cat.description || "").toLowerCase().includes(search.toLowerCase())
+                  )
+                  .map((cat) => (
                   <TableRow key={cat.id}>
                     <TableCell className="font-medium">{cat.name}</TableCell>
                     <TableCell>{cat.description || "—"}</TableCell>

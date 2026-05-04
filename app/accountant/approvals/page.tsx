@@ -44,7 +44,12 @@ export default function AccountantApprovals() {
     startTransition(async () => {
       setLoading(true);
       const data = await getPendingAccountantApprovals();
-      setRecords(data);
+      if (Array.isArray(data)) {
+        setRecords(data);
+      } else {
+        setRecords([]);
+        console.error((data as any)?.error || "Failed to fetch approvals");
+      }
       setLoading(false);
     });
   };
@@ -55,13 +60,17 @@ export default function AccountantApprovals() {
 
   const handleProcess = async () => {
     if (selectedRecord) {
-      await processByAccountant({
+      const result = await processByAccountant({
         id: selectedRecord.id,
         eoBpAmount: parseFloat(eoBpAmount) || 0,
         eoBpReason,
         taxRate: parseFloat(taxRate) || 0,
         vatRate: parseFloat(vatRate) || 0,
       });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       setProcessDialogOpen(false);
       setEoBpAmount("");
       setEoBpReason("");
@@ -73,7 +82,11 @@ export default function AccountantApprovals() {
 
   const handleReject = async () => {
     if (selectedRecord && rejectReason) {
-      await rejectSale(selectedRecord.id, rejectReason, "finance");
+      const result = await rejectSale(selectedRecord.id, rejectReason, "accountant");
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       setRejectDialogOpen(false);
       setRejectReason("");
       setSelectedRecord(null);
@@ -84,8 +97,8 @@ export default function AccountantApprovals() {
   const calculateNet = () => {
     if (!selectedRecord) return 0;
     const gross = selectedRecord.totalAmount || 0;
-    const tax = selectedRecord.taxEnabled ? gross * 0.05 : gross * (parseFloat(taxRate) / 100);
-    const vat = selectedRecord.vatEnabled ? gross * 0.10 : gross * (parseFloat(vatRate) / 100);
+    const tax = selectedRecord.taxEnabled ? 0 : gross * (parseFloat(taxRate) / 100);
+    const vat = selectedRecord.vatEnabled ? 0 : gross * (parseFloat(vatRate) / 100);
     const eobp = parseFloat(eoBpAmount) || 0;
     return gross - tax - vat - eobp;
   };
@@ -149,8 +162,8 @@ export default function AccountantApprovals() {
                         size="sm"
                         onClick={() => {
                           setSelectedRecord(record);
-                          setTaxRate(record.taxEnabled ? "5" : "0");
-                          setVatRate(record.vatEnabled ? "10" : "0");
+                          setTaxRate("0");
+                          setVatRate("0");
                           setProcessDialogOpen(true);
                         }}
                       >
@@ -196,15 +209,15 @@ export default function AccountantApprovals() {
                 <span className="font-medium">৳{selectedRecord?.totalAmount?.toLocaleString() || 0}</span>
               </div>
               <div className="flex justify-between mb-2">
-                <span>Tax (5%):</span>
+                <span>{selectedRecord?.taxEnabled ? "Tax (Included in price):" : "Tax:"}</span>
                 <span className="font-medium">
-                  {selectedRecord?.taxEnabled ? "Included" : `-$৳${((selectedRecord?.totalAmount || 0) * (parseFloat(taxRate) || 0) / 100).toFixed(2)}`}
+                  {selectedRecord?.taxEnabled ? "— ৳0" : `-৳${((selectedRecord?.totalAmount || 0) * (parseFloat(taxRate) || 0) / 100).toFixed(2)}`}
                 </span>
               </div>
               <div className="flex justify-between mb-2">
-                <span>VAT (10%):</span>
+                <span>{selectedRecord?.vatEnabled ? "VAT (Included in price):" : "VAT:"}</span>
                 <span className="font-medium">
-                  {selectedRecord?.vatEnabled ? "Included" : `-$৳${((selectedRecord?.totalAmount || 0) * (parseFloat(vatRate) || 0) / 100).toFixed(2)}`}
+                  {selectedRecord?.vatEnabled ? "— ৳0" : `-৳${((selectedRecord?.totalAmount || 0) * (parseFloat(vatRate) || 0) / 100).toFixed(2)}`}
                 </span>
               </div>
               <div className="flex justify-between mb-2">
@@ -217,7 +230,12 @@ export default function AccountantApprovals() {
               </div>
             </div>
             
-            {!selectedRecord?.taxEnabled && (
+            {selectedRecord?.taxEnabled ? (
+              <div>
+                <Label className="text-muted-foreground">Tax — Included by Sales Executive</Label>
+                <Input type="text" value="Tax included in price (no deduction)" disabled className="bg-muted" />
+              </div>
+            ) : (
               <div>
                 <Label>Tax Rate %</Label>
                 <Input
@@ -228,8 +246,13 @@ export default function AccountantApprovals() {
                 />
               </div>
             )}
-            
-            {!selectedRecord?.vatEnabled && (
+
+            {selectedRecord?.vatEnabled ? (
+              <div>
+                <Label className="text-muted-foreground">VAT — Included by Sales Executive</Label>
+                <Input type="text" value="VAT included in price (no deduction)" disabled className="bg-muted" />
+              </div>
+            ) : (
               <div>
                 <Label>VAT Rate %</Label>
                 <Input

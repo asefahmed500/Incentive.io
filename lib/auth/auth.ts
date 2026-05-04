@@ -11,6 +11,7 @@ declare module "next-auth" {
       id: string;
       role: string;
       employeeId?: string;
+      isActive?: boolean;
     } & DefaultSession["user"];
   }
 }
@@ -36,12 +37,35 @@ const config: NextAuthConfig = {
   ],
   session: { strategy: "jwt", maxAge: 60 * 60 * 24 },
   callbacks: {
-    async jwt({ token, user }) {
-      if (user) { token.id = (user as any).id; token.role = (user as any).role; token.employeeId = (user as any).employeeId; }
+    async jwt({ token, user, trigger }) {
+      if (user) {
+        token.id = (user as any).id;
+        token.role = (user as any).role;
+        token.employeeId = (user as any).employeeId;
+        token.isActive = true;
+      }
+      if (trigger === "update" || (!user && token.id)) {
+        try {
+          await connectToDatabase();
+          const dbUser = await User.findById(token.id).lean();
+          if (!dbUser || !dbUser.isActive) {
+            token.isActive = false;
+          } else {
+            token.isActive = true;
+          }
+        } catch {
+          token.isActive = false;
+        }
+      }
       return token;
     },
     async session({ session, token }) {
-      if (token && session.user) { (session.user as any).id = token.id; (session.user as any).role = token.role; (session.user as any).employeeId = token.employeeId; }
+      if (token && session.user) {
+        (session.user as any).id = token.id;
+        (session.user as any).role = token.role;
+        (session.user as any).employeeId = token.employeeId;
+        (session.user as any).isActive = token.isActive as boolean;
+      }
       return session;
     },
   },

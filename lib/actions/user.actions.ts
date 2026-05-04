@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/mongodb";
@@ -29,6 +30,8 @@ const updateUserSchema = z.object({
   role: z.string().optional(),
   phone: z.string().max(50).optional(),
   isActive: z.boolean().optional(),
+  managerId: objectIdSchema.optional(),
+  teamId: objectIdSchema.optional(),
 });
 
 const deleteUserSchema = z.object({
@@ -42,7 +45,6 @@ const getManagerForUserSchema = objectIdSchema;
 const toggleUserStatusSchema = objectIdSchema;
 
 const changePasswordSchema = z.object({
-  userId: objectIdSchema,
   currentPassword: z.string().min(1, "Current password is required"),
   newPassword: z.string().min(6, "New password must be at least 6 characters"),
 });
@@ -59,15 +61,20 @@ export async function getUsers({
   search?: string;
   role?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = getUsersSchema.safeParse({ search, role });
   if (!parsed.success) return [];
   await connectToDatabase();
 
   const query: Record<string, unknown> = {};
   if (parsed.data.search) {
+    const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     query.$or = [
-      { name: { $regex: parsed.data.search, $options: "i" } },
-      { email: { $regex: parsed.data.search, $options: "i" } },
+      { name: { $regex: escapedSearch, $options: "i" } },
+      { email: { $regex: escapedSearch, $options: "i" } },
     ];
   }
   if (parsed.data.role && parsed.data.role !== "all") {
@@ -83,6 +90,9 @@ export async function getUsers({
     employeeId: u.employeeId,
     phone: u.phone,
     isActive: u.isActive,
+    managerId: u.managerId?.toString(),
+    teamId: u.teamId?.toString(),
+    targetAmount: u.targetAmount,
     createdAt: u.createdAt,
   }));
 }
@@ -100,6 +110,10 @@ export async function createUser({
   role: string;
   phone?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createUserSchema.safeParse({ name, email, password, role, phone });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -150,6 +164,8 @@ export async function updateUser({
   role,
   phone,
   isActive,
+  managerId,
+  teamId,
 }: {
   id: string;
   name?: string;
@@ -157,8 +173,14 @@ export async function updateUser({
   role?: string;
   phone?: string;
   isActive?: boolean;
+  managerId?: string;
+  teamId?: string;
 }) {
-  const parsed = updateUserSchema.safeParse({ id, name, email, role, phone, isActive });
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  const parsed = updateUserSchema.safeParse({ id, name, email, role, phone, isActive, managerId, teamId });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
@@ -170,22 +192,30 @@ export async function updateUser({
   if (parsed.data.role) updateData.role = parsed.data.role;
   if (parsed.data.phone !== undefined) updateData.phone = parsed.data.phone;
   if (parsed.data.isActive !== undefined) updateData.isActive = parsed.data.isActive;
+  if (parsed.data.managerId !== undefined) updateData.managerId = parsed.data.managerId || null;
+  if (parsed.data.teamId !== undefined) updateData.teamId = parsed.data.teamId || null;
 
   await User.findByIdAndUpdate(parsed.data.id, updateData);
   return { success: true };
 }
 
 export async function deleteUser(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteUserSchema.safeParse({ id });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  await User.findByIdAndDelete(parsed.data.id);
+  await User.findByIdAndUpdate(parsed.data.id, { deletedAt: new Date() });
   return { success: true };
 }
 
 export async function getUserById(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = getUserByIdSchema.safeParse(id);
   if (!parsed.success) return null;
   await connectToDatabase();
@@ -204,6 +234,8 @@ export async function getUserById(id: string) {
 }
 
 export async function getManagerForUser(userId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = getManagerForUserSchema.safeParse(userId);
   if (!parsed.success) return null;
   await connectToDatabase();
@@ -219,6 +251,10 @@ export async function getManagerForUser(userId: string) {
 }
 
 export async function toggleUserStatus(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = toggleUserStatusSchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid user ID" };
@@ -231,21 +267,22 @@ export async function toggleUserStatus(id: string) {
 }
 
 export async function changePassword({
-  userId,
   currentPassword,
   newPassword,
 }: {
-  userId: string;
   currentPassword: string;
   newPassword: string;
 }) {
-  const parsed = changePasswordSchema.safeParse({ userId, currentPassword, newPassword });
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userId = session.user.id as string;
+  const parsed = changePasswordSchema.safeParse({ currentPassword, newPassword });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
 
-  const user = await User.findById(parsed.data.userId);
+  const user = await User.findById(userId);
   if (!user) {
     return { error: "User not found" };
   }
@@ -256,7 +293,7 @@ export async function changePassword({
   }
 
   const hashedPassword = await bcrypt.hash(parsed.data.newPassword, 10);
-  await User.findByIdAndUpdate(parsed.data.userId, { password: hashedPassword });
+  await User.findByIdAndUpdate(userId, { password: hashedPassword });
   return { success: true };
 }
 
@@ -267,6 +304,10 @@ export async function resetPassword({
   userId: string;
   newPassword: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = resetPasswordSchema.safeParse({ userId, newPassword });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };

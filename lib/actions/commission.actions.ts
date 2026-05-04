@@ -1,5 +1,6 @@
 "use server";
 
+import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import CommissionRule from "@/lib/models/CommissionRule";
@@ -35,6 +36,8 @@ const getCommissionsByEmployeeSchema = objectIdSchema;
 const checkEligibilitySchema = objectIdSchema;
 
 export async function getCommissionRules() {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   await connectToDatabase();
   const rules = await CommissionRule.find().sort({ priority: -1 }).lean();
   return rules.map((r) => ({
@@ -62,6 +65,10 @@ export async function createCommissionRule({
   categoryId?: string;
   priority?: number;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createCommissionRuleSchema.safeParse({ targetPercentageFrom, targetPercentageTo, commissionRate, categoryId, priority });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -94,6 +101,10 @@ export async function updateCommissionRule({
   priority?: number;
   isActive?: boolean;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateCommissionRuleSchema.safeParse({ id, targetPercentageFrom, targetPercentageTo, commissionRate, categoryId, priority, isActive });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -111,37 +122,53 @@ export async function updateCommissionRule({
 }
 
 export async function deleteCommissionRule(id: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as any).role as string;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteCommissionRuleSchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid ID format" };
   }
   await connectToDatabase();
-  await CommissionRule.findByIdAndDelete(parsed.data);
+  await CommissionRule.findByIdAndUpdate(parsed.data, { deletedAt: new Date() });
   return { success: true };
 }
 
 export async function getCommissions() {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
   await connectToDatabase();
   const records = await SalesRecord.find({
     approvalStatus: "Approved",
     accountantStatus: "Approved",
     financeStatus: "Approved",
-  }).populate("employeeId", "name").lean();
+  }).populate("employeeId", "name isEligible").lean();
 
-  return records.map((r) => ({
-    id: r._id.toString(),
-    employeeId: (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString(),
-    employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
-    commission: r.commission,
-    calculatedCommission: r.calculatedCommission,
-    status: r.financeStatus,
-    isPaid: (r as unknown as { isPaid?: boolean }).isPaid,
-    paymentStatus: (r as unknown as { paymentStatus?: string }).paymentStatus,
-    createdAt: r.createdAt,
-  }));
+  const employeeIds = [...new Set(records.map((r) => (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString()).filter(Boolean))];
+  const users = await User.find({ _id: { $in: employeeIds } }, { isEligible: 1 }).lean();
+  const eligibilityMap = new Map(users.map((u) => [u._id.toString(), u.isEligible || false]));
+
+  return records.map((r) => {
+    const empId = (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString();
+    return {
+      id: r._id.toString(),
+      employeeId: empId,
+      employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
+      commission: r.commission,
+      calculatedCommission: r.calculatedCommission,
+      status: r.status,
+      isEligible: empId ? eligibilityMap.get(empId) || false : false,
+      isPaid: (r as unknown as { isPaid?: boolean }).isPaid,
+      paymentStatus: (r as unknown as { paymentStatus?: string }).paymentStatus,
+      createdAt: r.createdAt,
+    };
+  });
 }
 
 export async function getCommissionsByEmployee(employeeId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { records: [], totalCommission: 0, paidCommission: 0, pendingCommission: 0 };
   const parsed = getCommissionsByEmployeeSchema.safeParse(employeeId);
   if (!parsed.success) {
     return { records: [], totalCommission: 0, paidCommission: 0, pendingCommission: 0 };
@@ -172,6 +199,8 @@ export async function getCommissionsByEmployee(employeeId: string) {
 }
 
 export async function checkEligibility(employeeId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { eligible: false, achievement: 0, message: "Unauthorized" };
   const parsed = checkEligibilitySchema.safeParse(employeeId);
   if (!parsed.success) {
     return { eligible: false, achievement: 0, message: "Invalid employee ID" };
@@ -214,7 +243,7 @@ export async function checkEligibility(employeeId: string) {
     }
 
     await User.findByIdAndUpdate(parsed.data, { isEligible: true });
-    await reevaluateIneligibleRecords(parsed.data, user.targetAmount);
+    await reevaluateIneligibleRecords(parsed.data);
   }
 
   if (!nowEligible && wasEligible) {
@@ -230,19 +259,36 @@ export async function checkEligibility(employeeId: string) {
   };
 }
 
-async function reevaluateIneligibleRecords(employeeId: string, targetAmount: number) {
-  const pendingRecords = await SalesRecord.find({
+export async function reevaluateIneligibleRecords(employeeId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+
+  await connectToDatabase();
+
+  const employee = await User.findById(employeeId).lean();
+  if (!employee) return { error: "Employee not found" };
+
+  const totalApprovedSales = await SalesRecord.find({
     employeeId,
     financeStatus: "Approved",
-    isPaid: false,
-  }).lean();
+  });
 
-  for (const record of pendingRecords) {
-    const recordAmount = record.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0);
-    const recordAchievement = (recordAmount / targetAmount) * 100;
+  const totalSales = totalApprovedSales.reduce((sum, r) => {
+    const amount = r.netSales > 0 ? r.netSales : r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + p.unitPrice * p.quantity, 0);
+    return sum + amount;
+  }, 0);
 
-    if (recordAchievement >= 50) {
-      await SalesRecord.findByIdAndUpdate(record._id, { eligibilityStatus: "Eligible" });
-    }
+  const achievement = employee.targetAmount > 0 ? (totalSales / employee.targetAmount) * 100 : 0;
+  const isEligible = achievement >= 50;
+
+  await User.findByIdAndUpdate(employeeId, { isEligible });
+
+  if (isEligible) {
+    await SalesRecord.updateMany(
+      { employeeId, financeStatus: "Approved", eligibilityStatus: { $ne: "Eligible" } },
+      { eligibilityStatus: "Eligible" }
+    );
   }
+
+  return { success: true, isEligible, achievement };
 }

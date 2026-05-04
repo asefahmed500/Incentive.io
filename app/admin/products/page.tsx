@@ -20,7 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Search, Pencil, Trash2, Upload, X } from "lucide-react";
 import { getProducts, createProduct, updateProduct, deleteProduct } from "@/lib/actions/product.actions";
 import { getCategories } from "@/lib/actions/category.actions";
 import {
@@ -60,8 +60,18 @@ export default function AdminProducts() {
         getProducts({ categoryId: categoryFilter !== "all" ? categoryFilter : undefined, search }),
         getCategories(),
       ]);
-      setProducts(productsData);
-      setCategories(categoriesData);
+      if (Array.isArray(productsData)) {
+        setProducts(productsData);
+      } else {
+        setProducts([]);
+        console.error((productsData as any)?.error || "Failed to fetch products");
+      }
+      if (Array.isArray(categoriesData)) {
+        setCategories(categoriesData);
+      } else {
+        setCategories([]);
+        console.error((categoriesData as any)?.error || "Failed to fetch categories");
+      }
       setLoading(false);
     });
   };
@@ -72,7 +82,11 @@ export default function AdminProducts() {
 
   const handleDelete = async (id: string) => {
     if (confirm("Delete this product?")) {
-      await deleteProduct(id);
+      const result = await deleteProduct(id);
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       fetchProducts();
     }
   };
@@ -212,6 +226,8 @@ function ProductForm({
   onSuccess: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
+  const [uploadedImage, setUploadedImage] = useState(editProduct?.image || "");
+  const [isUploading, setIsUploading] = useState(false);
   const { register, handleSubmit, formState: { errors }, setValue } = useForm({
     resolver: zodResolver(productSchema),
     defaultValues: {
@@ -223,24 +239,67 @@ function ProductForm({
     },
   });
 
+  const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (file.size > 10 * 1024 * 1024) {
+      alert("File exceeds 10MB limit.");
+      return;
+    }
+
+    setIsUploading(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const response = await fetch("/api/upload", {
+        method: "POST",
+        body: formData,
+      });
+      const result = await response.json();
+      if (result.success) {
+        setUploadedImage(result.url);
+      } else {
+        alert(result.error || "Failed to upload image");
+      }
+    } catch (error) {
+      console.error("Upload error:", error);
+      alert("Failed to upload image");
+    }
+
+    setIsUploading(false);
+    e.target.value = "";
+  };
+
   const onSubmit = async (data: any) => {
     if (editProduct) {
-      await updateProduct({
+      const result = await updateProduct({
         id: editProduct.id,
         name: data.name,
         sku: data.sku,
         categoryId: data.categoryId,
         price: data.price,
         stock: data.stock,
+        image: uploadedImage,
       });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
     } else {
-      await createProduct({
+      const result = await createProduct({
         name: data.name,
         sku: data.sku,
         categoryId: data.categoryId,
         price: data.price,
         stock: data.stock,
+        image: uploadedImage,
       });
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
     }
     onSuccess();
   };
@@ -292,6 +351,43 @@ function ProductForm({
       <div>
         <Label htmlFor="stock">Stock</Label>
         <Input id="stock" type="number" {...register("stock")} />
+      </div>
+      <div>
+        <Label>Product Image (Optional)</Label>
+        <div className="mt-2 space-y-3">
+          <div className="flex items-center gap-4">
+            <label className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-md hover:bg-primary/90 cursor-pointer">
+              <Upload className="h-4 w-4" />
+              Upload Image
+              <input
+                type="file"
+                className="hidden"
+                accept=".jpg,.jpeg,.png,.webp"
+                onChange={handleImageUpload}
+                disabled={isUploading}
+              />
+            </label>
+            <p className="text-sm text-muted-foreground">
+              JPG, PNG, WebP (max 10MB)
+            </p>
+          </div>
+          {uploadedImage && (
+            <div className="relative inline-block">
+              <img
+                src={uploadedImage}
+                alt="Product"
+                className="h-32 w-32 rounded-md object-cover border"
+              />
+              <button
+                type="button"
+                onClick={() => setUploadedImage("")}
+                className="absolute -top-2 -right-2 p-1 bg-red-500 text-white rounded-full hover:bg-red-600"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
       </div>
       <Button type="submit" disabled={isPending}>
         {isPending ? "Saving..." : editProduct ? "Update Product" : "Create Product"}

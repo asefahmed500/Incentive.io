@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -13,7 +14,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Check, X } from "lucide-react";
+import { Check, X, CheckCircle } from "lucide-react";
 import { getPendingFinanceApprovals, finalApproveByFinance, rejectSale } from "@/lib/actions/approval.actions";
 import {
   Dialog,
@@ -32,12 +33,20 @@ export default function FinancePaymentQueue() {
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [rejectReason, setRejectReason] = useState("");
   const [rejectDialogOpen, setRejectDialogOpen] = useState(false);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [batchConfirmOpen, setBatchConfirmOpen] = useState(false);
+  const [batchProcessing, setBatchProcessing] = useState(false);
 
   const fetchRecords = () => {
     startTransition(async () => {
       setLoading(true);
       const data = await getPendingFinanceApprovals();
-      setRecords(data);
+      if (Array.isArray(data)) {
+        setRecords(data);
+      } else {
+        setRecords([]);
+        console.error((data as any)?.error || "Failed to fetch approvals");
+      }
       setLoading(false);
     });
   };
@@ -48,13 +57,21 @@ export default function FinancePaymentQueue() {
 
   const handleApprove = async (id: string) => {
     const paidBy = (session?.user as any)?.id || "";
-    await finalApproveByFinance(id, paidBy);
+    const result = await finalApproveByFinance(id, paidBy);
+    if (result?.error) {
+      alert(result.error);
+      return;
+    }
     fetchRecords();
   };
 
   const handleReject = async () => {
     if (selectedRecord && rejectReason) {
-      await rejectSale(selectedRecord.id, rejectReason, "finance");
+      const result = await rejectSale(selectedRecord.id, rejectReason, "finance");
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       setRejectDialogOpen(false);
       setRejectReason("");
       setSelectedRecord(null);
@@ -62,11 +79,59 @@ export default function FinancePaymentQueue() {
     }
   };
 
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) {
+        next.delete(id);
+      } else {
+        next.add(id);
+      }
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    if (selectedIds.size === records.length && records.length > 0) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(records.map((r) => r.id)));
+    }
+  }, [records, selectedIds]);
+
+  const handleBatchApprove = async () => {
+    setBatchProcessing(true);
+    const paidBy = (session?.user as any)?.id || "";
+    for (const id of selectedIds) {
+      const result = await finalApproveByFinance(id, paidBy);
+      if (result?.error) {
+        alert(`Failed to approve record: ${result.error}`);
+        break;
+      }
+    }
+    setBatchProcessing(false);
+    setBatchConfirmOpen(false);
+    setSelectedIds(new Set());
+    fetchRecords();
+  };
+
+  const allSelected = records.length > 0 && selectedIds.size === records.length;
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Payment Queue</h1>
-        <p className="text-muted-foreground">Final approval and trigger commission payment</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Payment Queue</h1>
+          <p className="text-muted-foreground">
+            Final approval and trigger commission payment
+          </p>
+        </div>
+        {selectedIds.size > 0 && (
+          <Button onClick={() => setBatchConfirmOpen(true)}>
+            <CheckCircle className="mr-2 h-4 w-4" />
+            Approve Selected ({selectedIds.size})
+          </Button>
+        )}
       </div>
 
       <div className="grid gap-4 md:grid-cols-3">
@@ -88,6 +153,12 @@ export default function FinancePaymentQueue() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-12">
+                  <Checkbox
+                    checked={allSelected}
+                    onCheckedChange={toggleSelectAll}
+                  />
+                </TableHead>
                 <TableHead>Employee</TableHead>
                 <TableHead>Company</TableHead>
                 <TableHead>Net Sales</TableHead>
@@ -98,33 +169,48 @@ export default function FinancePaymentQueue() {
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center">
+                  <TableCell colSpan={6} className="text-center">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : records.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center">
+                  <TableCell colSpan={6} className="text-center">
                     No pending approvals
                   </TableCell>
                 </TableRow>
               ) : (
                 records.map((record) => (
-                  <TableRow key={record.id}>
-                    <TableCell className="font-medium">{record.employeeName}</TableCell>
-                    <TableCell>{record.companyName}</TableCell>
-                    <TableCell>৳{record.netSales?.toLocaleString() || 0}</TableCell>
-                    <TableCell>৳{record.commission?.toLocaleString() || 0}</TableCell>
+                  <TableRow
+                    key={record.id}
+                    className={selectedIds.has(record.id) ? "bg-primary/5" : ""}
+                  >
                     <TableCell>
-                      <Button 
-                        variant="ghost" 
+                      <Checkbox
+                        checked={selectedIds.has(record.id)}
+                        onCheckedChange={() => toggleSelect(record.id)}
+                      />
+                    </TableCell>
+                    <TableCell className="font-medium">
+                      {record.employeeName}
+                    </TableCell>
+                    <TableCell>{record.companyName}</TableCell>
+                    <TableCell>
+                      ৳{record.netSales?.toLocaleString() || 0}
+                    </TableCell>
+                    <TableCell>
+                      ৳{record.commission?.toLocaleString() || 0}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={() => handleApprove(record.id)}
                       >
                         <Check className="h-4 w-4 text-green-500" />
                       </Button>
-                      <Button 
-                        variant="ghost" 
+                      <Button
+                        variant="ghost"
                         size="sm"
                         onClick={() => {
                           setSelectedRecord(record);
@@ -163,10 +249,41 @@ export default function FinancePaymentQueue() {
               <Button onClick={handleReject} disabled={!rejectReason}>
                 Confirm Reject
               </Button>
-              <Button variant="outline" onClick={() => setRejectDialogOpen(false)}>
+              <Button
+                variant="outline"
+                onClick={() => setRejectDialogOpen(false)}
+              >
                 Cancel
               </Button>
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={batchConfirmOpen} onOpenChange={setBatchConfirmOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Confirm Batch Approval</DialogTitle>
+            <DialogDescription>
+              You are about to approve {selectedIds.size} record
+              {selectedIds.size > 1 ? "s" : ""} for payment. This will trigger
+              commission payments and cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex gap-2">
+            <Button
+              onClick={handleBatchApprove}
+              disabled={batchProcessing}
+            >
+              {batchProcessing ? "Processing..." : "Confirm Approval"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setBatchConfirmOpen(false)}
+              disabled={batchProcessing}
+            >
+              Cancel
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

@@ -29,13 +29,16 @@ export default function SalesDashboard() {
       const commissions = await getCommissionsByEmployee(session.user.id);
       const elig = await checkEligibility(session.user.id);
       
-      const pending = records.filter((r: any) => r.status !== "Approved" && r.status !== "Draft").length;
-      const approvedAmount = records
+      const safeRecords = Array.isArray(records) ? records : [];
+      if (!Array.isArray(records)) console.error((records as any)?.error || "Failed to fetch records");
+      
+      const pending = safeRecords.filter((r: any) => r.status !== "Approved" && r.status !== "Draft").length;
+      const approvedAmount = safeRecords
         .filter((r: any) => r.status === "Approved")
         .reduce((sum: number, r: any) => sum + (r.totalAmount || 0), 0);
       
       setStats({
-        totalRecords: records.length,
+        totalRecords: safeRecords.length,
         pending,
         approvedAmount,
         commission: commissions.pendingCommission || 0,

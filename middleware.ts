@@ -1,133 +1,110 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
-import { checkDatabaseConnection } from "@/lib/mongodb";
 
 const PUBLIC_PATHS = ["/", "/login", "/register", "/api/auth", "/api/health", "/api/socket"];
 
-const ROLE_ROUTES: Record<string, string[]> = {
-  admin: ["/admin"],
-  administrator: ["/administrator"],
-  salesExecutive: ["/sales-dashboard"],
-  salesManager: ["/sales-manager"],
-  accountant: ["/accountant"],
-  finance: ["/finance"],
-};
-
 export default async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
-  
+
+  if (process.env.NODE_ENV === "production" && request.headers.get("x-forwarded-proto") !== "https") {
+    const httpsUrl = new URL(request.url);
+    httpsUrl.protocol = "https:";
+    return NextResponse.redirect(httpsUrl);
+  }
+
   if (PUBLIC_PATHS.some(p => path.startsWith(p))) {
     return NextResponse.next();
   }
-  
-  try {
-    const dbCheck = await checkDatabaseConnection();
-    if (!dbCheck.connected) {
-      console.warn("Database not connected, allowing request through");
-    }
-  } catch (error) {
-    console.warn("Database check failed:", error);
-  }
-  
+
   const token = request.cookies.get("next-auth.session-token");
-  
+
   if (!token) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
-  
-  const role = request.cookies.get("next-auth.session-token");
-  const authHeader = request.headers.get("authorization");
-  
-  if (authHeader?.startsWith("Bearer ")) {
-    try {
-      const { auth } = await import("@/lib/auth/auth");
-      const session = await auth();
-      if (session?.user?.role) {
-        const userRole = (session.user as any).role as string;
-        const allowedRoutes = ROLE_ROUTES[userRole] || [];
-        if (allowedRoutes.some(route => path.startsWith(route))) {
-          return NextResponse.next();
-        }
-        if (userRole === "administrator" && (path.startsWith("/admin") || path.startsWith("/sales") || path.startsWith("/accountant") || path.startsWith("/finance"))) {
-          return NextResponse.next();
-        }
-        if (userRole === "admin" && (path.startsWith("/admin") || path.startsWith("/sales") || path.startsWith("/accountant") || path.startsWith("/finance"))) {
-          return NextResponse.next();
-        }
-      }
-    } catch {
+
+  try {
+    const base64Url = token.value.split(".")[1];
+    if (!base64Url) {
+      return NextResponse.redirect(new URL("/login", request.url));
     }
-  }
-  
-  const sessionCookie = request.cookies.get("next-auth.session-token");
-  if (sessionCookie) {
-    try {
-      const base64Url = sessionCookie.value.split(".")[1];
-      if (base64Url) {
-        const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-        const payload = JSON.parse(Buffer.from(base64, "base64").toString("utf8"));
-        const userRole = payload.role;
-        
-        if (userRole) {
-          const allowedRoutes = ROLE_ROUTES[userRole] || [];
-          if (allowedRoutes.some(route => path.startsWith(route))) {
-            return NextResponse.next();
-          }
-          
-          if (userRole === "administrator" && (
-            path.startsWith("/admin") ||
-            path.startsWith("/sales-dashboard") ||
-            path.startsWith("/sales-manager") ||
-            path.startsWith("/accountant") ||
-            path.startsWith("/finance")
-          )) {
-            return NextResponse.next();
-          }
-          
-          if (userRole === "admin" && !path.startsWith("/administrator") && (
-            path.startsWith("/admin") ||
-            path.startsWith("/sales-dashboard") ||
-            path.startsWith("/sales-manager") ||
-            path.startsWith("/accountant") ||
-            path.startsWith("/finance")
-          )) {
-            return NextResponse.next();
-          }
-          
-          if (userRole === "salesManager" && (
-            path.startsWith("/sales-manager") ||
-            path.startsWith("/sales-dashboard")
-          )) {
-            return NextResponse.next();
-          }
-          
-          if (userRole === "salesExecutive" && path.startsWith("/sales-dashboard")) {
-            return NextResponse.next();
-          }
-          
-          if (userRole === "accountant" && (
-            path.startsWith("/accountant") ||
-            path.startsWith("/sales-dashboard")
-          )) {
-            return NextResponse.next();
-          }
-          
-          if (userRole === "finance" && (
-            path.startsWith("/finance") ||
-            path.startsWith("/sales-dashboard")
-          )) {
-            return NextResponse.next();
-          }
-          
-          return NextResponse.redirect(new URL("/login", request.url));
-        }
-      }
-    } catch (e) {
-      console.error("Role check failed:", e);
+    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
+    const payload = JSON.parse(Buffer.from(base64, "base64").toString("utf8"));
+    const userRole = payload.role;
+
+    if (!userRole) {
+      return NextResponse.redirect(new URL("/login", request.url));
     }
+
+    const ADMIN_PATHS = ["/admin", "/sales-dashboard", "/sales-manager", "/accountant", "/finance"];
+    const SUPER_PATHS = ["/admin", "/administrator", "/sales-dashboard", "/sales-manager", "/accountant", "/finance"];
+
+    if (userRole === "administrator") {
+      if (SUPER_PATHS.some(p => path.startsWith(p))) {
+        return NextResponse.next();
+      }
+      if (path.startsWith("/api/")) {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/administrator", request.url));
+    }
+
+    if (userRole === "admin") {
+      if (path.startsWith("/administrator")) {
+        return NextResponse.redirect(new URL("/admin", request.url));
+      }
+      if (ADMIN_PATHS.some(p => path.startsWith(p))) {
+        return NextResponse.next();
+      }
+      if (path.startsWith("/api/")) {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/admin", request.url));
+    }
+
+    if (userRole === "salesManager") {
+      if (path.startsWith("/sales-manager") || path.startsWith("/sales-dashboard")) {
+        return NextResponse.next();
+      }
+      if (path.startsWith("/api/")) {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/sales-manager", request.url));
+    }
+
+    if (userRole === "salesExecutive") {
+      if (path.startsWith("/sales-dashboard")) {
+        return NextResponse.next();
+      }
+      if (path.startsWith("/api/")) {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/sales-dashboard", request.url));
+    }
+
+    if (userRole === "accountant") {
+      if (path.startsWith("/accountant") || path.startsWith("/sales-dashboard")) {
+        return NextResponse.next();
+      }
+      if (path.startsWith("/api/")) {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/accountant", request.url));
+    }
+
+    if (userRole === "finance") {
+      if (path.startsWith("/finance") || path.startsWith("/sales-dashboard")) {
+        return NextResponse.next();
+      }
+      if (path.startsWith("/api/")) {
+        return NextResponse.next();
+      }
+      return NextResponse.redirect(new URL("/finance", request.url));
+    }
+
+    return NextResponse.redirect(new URL("/login", request.url));
+  } catch {
+    return NextResponse.redirect(new URL("/login", request.url));
   }
-  
-  return NextResponse.next();
 }
 
 export const config = {

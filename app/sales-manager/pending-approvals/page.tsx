@@ -35,7 +35,12 @@ export default function ManagerApprovals() {
     startTransition(async () => {
       setLoading(true);
       const data = await getPendingManagerApprovals();
-      setRecords(data);
+      if (Array.isArray(data)) {
+        setRecords(data);
+      } else {
+        setRecords([]);
+        console.error((data as any)?.error || "Failed to fetch approvals");
+      }
       setLoading(false);
     });
   };
@@ -45,13 +50,21 @@ export default function ManagerApprovals() {
   }, []);
 
   const handleApprove = async (id: string) => {
-    await approveSale(id);
+    const result = await approveSale(id);
+    if (result?.error) {
+      alert(result.error);
+      return;
+    }
     fetchRecords();
   };
 
   const handleReject = async () => {
     if (selectedRecord && rejectReason) {
-      await rejectSale(selectedRecord.id, rejectReason, "manager");
+      const result = await rejectSale(selectedRecord.id, rejectReason, "manager");
+      if (result?.error) {
+        alert(result.error);
+        return;
+      }
       setRejectDialogOpen(false);
       setRejectReason("");
       setSelectedRecord(null);

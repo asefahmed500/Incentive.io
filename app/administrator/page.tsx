@@ -34,15 +34,22 @@ export default function AdministratorDashboard() {
         getCommissions(),
       ]);
       
-      const totalCommissionAmount = commissions.reduce((sum: number, c: any) => sum + (c.commission || 0), 0);
+      const safeCommissions = Array.isArray(commissions) ? commissions : [];
+      const safeSalesStats = salesStats && !("error" in salesStats) ? salesStats : { total: 0, pendingManager: 0, pendingAccountant: 0, pendingFinance: 0, approved: 0, rejected: 0 };
+      if (!Array.isArray(users)) console.error((users as any)?.error || "Failed to fetch users");
+      if (!Array.isArray(teams)) console.error((teams as any)?.error || "Failed to fetch teams");
+      if (!Array.isArray(commissions)) console.error((commissions as any)?.error || "Failed to fetch commissions");
+      if ("error" in salesStats) console.error((salesStats as any).error || "Failed to fetch sales stats");
+      
+      const totalCommissionAmount = safeCommissions.reduce((sum: number, c: any) => sum + (c.commission || 0), 0);
       
       setStats({
-        users: users.length,
-        teams: teams.length,
-        sales: salesStats.total,
-        pendingSales: salesStats.pendingManager + salesStats.pendingAccountant + salesStats.pendingFinance,
-        approvedSales: salesStats.approved,
-        commissions: commissions.length,
+        users: Array.isArray(users) ? users.length : 0,
+        teams: Array.isArray(teams) ? teams.length : 0,
+        sales: safeSalesStats.total,
+        pendingSales: safeSalesStats.pendingManager + safeSalesStats.pendingAccountant + safeSalesStats.pendingFinance,
+        approvedSales: safeSalesStats.approved,
+        commissions: safeCommissions.length,
         totalCommissionAmount,
       });
       

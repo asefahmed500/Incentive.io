@@ -17,7 +17,12 @@ export default function FinanceSalesRecords() {
   const fetchRecords = async () => {
     setLoading(true);
     const data = await getAllSalesRecords({});
-    setRecords(data);
+    if (Array.isArray(data)) {
+      setRecords(data);
+    } else {
+      setRecords([]);
+      console.error((data as any)?.error || "Failed to fetch records");
+    }
     setLoading(false);
   };
 

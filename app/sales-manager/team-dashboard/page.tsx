@@ -2,32 +2,73 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, TrendingUp, DollarSign, Target, BarChart3 } from "lucide-react";
+import { Users, TrendingUp, DollarSign, Target } from "lucide-react";
 import { getUsers } from "@/lib/actions/user.actions";
 import { getCommissions } from "@/lib/actions/commission.actions";
+import { getSalesRecordsByManagerId } from "@/lib/actions/sales.actions";
 import { useSession } from "next-auth/react";
 
 export default function TeamDashboardPage() {
   const { data: session } = useSession();
   const [teamMembers, setTeamMembers] = useState<any[]>([]);
   const [commissions, setCommissions] = useState<any[]>([]);
+  const [salesRecords, setSalesRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const fetchData = async () => {
-      const [members, commissionsData] = await Promise.all([
+      const managerId = session?.user?.id;
+      if (!managerId) return;
+
+      const [allUsers, allCommissions, teamSales] = await Promise.all([
         getUsers({ role: "salesExecutive", search: "" }),
         getCommissions(),
+        getSalesRecordsByManagerId(managerId),
       ]);
+
+      const safeUsers = Array.isArray(allUsers) ? allUsers : [];
+      const safeCommissions = Array.isArray(allCommissions) ? allCommissions : [];
+      const safeSales = Array.isArray(teamSales) ? teamSales : [];
+      if (!Array.isArray(allUsers)) console.error((allUsers as any)?.error || "Failed to fetch users");
+      if (!Array.isArray(allCommissions)) console.error((allCommissions as any)?.error || "Failed to fetch commissions");
+      if (!Array.isArray(teamSales)) console.error((teamSales as any)?.error || "Failed to fetch sales");
+
+      const members = safeUsers.filter((u: any) => u.managerId === managerId);
+      const teamMemberIds = new Set(members.map((u: any) => u.id));
+      const teamCommissions = safeCommissions.filter((c: any) =>
+        teamMemberIds.has(c.employeeId)
+      );
+
       setTeamMembers(members);
-      setCommissions(commissionsData);
+      setCommissions(teamCommissions);
+      setSalesRecords(safeSales);
       setLoading(false);
     };
-    fetchData();
-  }, []);
+    if (session?.user?.id) {
+      fetchData();
+    }
+  }, [session?.user?.id]);
 
-  const totalTeamSales = commissions.reduce((sum: number, c: any) => sum + (c.calculatedCommission || 0), 0);
-  const totalCommissions = commissions.filter((c: any) => c.status === "Approved").length;
+  const approvedSales = salesRecords.filter(
+    (r: any) => r.status === "Approved"
+  );
+  const totalApprovedAmount = approvedSales.reduce(
+    (sum: number, r: any) => sum + (r.totalAmount || 0),
+    0
+  );
+  const totalTargetAmount = teamMembers.reduce(
+    (sum: number, m: any) => sum + (m.targetAmount || 0),
+    0
+  );
+  const achievementPercent =
+    totalTargetAmount > 0
+      ? Math.round((totalApprovedAmount / totalTargetAmount) * 100)
+      : 0;
+
+  const totalCommissionAmount = commissions.reduce(
+    (sum: number, c: any) => sum + (c.calculatedCommission || 0),
+    0
+  );
 
   return (
     <div className="space-y-6">
@@ -52,7 +93,7 @@ export default function TeamDashboardPage() {
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">৳{totalTeamSales.toLocaleString()}</div>
+            <div className="text-2xl font-bold">৳{totalApprovedAmount.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -61,7 +102,7 @@ export default function TeamDashboardPage() {
             <DollarSign className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{totalCommissions}</div>
+            <div className="text-2xl font-bold">৳{totalCommissionAmount.toLocaleString()}</div>
           </CardContent>
         </Card>
         <Card>
@@ -71,7 +112,7 @@ export default function TeamDashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {teamMembers.length > 0 ? Math.round(50) : 0}%
+              {achievementPercent}%
             </div>
           </CardContent>
         </Card>
@@ -99,6 +140,17 @@ export default function TeamDashboardPage() {
                   0
                 );
                 const paidCount = memberCommissions.filter((c: any) => c.status === "Approved").length;
+                const memberSales = approvedSales.filter(
+                  (r: any) => r.employeeId === member.id
+                );
+                const memberTotalSales = memberSales.reduce(
+                  (sum: number, r: any) => sum + (r.totalAmount || 0),
+                  0
+                );
+                const memberAchievement =
+                  member.targetAmount > 0
+                    ? Math.round((memberTotalSales / member.targetAmount) * 100)
+                    : 0;
                 return (
                   <div
                     key={member.id}
@@ -127,6 +179,10 @@ export default function TeamDashboardPage() {
                           ৳{member.targetAmount?.toLocaleString() || 0}
                         </p>
                         <p className="text-xs text-muted-foreground">Target</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-lg font-bold">{memberAchievement}%</p>
+                        <p className="text-xs text-muted-foreground">Achievement</p>
                       </div>
                     </div>
                   </div>

@@ -16,7 +16,9 @@ export default function ManagerTeamEligibility() {
   useEffect(() => {
     const fetchTeam = async () => {
       const users = await getUsers({});
-      const team = users.filter((u: any) => u.managerId === session?.user?.id);
+      const safeUsers = Array.isArray(users) ? users : [];
+      if (!Array.isArray(users)) console.error((users as any)?.error || "Failed to fetch users");
+      const team = safeUsers.filter((u: any) => u.managerId === session?.user?.id);
       
       const withEligibility = await Promise.all(
         team.map(async (member: any) => {

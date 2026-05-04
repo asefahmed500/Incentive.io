@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { requireAdminOrAbove } from "@/lib/auth/role-guard";
 
 const BACKUP_DIR = path.join(process.cwd(), "backups");
 
 export async function POST(request: NextRequest) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     const { searchParams } = new URL(request.url);
     const filename = searchParams.get("filename");
@@ -68,6 +71,8 @@ export async function POST(request: NextRequest) {
 }
 
 export async function GET(request: NextRequest) {
+  const authResult = await requireAdminOrAbove();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
   try {
     const { searchParams } = new URL(request.url);
     const filename = searchParams.get("filename");
