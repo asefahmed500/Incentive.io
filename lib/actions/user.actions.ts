@@ -7,6 +7,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
 import { sendWelcomeEmail, sendNotificationEmail } from "@/lib/email";
 import { notifyUserCreated } from "@/lib/actions/notification.actions";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -63,7 +64,7 @@ export async function getUsers({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = getUsersSchema.safeParse({ search, role });
   if (!parsed.success) return [];
@@ -112,7 +113,7 @@ export async function createUser({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createUserSchema.safeParse({ name, email, password, role, phone });
   if (!parsed.success) {
@@ -178,7 +179,7 @@ export async function updateUser({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateUserSchema.safeParse({ id, name, email, role, phone, isActive, managerId, teamId });
   if (!parsed.success) {
@@ -202,7 +203,7 @@ export async function updateUser({
 export async function deleteUser(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteUserSchema.safeParse({ id });
   if (!parsed.success) {
@@ -253,7 +254,7 @@ export async function getManagerForUser(userId: string) {
 export async function toggleUserStatus(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = toggleUserStatusSchema.safeParse(id);
   if (!parsed.success) {
@@ -306,7 +307,7 @@ export async function resetPassword({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = resetPasswordSchema.safeParse({ userId, newPassword });
   if (!parsed.success) {

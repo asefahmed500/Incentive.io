@@ -5,6 +5,7 @@ import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Category } from "@/lib/models/Category";
 import type { ICategory } from "@/lib/models/Category";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -43,7 +44,7 @@ export async function createCategory({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createCategorySchema.safeParse({ name, description });
   if (!parsed.success) {
@@ -71,7 +72,7 @@ export async function updateCategory({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateCategorySchema.safeParse({ id, name, description });
   if (!parsed.success) {
@@ -88,7 +89,7 @@ export async function updateCategory({
 export async function deleteCategory(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteCategorySchema.safeParse(id);
   if (!parsed.success) {

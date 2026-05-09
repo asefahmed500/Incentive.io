@@ -107,6 +107,11 @@ SalesRecordSchema.index({ financeStatus: 1, employeeId: 1 });
 SalesRecordSchema.index({ isPaid: 1 });
 SalesRecordSchema.index({ deletedAt: 1 });
 SalesRecordSchema.index({ createdAt: -1 });
+// Performance optimization: compound indexes for common query patterns
+SalesRecordSchema.index({ employeeId: 1, financeStatus: 1 });
+SalesRecordSchema.index({ approvalStatus: 1, accountantStatus: 1, financeStatus: 1 });
+SalesRecordSchema.index({ createdAt: -1, status: 1 });
+SalesRecordSchema.index({ paymentStatus: 1, isPaid: 1 });
 
 SalesRecordSchema.pre("find", function () {
   this.where({ deletedAt: null });

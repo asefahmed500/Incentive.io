@@ -13,8 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Check, X, Eye, Calculator, XCircle } from "lucide-react";
+import { Eye, Calculator } from "lucide-react";
 import { getPendingAccountantApprovals, processByAccountant, rejectSale } from "@/lib/actions/approval.actions";
 import {
   Dialog,
@@ -25,12 +24,16 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useSession } from "next-auth/react";
+import { useNotifications } from "@/hooks/useNotifications";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { DashboardSkeleton, TableSkeleton } from "@/components/loading/dashboard-skeleton";
 
-export default function AccountantApprovals() {
+function AccountantApprovalsContent() {
   const { data: session } = useSession();
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
+  const { showSuccess, showError, showPromise } = useNotifications();
   const [selectedRecord, setSelectedRecord] = useState<any>(null);
   const [eoBpAmount, setEoBpAmount] = useState("");
   const [eoBpReason, setEoBpReason] = useState("");
@@ -48,7 +51,9 @@ export default function AccountantApprovals() {
         setRecords(data);
       } else {
         setRecords([]);
-        console.error((data as any)?.error || "Failed to fetch approvals");
+        if ((data as any)?.error) {
+          showError((data as any).error);
+        }
       }
       setLoading(false);
     });
@@ -68,7 +73,7 @@ export default function AccountantApprovals() {
         vatRate: parseFloat(vatRate) || 0,
       });
       if (result?.error) {
-        alert(result.error);
+        showError(result.error);
         return;
       }
       setProcessDialogOpen(false);
@@ -76,6 +81,7 @@ export default function AccountantApprovals() {
       setEoBpReason("");
       setTaxRate("0");
       setVatRate("0");
+      showSuccess("Sale processed successfully");
       fetchRecords();
     }
   };
@@ -84,12 +90,13 @@ export default function AccountantApprovals() {
     if (selectedRecord && rejectReason) {
       const result = await rejectSale(selectedRecord.id, rejectReason, "accountant");
       if (result?.error) {
-        alert(result.error);
+        showError(result.error);
         return;
       }
       setRejectDialogOpen(false);
       setRejectReason("");
       setSelectedRecord(null);
+      showSuccess("Sale rejected successfully");
       fetchRecords();
     }
   };
@@ -109,6 +116,17 @@ export default function AccountantApprovals() {
         <h1 className="text-3xl font-bold">Pending Approvals</h1>
         <p className="text-muted-foreground">Process sales with tax, VAT, and deductions</p>
       </div>
+
+      {loading ? (
+        <TableSkeleton rows={5} />
+      ) : records.length === 0 ? (
+        <Card>
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <Calculator className="h-12 w-12 text-muted-foreground mb-4" />
+            <p className="text-muted-foreground">No pending approvals</p>
+          </CardContent>
+        </Card>
+      ) : (
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -319,5 +337,13 @@ export default function AccountantApprovals() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function AccountantApprovals() {
+  return (
+    <ErrorBoundary>
+      <AccountantApprovalsContent />
+    </ErrorBoundary>
   );
 }

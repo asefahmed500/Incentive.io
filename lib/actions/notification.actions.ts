@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -122,7 +123,7 @@ export async function getNotifications(userId: string, limit = 20) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const sessionUserId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (userId !== sessionUserId && !["admin", "administrator"].includes(userRole)) {
     return { error: "Forbidden: You can only access your own notifications" };
   }
@@ -149,7 +150,7 @@ export async function getUnreadCount(userId: string) {
   const session = await auth();
   if (!session?.user?.id) return 0;
   const sessionUserId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (userId !== sessionUserId && !["admin", "administrator"].includes(userRole)) {
     return 0;
   }
@@ -164,7 +165,7 @@ export async function markAsRead(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const sessionUserId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   const parsed = markAsReadSchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid ID format" };
@@ -183,7 +184,7 @@ export async function markAllAsRead(userId: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const sessionUserId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (userId !== sessionUserId && !["admin", "administrator"].includes(userRole)) {
     return { error: "Forbidden: You can only mark your own notifications as read" };
   }
@@ -200,7 +201,7 @@ export async function deleteNotification(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const sessionUserId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   const parsed = deleteNotificationSchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid ID format" };
@@ -361,4 +362,24 @@ export async function notifyUserCreated(employeeId: string, userName: string, ro
     message: `Your account has been created as ${parsed.data.role}. Please log in and change your password.`,
     link: "/profile",
   });
+}
+export async function notifySaleResubmitted(employeeId: string, companyName: string, managerIds?: string[]) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+
+  const managers = managerIds && managerIds.length > 0
+    ? await User.find({ _id: { $in: managerIds }, role: "salesManager", isActive: true }).lean()
+    : await User.find({ role: "salesManager", isActive: true }).lean();
+
+  const notifications = managers.map((manager) =>
+    createNotification({
+      userId: manager._id.toString(),
+      title: "Sale Resubmitted",
+      message: `${companyName} has been resubmitted and is pending your review.`,
+      type: "SALE_RESUBMITTED",
+    })
+  );
+
+  await Promise.allSettled(notifications);
+  return { success: true };
 }

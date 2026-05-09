@@ -6,6 +6,7 @@ import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Team } from "@/lib/models/Team";
 import { User } from "@/lib/models/User";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -40,7 +41,7 @@ export async function getTeams() {
 export async function createTeam({ name, managerId }: { name: string; managerId: string }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createTeamSchema.safeParse({ name, managerId });
   if (!parsed.success) {
@@ -55,7 +56,7 @@ export async function createTeam({ name, managerId }: { name: string; managerId:
 export async function updateTeam({ id, name, managerId }: { id: string; name?: string; managerId?: string }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateTeamSchema.safeParse({ id, name, managerId });
   if (!parsed.success) {
@@ -75,7 +76,7 @@ export async function updateTeam({ id, name, managerId }: { id: string; name?: s
 export async function deleteTeam(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteTeamSchema.safeParse(id);
   if (!parsed.success) {
@@ -94,7 +95,7 @@ export async function deleteTeam(id: string) {
 export async function addMember(teamId: string, userId: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = z.object({ teamId: objectIdSchema, userId: objectIdSchema }).safeParse({ teamId, userId });
   if (!parsed.success) {
@@ -115,7 +116,7 @@ export async function addMember(teamId: string, userId: string) {
 export async function removeMember(teamId: string, userId: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = z.object({ teamId: objectIdSchema, userId: objectIdSchema }).safeParse({ teamId, userId });
   if (!parsed.success) {

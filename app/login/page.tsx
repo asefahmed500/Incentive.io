@@ -1,23 +1,13 @@
-import { signIn } from "next-auth/react";
 import { redirect } from "next/navigation";
 import { auth } from "@/lib/auth/auth";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { LoginForm } from "./login-form";
 
 export default async function LoginPage() {
   const session = await auth();
 
   if (session?.user) {
     redirect(`/${session.user.role === "administrator" ? "administrator" : session.user.role === "admin" ? "admin" : session.user.role === "salesManager" ? "sales-manager" : session.user.role === "accountant" ? "accountant" : session.user.role === "finance" ? "finance" : "sales-dashboard"}`);
-  }
-
-  async function login(formData: FormData) {
-    "use server";
-    const email = formData.get("email") as string;
-    const password = formData.get("password") as string;
-    await signIn("credentials", { email, password, redirect: false });
   }
 
   return (
@@ -28,24 +18,11 @@ export default async function LoginPage() {
           <p className="mt-2 text-muted-foreground">Sign in to your account</p>
         </div>
 
-        <form action={login} className="mt-8 space-y-6">
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <Input id="email" name="email" type="email" placeholder="you@example.com" required />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <Input id="password" name="password" type="password" required />
-            </div>
-          </div>
+        <LoginForm />
 
-          <Button type="submit" className="w-full">Sign in</Button>
-
-          <p className="text-center text-sm">
-            Don&apos;t have an account? <Link href="/register" className="text-primary hover:underline">Register</Link>
-          </p>
-        </form>
+        <p className="text-center text-sm">
+          Don&apos;t have an account? <Link href="/register" className="text-primary hover:underline">Register</Link>
+        </p>
       </div>
     </div>
   );

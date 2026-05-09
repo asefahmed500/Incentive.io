@@ -77,12 +77,49 @@ Rejection → `Draft` + `rejectionReason` + `rejectedBy`
 
 | File | Purpose |
 |------|---------|
-| `lib/actions/sales.actions.ts` |CRUD, submit, delete with ownership checks |
+| `lib/actions/sales.actions.ts` | CRUD, submit, delete with ownership checks |
 | `lib/actions/approval.actions.ts` | Approve/reject/process by role with status guards |
-| `lib/actions/wallet.actions.ts` | Atomic `$inc` credit/debit operations |
+| `lib/actions/wallet.actions.ts` | atomic `$inc` with MongoDB sessions (prevents race conditions) |
 | `scripts/seed.ts` | Demo data: users, teams, products, sales, commission rules |
-| `middleware.ts` | Role-based route protection |
+| `middleware.ts` | Role-based route protection with jose JWT verification |
 | `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()` helpers |
+| `lib/monitoring.ts` | Metric logging: logMetric, logPerformance, logError |
+| `types/index.ts` | UserRole, SaleStatus, AuthUser, SaleRecord types |
+| `hooks/useNotifications.ts` | Unified sonner toast notifications |
+| `components/error-boundary.tsx` | Graceful error handling for dashboards |
+
+## Recent Improvements
+
+### Security (Phase 1 - Complete)
+- JWT token verification with jose library — prevents token tampering
+- Atomic wallet transactions with MongoDB sessions — prevents race conditions
+- Status field synchronization — fixes rejection/resubmission workflow
+- Next.js 16.2.6 update — fixes DoS vulnerability (CVE-2025-xxxxx)
+
+### Type Safety (Phase 2 - Complete)
+- Comprehensive types in `types/index.ts` — replaced 56+ `as any` usages
+- Custom error classes in `types/errors.ts`
+- Zero TypeScript errors
+
+### Developer Experience (Phase 3 - Complete)
+- Unified notification hook (`hooks/useNotifications.ts`) using sonner toast
+- Loading skeleton components (`components/loading/dashboard-skeleton.tsx`)
+- Error boundary components (`components/error-boundary.tsx`)
+
+### Performance (Phase 4 - Complete)
+- MongoDB aggregation pipeline for commission calculations — eliminates N+1 queries
+- Compound indexes on SalesRecord, Wallet, User models
+- Target change detection with automatic eligibility recalculation
+
+### Testing (Phase 5 - Complete)
+- Integration tests (`tests/integration/workflow.test.ts`)
+- E2E scenarios (`tests/e2e/role-workflows.spec.ts`)
+- Performance tests (`tests/performance/load-test.ts`)
+- Security tests (`tests/security/auth-security.test.ts`)
+
+### Deployment (Phase 6 - Complete)
+- Pre-deployment GitHub Actions workflow (`.github/workflows/pre-deploy.yml`)
+- Monitoring system (`lib/monitoring.ts`)
 
 ## Test Accounts
 

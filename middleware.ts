@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
+import { jwtVerify } from "jose";
 
 const PUBLIC_PATHS = ["/", "/login", "/register", "/api/auth", "/api/health", "/api/socket"];
 
@@ -23,13 +24,9 @@ export default async function middleware(request: NextRequest) {
   }
 
   try {
-    const base64Url = token.value.split(".")[1];
-    if (!base64Url) {
-      return NextResponse.redirect(new URL("/login", request.url));
-    }
-    const base64 = base64Url.replace(/-/g, "+").replace(/_/g, "/");
-    const payload = JSON.parse(Buffer.from(base64, "base64").toString("utf8"));
-    const userRole = payload.role;
+    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "");
+    const { payload } = await jwtVerify(token.value, secret);
+    const userRole = payload.role as string;
 
     if (!userRole) {
       return NextResponse.redirect(new URL("/login", request.url));
@@ -110,3 +107,6 @@ export default async function middleware(request: NextRequest) {
 export const config = {
   matcher: ["/((?!api/auth|_next/static|_next/image|favicon.ico).*)"],
 };
+
+// Named export for testing purposes
+export { default as middlewareHandler } from "./middleware";

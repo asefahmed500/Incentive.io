@@ -8,8 +8,30 @@ import { User } from "@/lib/models/User";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifySaleSubmitted } from "@/lib/actions/notification.actions";
 import { auth } from "@/lib/auth/auth";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
+
+/**
+ * Helper function to reset all status fields when a sale is rejected or resubmitted
+ * This ensures all workflow fields are synchronized
+ */
+export async function resetSaleStatuses(saleId: string) {
+  await connectToDatabase();
+  await SalesRecord.findByIdAndUpdate(saleId, {
+    status: "Draft",
+    approvalStatus: "Pending",
+    accountantStatus: "Pending",
+    financeStatus: "Pending",
+    rejectionReason: undefined,
+    rejectedBy: undefined,
+    eligibilityStatus: "Pending",
+    approvedBy: undefined,
+    approvedAt: undefined,
+    processedAt: undefined,
+    finalApprovedAt: undefined,
+  });
+}
 
 const productLineSchema = z.object({
   productName: z.string().min(1, "Product name is required"),
@@ -112,13 +134,23 @@ export async function getSalesRecord(id: string) {
   const record = await SalesRecord.findById(parsed.data).lean();
   if (!record) return null;
 
+  // Convert products to plain objects with string IDs for client serialization
+  const products = record.products.map((p: any) => ({
+    productName: p.productName,
+    categoryId: p.categoryId?.toString() || "",
+    unitPrice: p.unitPrice,
+    originalPrice: p.originalPrice,
+    quantity: p.quantity,
+    dealNotes: p.dealNotes,
+  }));
+
   return {
     id: record._id.toString(),
     employeeId: record.employeeId,
     employeeName: record.employeeName,
     companyName: record.companyName,
     companyEmail: record.companyEmail,
-    products: record.products,
+    products,
     taxEnabled: record.taxEnabled,
     vatEnabled: record.vatEnabled,
     taxRate: record.taxRate,
@@ -144,7 +176,7 @@ export async function getSalesRecord(id: string) {
 export async function getSalesStats() {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   await connectToDatabase();
   const records = await SalesRecord.find().lean();
@@ -209,7 +241,7 @@ export async function getAllSalesRecords({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator", "accountant", "finance", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = getAllSalesRecordsSchema.safeParse({ status, search });
   if (!parsed.success) return [];
@@ -268,7 +300,7 @@ export async function createSalesRecord({
 }): Promise<{ success?: boolean; error?: string; id?: string }> {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["salesExecutive", "salesManager", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createSalesRecordSchema.safeParse({
     employeeId,
@@ -311,7 +343,7 @@ export async function submitSalesRecord(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   const parsed = submitSalesRecordSchema.safeParse({ id });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -324,6 +356,11 @@ export async function submitSalesRecord(id: string) {
     return { error: "Forbidden: You can only submit your own records" };
   }
   if (record.status !== "Draft") return { error: "Only draft records can be submitted" };
+
+  // If this was a rejected record being resubmitted, reset all status fields first
+  if (record.approvalStatus === "Rejected" || record.accountantStatus === "Rejected" || record.financeStatus === "Rejected") {
+    await resetSaleStatuses(parsed.data.id);
+  }
 
   await SalesRecord.findByIdAndUpdate(parsed.data.id, {
     status: "Pending_Manager",
@@ -360,7 +397,7 @@ export async function deleteSalesRecord(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   const parsed = deleteSalesRecordSchema.safeParse({ id });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -380,7 +417,7 @@ export async function updateSalesRecord(id: string, data: unknown) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   const parsed = updateSalesRecordSchema.safeParse({ id, data });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };

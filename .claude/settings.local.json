@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(grep -E \"\\\\.\\(ts|tsx|js|mjs|json\\)$\")",
+      "Bash(npm install *)",
+      "Bash(npm run *)",
+      "Bash(echo \"Typecheck completed with status: $?\")",
+      "Bash(echo \"Lint completed with status: $?\")",
+      "Bash(npm test *)",
+      "Bash(git add *)"
+    ]
+  }
+}

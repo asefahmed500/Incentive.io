@@ -72,4 +72,4 @@ const config: NextAuthConfig = {
   pages: { signIn: "/login" },
 };
 
-export const { handlers, auth } = NextAuth(config);
+export const { handlers, auth, signOut } = NextAuth(config);

@@ -39,4 +39,8 @@ const WalletSchema = new Schema<IWallet>(
   { timestamps: true }
 );
 
+// Performance optimization: compound indexes for wallet queries
+WalletSchema.index({ employeeId: 1, balance: 1 });
+WalletSchema.index({ "transactions.createdAt": -1 });
+
 export const Wallet = mongoose.models.Wallet || mongoose.model<IWallet>("Wallet", WalletSchema);

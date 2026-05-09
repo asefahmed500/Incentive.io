@@ -5,6 +5,7 @@ import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Product } from "@/lib/models/Product";
 import { Category } from "@/lib/models/Category";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -81,7 +82,7 @@ export async function createProduct({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createProductSchema.safeParse({ name, sku, categoryId, price, stock, image });
   if (!parsed.success) {
@@ -121,7 +122,7 @@ export async function updateProduct({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateProductSchema.safeParse({ id, name, sku, categoryId, price, stock, image });
   if (!parsed.success) {
@@ -142,7 +143,7 @@ export async function updateProduct({
 export async function deleteProduct(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteProductSchema.safeParse(id);
   if (!parsed.success) {

@@ -8,6 +8,7 @@ import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifyCommissionEligible } from "@/lib/actions/notification.actions";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -67,7 +68,7 @@ export async function createCommissionRule({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createCommissionRuleSchema.safeParse({ targetPercentageFrom, targetPercentageTo, commissionRate, categoryId, priority });
   if (!parsed.success) {
@@ -103,7 +104,7 @@ export async function updateCommissionRule({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateCommissionRuleSchema.safeParse({ id, targetPercentageFrom, targetPercentageTo, commissionRate, categoryId, priority, isActive });
   if (!parsed.success) {
@@ -124,7 +125,7 @@ export async function updateCommissionRule({
 export async function deleteCommissionRule(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteCommissionRuleSchema.safeParse(id);
   if (!parsed.success) {
@@ -212,6 +213,10 @@ export async function checkEligibility(employeeId: string) {
     return { eligible: false, achievement: 0, message: "No target set" };
   }
 
+  // Detect target changes and re-evaluate if target changed
+  const previousTarget = (user as unknown as { previousTargetAmount?: number }).previousTargetAmount;
+  const targetChanged = previousTarget !== undefined && previousTarget !== user.targetAmount;
+
   const approvedSales = await SalesRecord.find({
     employeeId: parsed.data,
     financeStatus: "Approved",
@@ -224,6 +229,22 @@ export async function checkEligibility(employeeId: string) {
   const achievement = (totalSales / user.targetAmount) * 100;
   const wasEligible = (user as unknown as { isEligible?: boolean }).isEligible || false;
   const nowEligible = achievement >= 50;
+
+  // If target changed, re-evaluate all commission eligibility
+  if (targetChanged) {
+    await SalesRecord.updateMany(
+      { employeeId: parsed.data, financeStatus: "Approved" },
+      {
+        eligibilityStatus: nowEligible ? "Eligible" : "Not_Eligible",
+      }
+    );
+
+    // Store previous target for next comparison
+    await User.findByIdAndUpdate(parsed.data, {
+      previousTargetAmount: user.targetAmount,
+      isEligible: nowEligible,
+    });
+  }
 
   if (nowEligible && !wasEligible && user.email) {
     try {

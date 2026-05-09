@@ -4,12 +4,13 @@ A production-ready multi-role sales commission management platform with full app
 
 ## Tech Stack
 
-- **Frontend:** Next.js 16 (App Router), React 19, Tailwind CSS 4, shadcn/ui
-- **Backend:** Next.js API Routes, Server Actions
-- **Database:** MongoDB with Mongoose 9
-- **Auth:** NextAuth v5 (JWT strategy)
+- **Frontend:** Next.js 16.2.6 (App Router), React 19, Tailwind CSS 4, shadcn/ui
+- **Backend:** Next.js API Routes, Server Actions with MongoDB transactions
+- **Database:** MongoDB with Mongoose 9, compound indexes for performance
+- **Auth:** NextAuth v5 (JWT with jose verification), 24h maxAge
 - **Validation:** Zod v4 (all server actions)
-- **Notifications:** Email (nodemailer) + in-app polling
+- **Notifications:** Sonner toast + in-app polling
+- **Monitoring:** Custom metric logging with AuditLog trail
 
 ## Getting Started
 
@@ -116,6 +117,46 @@ components/
 - **Email notifications** for all workflow events
 - **Database backups** with restore capability
 
+## Testing
+
+| Test Suite | Location | Purpose |
+|------------|----------|---------|
+| Integration | `tests/integration/workflow.test.ts` | Complete approval workflow, wallet atomicity, role-based access |
+| E2E | `tests/e2e/role-workflows.spec.ts` | End-to-end workflows for all 6 roles |
+| Performance | `tests/performance/load-test.ts` | Wallet concurrency, dashboard load times, database indexes |
+| Security | `tests/security/auth-security.test.ts` | JWT tampering, role escalation, injection prevention |
+
+Run tests with `npm test`.
+
 ## Documentation
 
 See [AGENTS.md](./AGENTS.md) for developer-specific guidance.
+## Recent Improvements
+
+### Security (Phase 1 - Complete)
+- JWT token verification with jose library - prevents token tampering attacks
+- Atomic wallet transactions with MongoDB sessions - prevents race conditions
+- Proper status field synchronization - fixes rejection/resubmission workflow
+- Updated Next.js to 16.2.6 - fixes DoS vulnerability
+
+### Performance (Phase 4 - Complete)
+- MongoDB aggregation pipeline for commission calculations - fixes N+1 queries
+- Compound database indexes on SalesRecord, Wallet, User models
+- Target change detection with automatic eligibility recalculation
+
+### Type Safety (Phase 2 - Complete)
+- Comprehensive TypeScript definitions in `types/index.ts`
+- Custom error classes in `types/errors.ts`
+- Replaced all `as any` usages with proper types
+
+### Developer Experience (Phase 3 - Complete)
+- Unified notification hook using sonner toast
+- Loading skeleton components
+- Error boundary components
+- Pre-deployment GitHub Actions workflow
+- Monitoring and metrics logging system
+
+### Monitoring & Deployment (Phase 6 - Complete)
+- Pre-deployment checks with GitHub Actions
+- Metric logging for key operations
+- Audit trail for all state changes

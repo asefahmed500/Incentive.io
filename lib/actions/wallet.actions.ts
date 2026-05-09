@@ -5,6 +5,7 @@ import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Wallet } from "@/lib/models/Wallet";
 import mongoose from "mongoose";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -45,7 +46,7 @@ export async function getWallet(employeeId: string) {
   const session = await auth();
   if (!session?.user?.id) return null;
   const userId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (employeeId !== userId && !["admin", "administrator", "finance"].includes(userRole)) return null;
   const parsed = getWalletSchema.safeParse(employeeId);
   if (!parsed.success) return null;
@@ -60,7 +61,7 @@ export async function getOrCreateWallet(employeeId: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (employeeId !== userId && !["admin", "administrator", "finance"].includes(userRole)) {
     return { error: "Forbidden: You can only access your own wallet" };
   }
@@ -88,7 +89,7 @@ export async function creditWallet({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = creditWalletSchema.safeParse({ employeeId, amount, salesRecordId, description });
   if (!parsed.success) {
@@ -101,27 +102,51 @@ export async function creditWallet({
 
   const empOid = toObjectId(parsed.data.employeeId);
 
-  const wallet = await Wallet.findOneAndUpdate(
-    { employeeId: empOid },
-    {
-      $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
-      $setOnInsert: { transactions: [] },
-    },
-    { upsert: true, new: true }
-  );
+  const dbSession = await mongoose.startSession();
+  dbSession.startTransaction();
 
-  wallet.transactions.push({
-    type: "credit",
-    amount: parsed.data.amount,
-    salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
-    description: parsed.data.description,
-    balanceAfter: wallet.balance,
-    createdAt: new Date(),
-  });
+  try {
+    const wallet = await Wallet.findOneAndUpdate(
+      { employeeId: empOid },
+      {
+        $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
+        $setOnInsert: { transactions: [] },
+      },
+      { upsert: true, new: true, session: dbSession }
+    );
 
-  await wallet.save();
+    if (!wallet) {
+      await dbSession.abortTransaction();
+      return { error: "Failed to create or update wallet" };
+    }
 
-  return { success: true, newBalance: wallet.balance };
+    const balanceAfter = wallet.balance + parsed.data.amount;
+
+    await Wallet.findByIdAndUpdate(
+      wallet._id,
+      {
+        $push: {
+          transactions: {
+            type: "credit",
+            amount: parsed.data.amount,
+            salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
+            description: parsed.data.description,
+            balanceAfter,
+            createdAt: new Date(),
+          },
+        },
+      },
+      { session: dbSession }
+    );
+
+    await dbSession.commitTransaction();
+    return { success: true, newBalance: balanceAfter };
+  } catch (error) {
+    await dbSession.abortTransaction();
+    return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
+  } finally {
+    dbSession.endSession();
+  }
 }
 
 export async function debitWallet({
@@ -137,7 +162,7 @@ export async function debitWallet({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = debitWalletSchema.safeParse({ employeeId, amount, salesRecordId, description });
   if (!parsed.success) {
@@ -150,28 +175,48 @@ export async function debitWallet({
 
   const empOid = toObjectId(parsed.data.employeeId);
 
-  const wallet = await Wallet.findOneAndUpdate(
-    { employeeId: empOid, balance: { $gte: parsed.data.amount } },
-    { $inc: { balance: -parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount } },
-    { new: true }
-  );
+  const dbSession = await mongoose.startSession();
+  dbSession.startTransaction();
 
-  if (!wallet) {
-    return { error: "Insufficient balance or wallet not found" };
+  try {
+    const wallet = await Wallet.findOneAndUpdate(
+      { employeeId: empOid, balance: { $gte: parsed.data.amount } },
+      { $inc: { balance: -parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount } },
+      { new: true, session: dbSession }
+    );
+
+    if (!wallet) {
+      await dbSession.abortTransaction();
+      return { error: "Insufficient balance or wallet not found" };
+    }
+
+    const balanceAfter = wallet.balance;
+
+    await Wallet.findByIdAndUpdate(
+      wallet._id,
+      {
+        $push: {
+          transactions: {
+            type: "debit",
+            amount: parsed.data.amount,
+            salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
+            description: parsed.data.description,
+            balanceAfter,
+            createdAt: new Date(),
+          },
+        },
+      },
+      { session: dbSession }
+    );
+
+    await dbSession.commitTransaction();
+    return { success: true, newBalance: balanceAfter };
+  } catch (error) {
+    await dbSession.abortTransaction();
+    return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
+  } finally {
+    dbSession.endSession();
   }
-
-  wallet.transactions.push({
-    type: "debit",
-    amount: parsed.data.amount,
-    salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
-    description: parsed.data.description,
-    balanceAfter: wallet.balance,
-    createdAt: new Date(),
-  });
-
-  await wallet.save();
-
-  return { success: true, newBalance: wallet.balance };
 }
 
 export async function markCommissionPaid({
@@ -187,7 +232,7 @@ export async function markCommissionPaid({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = markCommissionPaidSchema.safeParse({ employeeId, amount, salesRecordId, paidBy });
   if (!parsed.success) {
@@ -201,43 +246,68 @@ export async function markCommissionPaid({
   const empOid = toObjectId(parsed.data.employeeId);
   const srOid = toObjectId(parsed.data.salesRecordId);
 
-  const existingCredit = await Wallet.exists({
-    employeeId: empOid,
-    "transactions.salesRecordId": srOid,
-    "transactions.type": "credit",
-  });
+  const dbSession = await mongoose.startSession();
+  dbSession.startTransaction();
 
-  if (existingCredit) {
-    return { error: "Commission already paid for this sale" };
+  try {
+    const existingCredit = await Wallet.exists({
+      employeeId: empOid,
+      "transactions.salesRecordId": srOid,
+      "transactions.type": "credit",
+    }).session(dbSession);
+
+    if (existingCredit) {
+      await dbSession.abortTransaction();
+      return { error: "Commission already paid for this sale" };
+    }
+
+    const wallet = await Wallet.findOneAndUpdate(
+      { employeeId: empOid },
+      {
+        $inc: { balance: parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount },
+        $setOnInsert: { transactions: [] },
+      },
+      { upsert: true, new: true, session: dbSession }
+    );
+
+    if (!wallet) {
+      await dbSession.abortTransaction();
+      return { error: "Failed to create or update wallet" };
+    }
+
+    const balanceAfter = wallet.balance + parsed.data.amount;
+
+    await Wallet.findByIdAndUpdate(
+      wallet._id,
+      {
+        $push: {
+          transactions: {
+            type: "credit",
+            amount: parsed.data.amount,
+            salesRecordId: srOid,
+            description: "Commission paid for sale",
+            balanceAfter,
+            createdAt: new Date(),
+          },
+        },
+      },
+      { session: dbSession }
+    );
+
+    await dbSession.commitTransaction();
+    return { success: true, newBalance: balanceAfter };
+  } catch (error) {
+    await dbSession.abortTransaction();
+    return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
+  } finally {
+    dbSession.endSession();
   }
-
-  const wallet = await Wallet.findOneAndUpdate(
-    { employeeId: empOid },
-    {
-      $inc: { balance: parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount },
-      $setOnInsert: { transactions: [] },
-    },
-    { upsert: true, new: true }
-  );
-
-  wallet.transactions.push({
-    type: "credit",
-    amount: parsed.data.amount,
-    salesRecordId: srOid,
-    description: "Commission paid for sale",
-    balanceAfter: wallet.balance,
-    createdAt: new Date(),
-  });
-
-  await wallet.save();
-
-  return { success: true, newBalance: wallet.balance };
 }
 
 export async function getAllWallets() {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   await connectToDatabase();
   const wallets = await Wallet.find().populate("employeeId", "name email role").lean();
@@ -258,7 +328,7 @@ export async function getWalletTransactions(employeeId: string, limit = 50) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userId = session.user.id as string;
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (employeeId !== userId && !["admin", "administrator", "finance"].includes(userRole)) {
     return { error: "Forbidden: You can only access your own wallet transactions" };
   }

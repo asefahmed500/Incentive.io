@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, FileText, Target, Wallet, Users, LogOut, User, Plus, CheckCircle, Percent } from "lucide-react";
-import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -18,6 +17,8 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { NotificationBell } from "@/components/notification-bell";
+import { Separator } from "@/components/ui/separator";
+import { logoutAction } from "@/lib/actions/auth.actions";
 
 const sidebarItems = [
   { href: "/sales-dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -43,12 +44,9 @@ export default function SalesDashboardLayout({
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">Incentive.io</h2>
-              <p className="text-sm text-muted-foreground">Sales Executive</p>
-            </div>
-            <NotificationBell />
+          <div>
+            <h2 className="text-lg font-semibold">Incentive.io</h2>
+            <p className="text-sm text-muted-foreground">Sales Executive</p>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -73,7 +71,7 @@ export default function SalesDashboardLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
+              <SidebarMenuButton onClick={() => logoutAction()}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>
@@ -82,7 +80,14 @@ export default function SalesDashboardLayout({
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <div className="p-8">{children}</div>
+        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <div className="flex flex-1 items-center justify-end">
+            <NotificationBell />
+          </div>
+        </header>
+        <div className="p-8 flex-1 overflow-auto">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

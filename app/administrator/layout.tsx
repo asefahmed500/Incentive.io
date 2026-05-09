@@ -3,7 +3,6 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { LayoutDashboard, Users, Building2, Tag, Percent, Target, FileText, Wallet, BarChart3, Settings, LogOut, User, HardDrive, Bell, RefreshCw, Database, Activity, ClipboardList } from "lucide-react";
-import { signOut } from "next-auth/react";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -18,6 +17,8 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { NotificationBell } from "@/components/notification-bell";
+import { Separator } from "@/components/ui/separator";
+import { logoutAction } from "@/lib/actions/auth.actions";
 
 const sidebarItems = [
   { href: "/administrator", label: "Dashboard", icon: LayoutDashboard },
@@ -40,12 +41,9 @@ export default function AdministratorLayout({
     <SidebarProvider>
       <Sidebar>
         <SidebarHeader className="p-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-lg font-semibold">Incentive.io</h2>
-              <p className="text-sm text-muted-foreground">SuperAdmin</p>
-            </div>
-            <NotificationBell />
+          <div>
+            <h2 className="text-lg font-semibold">Incentive.io</h2>
+            <p className="text-sm text-muted-foreground">SuperAdmin</p>
           </div>
         </SidebarHeader>
         <SidebarContent>
@@ -64,7 +62,7 @@ export default function AdministratorLayout({
         </SidebarContent>
         <SidebarFooter className="p-4">
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => logoutAction()}
             className="flex items-center gap-3 px-3 py-2 w-full text-left text-red-500 hover:bg-red-50 rounded-md transition-colors"
           >
             <LogOut className="h-4 w-4" />
@@ -73,7 +71,14 @@ export default function AdministratorLayout({
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
-        <div className="p-6">{children}</div>
+        <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="mr-2 h-4" />
+          <div className="flex flex-1 items-center justify-end">
+            <NotificationBell />
+          </div>
+        </header>
+        <div className="p-6 flex-1 overflow-auto">{children}</div>
       </SidebarInset>
     </SidebarProvider>
   );

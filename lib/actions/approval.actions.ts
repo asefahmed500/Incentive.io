@@ -10,6 +10,8 @@ import CommissionRule from "@/lib/models/CommissionRule";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifyManagerApproved, notifyManagerRejected, notifyAccountantProcessed, notifyAccountantRejected, notifyFinanceApproved, notifyFinanceRejected } from "@/lib/actions/notification.actions";
 import { logAudit } from "@/lib/actions/audit.actions";
+import { resetSaleStatuses } from "@/lib/actions/sales.actions";
+import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -40,7 +42,7 @@ const finalApproveByFinanceSchema = z.object({
 export async function getPendingManagerApprovals() {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["salesManager", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   await connectToDatabase();
   const records = await SalesRecord.find({ status: "Pending_Manager" })
@@ -64,7 +66,7 @@ export async function getPendingManagerApprovals() {
 export async function approveSale(id: string, paidBy?: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["salesManager", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = approveSaleSchema.safeParse({ id, paidBy });
   if (!parsed.success) {
@@ -129,7 +131,7 @@ export async function approveSale(id: string, paidBy?: string) {
 export async function rejectSale(id: string, reason: string, rejectedBy?: "manager" | "accountant" | "finance") {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["salesManager", "accountant", "finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = rejectSaleSchema.safeParse({ id, reason, rejectedBy });
   if (!parsed.success) {
@@ -152,21 +154,30 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
     return { error: `Record is not pending ${parsed.data.rejectedBy} rejection` };
   }
 
-  record.status = "Draft";
-  record.approvalStatus = "Rejected";
-  record.rejectionReason = parsed.data.reason;
-  record.rejectedBy = parsed.data.rejectedBy;
-  await record.save();
+  // Store rejection info before resetting
+  const rejectionReason = parsed.data.reason;
+  const rejectorRole = parsed.data.rejectedBy;
+
+  // Reset all status fields using helper function
+  await resetSaleStatuses(parsed.data.id);
+
+  // Update with rejection information and set approval status
+  await SalesRecord.findByIdAndUpdate(parsed.data.id, {
+    status: "Draft",
+    approvalStatus: "Rejected",
+    rejectionReason,
+    rejectedBy: rejectorRole,
+  });
 
   {
     await logAudit({
       userId: record.managerId?.toString() || "",
       userEmail: "",
-      userRole: rejectedBy === "finance" ? "finance" : rejectedBy === "accountant" ? "accountant" : "salesManager",
+      userRole: rejectorRole === "finance" ? "finance" : rejectorRole === "accountant" ? "accountant" : "salesManager",
       action: "REJECT_SALE",
       entity: "SalesRecord",
       entityId: parsed.data.id,
-      details: { reason: parsed.data.reason, rejectedBy },
+      details: { reason: parsed.data.reason, rejectedBy: rejectorRole },
     });
 
     try {
@@ -204,7 +215,7 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
 export async function getPendingAccountantApprovals() {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["accountant", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   await connectToDatabase();
   const records = await SalesRecord.find({
@@ -249,7 +260,7 @@ export async function processByAccountant({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["accountant", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = processByAccountantSchema.safeParse({ id, eoBpAmount, eoBpReason, taxRate, vatRate });
   if (!parsed.success) {
@@ -337,7 +348,7 @@ export async function processByAccountant({
 export async function getPendingFinanceApprovals() {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   await connectToDatabase();
   const records = await SalesRecord.find({
@@ -369,7 +380,7 @@ export async function getPendingFinanceApprovals() {
 export async function finalApproveByFinance(id: string, paidBy: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = finalApproveByFinanceSchema.safeParse({ id, paidBy });
   if (!parsed.success) {

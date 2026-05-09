@@ -36,18 +36,22 @@ const UserSchema = new Schema<IUser>(
     managerId: { type: Schema.Types.ObjectId, ref: "User" },
     targetAmount: { type: Number, default: 0 },
     targetPeriod: { type: String },
+    previousTargetAmount: { type: Number },
     deletedAt: { type: Date },
   },
   { timestamps: true }
 );
 
-UserSchema.index({ email: 1 });
-UserSchema.index({ employeeId: 1 });
+// email and employeeId indexes are auto-created by unique/sparse in schema definition
 UserSchema.index({ role: 1 });
 UserSchema.index({ managerId: 1 });
 UserSchema.index({ teamId: 1 });
 UserSchema.index({ isActive: 1 });
 UserSchema.index({ deletedAt: 1 });
+// Performance optimization: compound indexes for user queries
+UserSchema.index({ isEligible: 1, targetAmount: 1 });
+UserSchema.index({ role: 1, isActive: 1 });
+UserSchema.index({ managerId: 1, isActive: 1 });
 
 UserSchema.pre("find", function () {
   this.where({ deletedAt: null });
