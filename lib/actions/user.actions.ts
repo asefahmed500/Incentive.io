@@ -7,6 +7,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
 import { sendWelcomeEmail, sendNotificationEmail } from "@/lib/email";
 import { notifyUserCreated } from "@/lib/actions/notification.actions";
+import { logAudit } from "@/lib/actions/audit.actions";
 import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
@@ -19,7 +20,12 @@ const getUsersSchema = z.object({
 const createUserSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
   email: z.string().email("Invalid email format"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  password: z.string()
+    .min(12, "Password must be at least 12 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
   role: z.enum(["admin", "administrator", "salesManager", "salesExecutive", "accountant", "finance"]),
   phone: z.string().max(50).optional(),
 });
@@ -47,12 +53,22 @@ const toggleUserStatusSchema = objectIdSchema;
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string().min(6, "New password must be at least 6 characters"),
+  newPassword: z.string()
+    .min(12, "Password must be at least 12 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
 });
 
 const resetPasswordSchema = z.object({
   userId: objectIdSchema,
-  newPassword: z.string().min(6, "New password must be at least 6 characters"),
+  newPassword: z.string()
+    .min(12, "Password must be at least 12 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
 });
 
 export async function getUsers({
@@ -138,6 +154,21 @@ export async function createUser({
     employeeId,
     isActive: true,
     targetAmount: 0,
+  });
+
+  // Audit logging for user creation
+  await logAudit({
+    userId: session.user.id,
+    userEmail: session.user.email || undefined,
+    userRole,
+    action: "user.created",
+    entity: "User",
+    details: {
+      createdUserName: parsed.data.name,
+      createdUserEmail: parsed.data.email.toLowerCase(),
+      createdUserRole: parsed.data.role,
+      employeeId,
+    },
   });
 
   try {

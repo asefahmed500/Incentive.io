@@ -50,18 +50,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Parse JSON body directly (no FormData conversion needed)
     const body = await request.json();
-    const formData = new FormData();
 
-    // Parse form data from JSON body
-    Object.entries(body).forEach(([key, value]) => {
-      formData.append(key, value as string);
-    });
-
-    const name = formData.get("name") as string;
-    const email = (formData.get("email") as string)?.toLowerCase();
-    const password = formData.get("password") as string;
-    const phone = (formData.get("phone") as string) || "";
+    const { name, email, password, phone } = body;
 
     // Validate input
     const parsed = registerSchema.safeParse({ name, email, password, phone });

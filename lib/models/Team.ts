@@ -20,6 +20,7 @@ const TeamSchema = new Schema<ITeam>(
 );
 
 TeamSchema.index({ managerId: 1 });
+TeamSchema.index({ members: 1 });
 TeamSchema.index({ deletedAt: 1 });
 
 TeamSchema.pre("find", function () {

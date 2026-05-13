@@ -7,6 +7,7 @@ import { Product } from "@/lib/models/Product";
 import { User } from "@/lib/models/User";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifySaleSubmitted } from "@/lib/actions/notification.actions";
+import { logAudit } from "@/lib/actions/audit.actions";
 import { auth } from "@/lib/auth/auth";
 import type { AuthUser, UserRole } from "@/types";
 import { sseManager, SSE_EVENTS } from "@/lib/sse";
@@ -338,6 +339,23 @@ export async function createSalesRecord({
     status: "Draft",
   });
 
+  // Audit logging for sales record creation
+  await logAudit({
+    userId: session.user.id,
+    userEmail: session.user.email || undefined,
+    userRole,
+    action: "sales.created",
+    entity: "SalesRecord",
+    entityId: record._id.toString(),
+    details: {
+      employeeName: parsed.data.employeeName,
+      companyName: parsed.data.companyName,
+      productCount: parsed.data.products.length,
+      taxEnabled: parsed.data.taxEnabled,
+      vatEnabled: parsed.data.vatEnabled,
+    },
+  });
+
   return { success: true, id: record._id.toString() };
 }
 
@@ -429,6 +447,23 @@ export async function deleteSalesRecord(id: string) {
     return { error: "Forbidden: You can only delete your own records" };
   }
   if (record.status !== "Draft") return { error: "Only draft records can be deleted" };
+
+  // Audit logging before deletion
+  await logAudit({
+    userId: session.user.id,
+    userEmail: session.user.email || undefined,
+    userRole,
+    action: "sales.deleted",
+    entity: "SalesRecord",
+    entityId: parsed.data.id,
+    details: {
+      employeeName: record.employeeName,
+      companyName: record.companyName,
+      status: record.status,
+      productCount: record.products.length,
+    },
+  });
+
   await SalesRecord.findByIdAndUpdate(parsed.data.id, { deletedAt: new Date() });
   return { success: true };
 }

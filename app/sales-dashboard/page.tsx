@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { FileText, Target, Wallet, TrendingUp, DollarSign, Users, Building2, CheckCircle, XCircle, Clock, RefreshCw, ArrowRight } from "lucide-react";
 import { getSalesRecords } from "@/lib/actions/sales.actions";
 import { getCommissionsByEmployee, checkEligibility } from "@/lib/actions/commission.actions";
+import { getSalesTrends, getCommissionProgress } from "@/lib/actions/analytics.actions";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
@@ -25,6 +26,8 @@ export default function SalesDashboard() {
     commission: 0,
   });
   const [eligibility, setEligibility] = useState<any>(null);
+  const [salesTrends, setSalesTrends] = useState<Array<{ month: string; sales: number; commission: number }>>([]);
+  const [commissionProgress, setCommissionProgress] = useState<Array<{ month: string; earned: number; target: number }>>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
@@ -34,10 +37,17 @@ export default function SalesDashboard() {
     const commissions = await getCommissionsByEmployee(session.user.id);
     const elig = await checkEligibility(session.user.id);
 
+    // Fetch real analytics data
+    const trendsResult = await getSalesTrends(session.user.id, 6);
+    const progressResult = await getCommissionProgress(session.user.id, 6);
+
     const safeRecords = Array.isArray(records) ? records : [];
     if (!Array.isArray(records)) console.error((records as any)?.error || "Failed to fetch records");
 
-    const pending = safeRecords.filter((r: any) => r.status !== "Approved" && r.status !== "Draft").length;
+    // Fix: Only count records actively in approval workflow, not Draft or Approved
+    const pending = safeRecords.filter((r: any) =>
+      r.status === "Pending_Manager" || r.status === "Pending_Accountant" || r.status === "Pending_Finance"
+    ).length;
     const approvedAmount = safeRecords
       .filter((r: any) => r.status === "Approved")
       .reduce((sum: number, r: any) => sum + (r.totalAmount || 0), 0);
@@ -49,6 +59,26 @@ export default function SalesDashboard() {
       commission: commissions.pendingCommission || 0,
     });
     setEligibility(elig);
+
+    // Set chart data from real analytics or use empty arrays if error
+    if (Array.isArray(trendsResult)) {
+      setSalesTrends(trendsResult.length > 0 ? trendsResult : [
+        { month: "No Data", sales: 0, commission: 0 }
+      ]);
+    } else if (trendsResult?.error) {
+      console.error("Sales trends error:", trendsResult.error);
+      setSalesTrends([{ month: "No Data", sales: 0, commission: 0 }]);
+    }
+
+    if (Array.isArray(progressResult)) {
+      setCommissionProgress(progressResult.length > 0 ? progressResult : [
+        { month: "No Data", earned: 0, target: 0 }
+      ]);
+    } else if (progressResult?.error) {
+      console.error("Commission progress error:", progressResult.error);
+      setCommissionProgress([{ month: "No Data", earned: 0, target: 0 }]);
+    }
+
     setLoading(false);
   };
 
@@ -114,22 +144,6 @@ export default function SalesDashboard() {
   const recordsByStatus = [
     { name: "Approved", value: stats.totalRecords - stats.pending, color: "#10b981" },
     { name: "Pending", value: stats.pending, color: "#f59e0b" }
-  ];
-
-  const salesTrends = [
-    { month: "Jan", sales: 150000, commission: 4500 },
-    { month: "Feb", sales: 180000, commission: 5400 },
-    { month: "Mar", sales: 120000, commission: 3600 },
-    { month: "Apr", sales: 220000, commission: 6600 },
-    { month: "May", sales: 195000, commission: 5850 },
-  ];
-
-  const commissionProgress = [
-    { month: "Jan", earned: 4500, target: 5000 },
-    { month: "Feb", earned: 5400, target: 5500 },
-    { month: "Mar", earned: 3600, target: 4000 },
-    { month: "Apr", earned: 6600, target: 6000 },
-    { month: "May", earned: 5850, target: 6500 },
   ];
 
   return (

@@ -8,6 +8,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, AreaChart, Area, BarChart, Ba
 import { getPendingAccountantApprovals } from "@/lib/actions/approval.actions";
 import { getSalesStats } from "@/lib/actions/sales.actions";
 import { getCommissions } from "@/lib/actions/commission.actions";
+import { getDeductionBreakdown } from "@/lib/actions/analytics.actions";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -25,13 +26,15 @@ export default function AccountantDashboard() {
     totalDeductions: 0,
     pendingFinance: 0,
   });
+  const [deductionBreakdown, setDeductionBreakdown] = useState<Array<{ type: string; amount: number; count: number }>>([]);
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
-    const [pending, salesStats, commissions] = await Promise.all([
+    const [pending, salesStats, commissions, deductionData] = await Promise.all([
       getPendingAccountantApprovals(),
       getSalesStats(),
       getCommissions(),
+      getDeductionBreakdown(6),
     ]);
 
     const safePending = Array.isArray(pending) ? pending : [];
@@ -46,6 +49,26 @@ export default function AccountantDashboard() {
       totalDeductions: safeStats.totalDeductions,
       pendingFinance: safeStats.pendingFinance,
     });
+
+    // Set deduction breakdown from real data or use empty array if error
+    if (Array.isArray(deductionData) && deductionData.length > 0) {
+      setDeductionBreakdown(deductionData);
+    } else {
+      // Check if it's an error object
+      const deductionResult = deductionData as { error?: string } | undefined;
+      if (deductionResult?.error) {
+        console.error("Deduction breakdown error:", deductionResult.error);
+        // Fallback to calculated breakdown if real data unavailable
+        setDeductionBreakdown([
+          { type: "Tax", amount: safeStats.totalDeductions * 0.15, count: 0 },
+          { type: "VAT", amount: safeStats.totalDeductions * 0.10, count: 0 },
+          { type: "EO/BP", amount: safeStats.totalDeductions * 0.05, count: 0 },
+        ]);
+      } else {
+        setDeductionBreakdown([]);
+      }
+    }
+
     setLoading(false);
   };
 
@@ -63,12 +86,6 @@ export default function AccountantDashboard() {
   const processingStatus = [
     { name: "Processed", value: stats.totalProcessed, color: "#10b981" },
     { name: "Pending", value: stats.pending, color: "#f59e0b" }
-  ];
-
-  const deductionBreakdown = [
-    { type: "Tax", amount: stats.totalDeductions * 0.15 },
-    { type: "VAT", amount: stats.totalDeductions * 0.10 },
-    { type: "EO/BP", amount: stats.totalDeductions * 0.05 },
   ];
 
   const processingTrends = [
@@ -166,17 +183,23 @@ export default function AccountantDashboard() {
             <CardTitle>Deduction Breakdown</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <BarChart data={deductionBreakdown}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="type" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value) => `৳${(value || 0).toLocaleString()}`}
-                />
-                <Bar dataKey="amount" fill="#f59e0b" name="Amount" />
-              </BarChart>
-            </ResponsiveContainer>
+            {deductionBreakdown.length > 0 ? (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={deductionBreakdown}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="type" />
+                  <YAxis />
+                  <Tooltip
+                    formatter={(value) => `৳${(value || 0).toLocaleString()}`}
+                  />
+                  <Bar dataKey="amount" fill="#f59e0b" name="Amount" />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="flex items-center justify-center h-[200px] text-muted-foreground">
+                No deduction data available
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>

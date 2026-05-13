@@ -29,6 +29,11 @@ export const createSalesRecordApiSchema = z.object({
   vatEnabled: z.boolean().optional(),
 });
 
+// Delete action validation
+export const deleteSalesRecordSchema = z.object({
+  id: z.string().regex(/^[a-f\d]{24}$/i, "Invalid sale record ID format"),
+});
+
 // Query parameter validation for GET requests
 export const salesQuerySchema = z.object({
   employeeId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid employee ID format").optional(),

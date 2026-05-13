@@ -5,6 +5,7 @@ import { z } from "zod";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
+import Notification from "@/lib/models/Notification";
 import type { AuthUser, UserRole } from "@/types";
 import { sseManager, SSE_EVENTS } from "@/lib/sse";
 
@@ -84,19 +85,6 @@ const notifyUserCreatedSchema = z.object({
   userName: z.string().min(1).max(200),
   role: z.string().min(1),
 });
-
-const NotificationSchema = new mongoose.Schema({
-  userId: { type: String, required: true },
-  recipientRole: { type: String, required: true }, // Store recipient role for filtering
-  type: { type: String, required: true },
-  title: { type: String, required: true },
-  message: { type: String, required: true },
-  link: { type: String },
-  isRead: { type: Boolean, default: false },
-  createdAt: { type: Date, default: Date.now },
-});
-
-const Notification = mongoose.models.Notification || mongoose.model("Notification", NotificationSchema);
 
 export async function createNotification({
   userId,

@@ -13,7 +13,8 @@
     "typecheck": "tsc --noEmit",
     "test": "jest",
     "audit": "npm run typecheck && npm run lint && npm test",
-    "seed": "npx tsx scripts/seed.ts"
+    "seed": "npx tsx scripts/seed.ts",
+    "share": "node scripts/dev-tunnel.js"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",

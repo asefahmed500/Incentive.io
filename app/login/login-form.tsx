@@ -21,6 +21,19 @@ export function LoginForm() {
     const email = formData.get("email") as string
     const password = formData.get("password") as string
 
+    // Client-side validation
+    if (!email || !email.includes("@")) {
+      showError(new Error("Please enter a valid email address"))
+      setIsLoading(false)
+      return
+    }
+
+    if (!password || password.length < 1) {
+      showError(new Error("Please enter your password"))
+      setIsLoading(false)
+      return
+    }
+
     const result = await signIn("credentials", {
       email,
       password,
@@ -41,11 +54,28 @@ export function LoginForm() {
       <div className="space-y-4">
         <div className="space-y-2">
           <Label htmlFor="email">Email</Label>
-          <Input id="email" name="email" type="email" placeholder="you@example.com" required disabled={isLoading} />
+          <Input
+            id="email"
+            name="email"
+            type="email"
+            placeholder="you@example.com"
+            required
+            disabled={isLoading}
+            pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
+            title="Please enter a valid email address"
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="password">Password</Label>
-          <Input id="password" name="password" type="password" required disabled={isLoading} />
+          <Input
+            id="password"
+            name="password"
+            type="password"
+            required
+            disabled={isLoading}
+            minLength={1}
+            title="Please enter your password"
+          />
         </div>
       </div>
 

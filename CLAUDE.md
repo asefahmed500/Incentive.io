@@ -135,6 +135,9 @@ Rejection returns record to `Draft` with `rejectionReason` and `rejectedBy` fiel
 - Zod schemas for all API endpoints (defense in depth)
 - `approval.validation.ts`: Manager, Accountant, Finance approval schemas
 - `sales.validation.ts`: Sales record creation, query parameter schemas
+- `wallet.validation.ts`: Credit/debit wallet operations
+- `target.validation.ts`: Target assignment and removal
+- `commission.validation.ts`: Commission rule CRUD operations
 - Applied in API routes before calling server actions
 
 **Error Handling** (`lib/api-error.ts`):
@@ -163,6 +166,7 @@ Rejection returns record to `Draft` with `rejectionReason` and `rejectedBy` fiel
 - Auto-filter `deletedAt: null` on all queries
 - Indexes on common query patterns (see Performance section below)
 - References between models (User, Team, Product, Category, etc.)
+- **Notification model** (`lib/models/Notification.ts`): Stores in-app notifications with recipientRole filtering and SSE integration
 
 **Database Connection** (`lib/mongodb.ts`):
 - Singleton pattern with global cache
@@ -185,12 +189,13 @@ Rejection returns record to `Draft` with `rejectionReason` and `rejectedBy` fiel
 
 **API Routes** (`app/api/*/route.ts`):
 - Health check: `/api/health`
-- Sales operations: `/api/sales-records/*`, `/api/approvals/*`
-- Data management: `/api/users/*`, `/api/teams/*`, `/api/products/*`, `/api/categories/*`
-- Financial: `/api/wallets/*`, `/api/commissions/*`, `/api/commission-rules/*`
+- Sales operations: `/api/sales-records/*` (GET, POST, PATCH, DELETE), `/api/approvals/*`
+- Data management: `/api/users/*`, `/api/users/[id]`, `/api/teams/*`, `/api/teams/[id]`, `/api/products/*`, `/api/products/[id]`, `/api/categories/*`, `/api/categories/[id]`
+- Financial: `/api/wallets/*`, `/api/wallets/[id]`, `/api/commissions/*`, `/api/commission-rules/*`, `/api/commission-rules/[id]`
+- Targets: `/api/targets/*` (GET, POST, DELETE)
 - System: `/api/backups/*`, `/api/sync/*`, `/api/settings/*`, `/api/upload/*`, `/api/audit-logs/*`
-- Real-time: `/api/notifications/*`, `/api/socket/*` (socket.io - unused currently)
-- Route handlers complement server actions for specific use cases
+- Real-time: `/api/notifications/*`, `/api/events` (SSE), `/api/socket/*` (socket.io - unused currently)
+- All CRUD operations have complete API coverage (GET, POST, PUT/PATCH, DELETE where applicable)
 
 **API Route Error Handling Pattern** (established during runtime validation):
 ```typescript
@@ -244,8 +249,11 @@ export async function POST(request: Request) {
 
 **Database Indexes** (added during comprehensive audit):
 - `User`: `{ isEligible: 1 }`, `{ isEligible: 1, targetAmount: 1 }`, `{ role: 1, isActive: 1 }`, `{ managerId: 1, isActive: 1 }`
-- `SalesRecord`: `{ employeeId: 1, createdAt: -1 }`, `{ createdAt: -1, status: 1 }`, `{ paymentStatus: 1, isPaid: 1 }`
-- `Wallet`: `{ balance: 1 }`, `{ employeeId: 1, balance: 1 }`, `{ "transactions.createdAt": -1 }`
+- `SalesRecord`: `{ employeeId: 1, createdAt: -1 }`, `{ createdAt: -1, status: 1 }`, `{ paymentStatus: 1, isPaid: 1 }`, `{ companyEmail: 1 }`
+- `Wallet`: `{ balance: 1 }`, `{ employeeId: 1, balance: 1 }`, `{ "transactions.createdAt": -1 }` (note: employeeId has unique index)
+- `Team`: `{ managerId: 1 }`, `{ members: 1 }`, `{ deletedAt: 1 }`
+- `Product`: `{ deletedAt: 1 }`, `{ categoryId: 1 }`
+- `Notification`: `{ userId: 1, createdAt: -1 }`, `{ userId: 1, isRead: 1 }`, `{ recipientRole: 1, createdAt: -1 }`
 - `CommissionRule`: `{ targetPercentageTo: 1, targetPercentageFrom: -1 }` for range queries
 
 **Atomic Transactions:**
@@ -317,16 +325,18 @@ useEffect(() => {
 | `lib/actions/sales.actions.ts` | Sales CRUD with ownership checks, ObjectId serialization handling |
 | `lib/actions/approval.actions.ts` | Multi-stage approve/reject/process with atomic transactions + local MongoDB fallback |
 | `lib/actions/wallet.actions.ts` | Atomic credit/debit operations with MongoDB sessions + local MongoDB fallback |
+| `lib/actions/notification.actions.ts` | Notification creation, retrieval, role-based link validation |
 | `lib/actions/auth.actions.ts` | Logout action (use for all signout flows) |
 | `lib/utils/money.ts` | Precise monetary calculations (use for all currency operations) |
 | `lib/rate-limit.ts` | In-memory rate limiting for public API endpoints |
 | `lib/api-error.ts` | Standardized error handling with ApiError class and handleError |
 | `lib/validations/*.ts` | API-level Zod validation schemas |
 | `lib/sse.ts` | Server-Sent Events manager for real-time updates |
-| `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()` helpers |
+| `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()`, `requireAdminOrAbove()`, `requireFinanceOrAbove()` helpers |
 | `middleware.ts` | Route-level RBAC enforcement with jose JWT verification |
 | `lib/auth/auth.ts` | NextAuth v5 config with JWT, exports `signOut` |
 | `lib/mongodb.ts` | Database connection singleton, exports `toObjectId()` and `checkDatabaseConnection()` helpers |
+| `lib/models/Notification.ts` | Notification model with SSE integration and soft delete |
 | `app/login/login-form.tsx` | Client-side login form using `signIn` from next-auth/react |
 | `scripts/seed.ts` | Demo data (13 users, teams, products, sales) |
 | `lib/monitoring.ts` | Metric logging for key operations |
@@ -592,3 +602,5 @@ EMAIL_FROM="Incentive.io <your-email@gmail.com>"
 ```
 
 **Note:** For local development, `retryWrites=false` is automatically added to localhost/127.0.0.1 connections in `lib/mongodb.ts`.
+
+**MongoDB Compass:** The database is fully compatible with MongoDB Compass for GUI access. Connect to `mongodb://localhost:27017/incentiveio` to view collections, run queries, and monitor data in real-time. All collections use soft delete (`deletedAt` field), so filter `{ deletedAt: null }` to see active records.

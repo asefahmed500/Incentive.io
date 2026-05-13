@@ -6,6 +6,7 @@ import { connectToDatabase } from "@/lib/mongodb";
 import { Wallet } from "@/lib/models/Wallet";
 import mongoose, { ClientSession } from "mongoose";
 import type { AuthUser, UserRole } from "@/types";
+import { logAudit } from "@/lib/actions/audit.actions";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -142,6 +143,23 @@ export async function creditWallet({
       );
 
       await dbSession.commitTransaction();
+
+      // Audit logging for wallet credit
+      await logAudit({
+        userId: session.user.id,
+        userEmail: session.user.email || undefined,
+        userRole,
+        action: "wallet.credit",
+        entity: "Wallet",
+        entityId: empOid.toString(),
+        details: {
+          amount: parsed.data.amount,
+          balanceAfter,
+          description: parsed.data.description,
+          salesRecordId: parsed.data.salesRecordId,
+        },
+      });
+
       return { success: true, newBalance: balanceAfter };
     } catch (error) {
       await dbSession.abortTransaction();
@@ -184,6 +202,23 @@ export async function creditWallet({
           },
         },
       );
+
+      // Audit logging for wallet credit (fallback path)
+      await logAudit({
+        userId: session.user.id,
+        userEmail: session.user.email || undefined,
+        userRole,
+        action: "wallet.credit",
+        entity: "Wallet",
+        entityId: empOid.toString(),
+        details: {
+          amount: parsed.data.amount,
+          balanceAfter,
+          description: parsed.data.description,
+          salesRecordId: parsed.data.salesRecordId,
+          fallback: true,
+        },
+      });
 
       return { success: true, newBalance: balanceAfter };
     }
@@ -253,6 +288,23 @@ export async function debitWallet({
     );
 
     await dbSession.commitTransaction();
+
+    // Audit logging for wallet debit
+    await logAudit({
+      userId: session.user.id,
+      userEmail: session.user.email || undefined,
+      userRole,
+      action: "wallet.debit",
+      entity: "Wallet",
+      entityId: empOid.toString(),
+      details: {
+        amount: parsed.data.amount,
+        balanceAfter,
+        description: parsed.data.description,
+        salesRecordId: parsed.data.salesRecordId,
+      },
+    });
+
     return { success: true, newBalance: balanceAfter };
   } catch (error) {
     await dbSession.abortTransaction();

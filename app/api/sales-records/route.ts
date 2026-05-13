@@ -1,6 +1,6 @@
-import { getSalesRecords, createSalesRecord, submitSalesRecord } from "@/lib/actions/sales.actions";
-import { handleError } from "@/lib/api-error";
-import { salesQuerySchema, createSalesRecordApiSchema, submitActionSchema } from "@/lib/validations/sales.validation";
+import { getSalesRecords, createSalesRecord, submitSalesRecord, deleteSalesRecord } from "@/lib/actions/sales.actions";
+import { handleError, getStatusCodeForError } from "@/lib/api-error";
+import { salesQuerySchema, createSalesRecordApiSchema, submitActionSchema, deleteSalesRecordSchema } from "@/lib/validations/sales.validation";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/role-guard";
 
@@ -46,7 +46,7 @@ export async function POST(request: Request) {
       vatEnabled: parsed.data.vatEnabled ?? false,
     }) as { success?: boolean; error?: string; id?: string };
     if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true, id: result.id }, { status: 201 });
   } catch (error) {
@@ -69,7 +69,34 @@ export async function PATCH(request: Request) {
     const { id } = parsed.data;
     const result = await submitSalesRecord(id) as { success?: boolean; error?: string };
     if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
+    }
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleError(error);
+  }
+}
+
+export async function DELETE(request: Request) {
+  const authResult = await requireAuth();
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+
+    if (!id) {
+      return NextResponse.json({ error: "ID parameter is required" }, { status: 400 });
+    }
+
+    const parsed = deleteSalesRecordSchema.safeParse({ id });
+    if (!parsed.success) {
+      return handleError(parsed.error);
+    }
+
+    const result = await deleteSalesRecord(parsed.data.id) as { success?: boolean; error?: string };
+    if (result.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });
   } catch (error) {

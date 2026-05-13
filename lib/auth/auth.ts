@@ -45,8 +45,17 @@ const config: NextAuthConfig = {
   callbacks: {
     async jwt({ token, user, trigger }) {
       if (user) {
+        // Validate role from user object
+        const userRole = (user as { role: string }).role;
+        const validRoles = ["administrator", "admin", "salesManager", "salesExecutive", "accountant", "finance"];
+
+        if (typeof userRole !== "string" || !validRoles.includes(userRole)) {
+          // Reject invalid role
+          throw new Error("Invalid user role");
+        }
+
         token.id = (user as { id: string }).id;
-        token.role = (user as { role: string }).role;
+        token.role = userRole;
         token.employeeId = (user as { employeeId?: string }).employeeId;
         token.isActive = true;
       }
@@ -66,15 +75,25 @@ const config: NextAuthConfig = {
       return token;
     },
     async session({ session, token }) {
+      // Validate token structure before proceeding
+      if (!token || !token.id) {
+        // Return session with minimal data - will be caught by middleware
+        return session;
+      }
+
       if (token && session.user) {
         session.user.id = token.id as string;
-        // Type guard for role
+
+        // Strict type guard for role - reject invalid roles
         const role = token.role;
-        if (typeof role === "string") {
+        const validRoles = ["administrator", "admin", "salesManager", "salesExecutive", "accountant", "finance"];
+        if (typeof role === "string" && validRoles.includes(role)) {
           session.user.role = role;
         } else {
-          session.user.role = "salesExecutive";
+          // Set invalid role marker - middleware will redirect
+          session.user.role = "INVALID";
         }
+
         session.user.employeeId = token.employeeId as string | undefined;
         session.user.isActive = token.isActive as boolean;
       }

@@ -101,6 +101,7 @@ const SalesRecordSchema = new Schema<ISalesRecord>(
 
 SalesRecordSchema.index({ employeeId: 1 });
 SalesRecordSchema.index({ companyName: 1 });
+SalesRecordSchema.index({ companyEmail: 1 });
 SalesRecordSchema.index({ status: 1 });
 SalesRecordSchema.index({ managerId: 1 });
 SalesRecordSchema.index({ financeStatus: 1, employeeId: 1 });

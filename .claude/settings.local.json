@@ -14,7 +14,17 @@
       "Bash(awk '{print $NF}')",
       "Bash(curl -s http://localhost:3000/api/health)",
       "Bash(netstat -ano)",
-      "Bash(findstr \":3000\")"
+      "Bash(findstr \":3000\")",
+      "Bash(curl -s http://localhost:3000/api/wallets)",
+      "Bash(curl *)",
+      "mcp__ide__getDiagnostics",
+      "Bash(npx shadcn@latest info --json)",
+      "Bash(agent-browser --version)",
+      "Bash(agent-browser skills *)",
+      "Bash(agent-browser open *)",
+      "Bash(agent-browser screenshot *)",
+      "Bash(agent-browser close *)",
+      "Bash(npx tsc *)"
     ]
   }
 }

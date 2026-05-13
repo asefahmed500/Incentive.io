@@ -40,6 +40,7 @@ const WalletSchema = new Schema<IWallet>(
 );
 
 // Performance optimization: compound indexes for wallet queries
+// Note: employeeId already has a unique index, no need to duplicate
 WalletSchema.index({ employeeId: 1, balance: 1 });
 WalletSchema.index({ balance: 1 });
 WalletSchema.index({ "transactions.createdAt": -1 });

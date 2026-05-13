@@ -317,7 +317,7 @@ describe("E2E: Admin Workflow", () => {
     const user = await createExec({
       name: "E2E New User",
       email: testEmail,
-      password: "Test123!",
+      password: "Test123!@#456",
       role: "salesExecutive",
     });
     expect(user?.success).toBe(true);

@@ -179,3 +179,30 @@ export const errorResponses = {
     throw new ApiError(500, message, ErrorCodes.INTERNAL_ERROR);
   },
 };
+
+/**
+ * Map error message to appropriate HTTP status code
+ * Use this for server action results that return error strings
+ */
+export function getStatusCodeForError(error: string): number {
+  const lowerError = error.toLowerCase();
+
+  if (lowerError === "unauthorized" || lowerError.includes("unauthenticated")) {
+    return 401;
+  }
+
+  if (lowerError === "forbidden" || lowerError.includes("insufficient permissions") || lowerError.includes("only delete your own") || lowerError.includes("can only access")) {
+    return 403;
+  }
+
+  if (lowerError.includes("not found") || lowerError.includes("does not exist")) {
+    return 404;
+  }
+
+  if (lowerError.includes("already exists") || lowerError.includes("duplicate")) {
+    return 409;
+  }
+
+  // Default to 400 for validation and business logic errors
+  return 400;
+}

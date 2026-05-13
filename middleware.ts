@@ -28,7 +28,7 @@ export default async function middleware(request: NextRequest) {
     const { payload } = await jwtVerify(token.value, secret);
     const userRole = payload.role as string;
 
-    if (!userRole) {
+    if (!userRole || userRole === "INVALID") {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 

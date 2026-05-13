@@ -26,6 +26,7 @@ const ProductSchema = new Schema<IProduct>(
 );
 
 ProductSchema.index({ deletedAt: 1 });
+ProductSchema.index({ categoryId: 1 });
 
 ProductSchema.pre("find", function () {
   this.where({ deletedAt: null });
