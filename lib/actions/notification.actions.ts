@@ -4,7 +4,9 @@ import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
+import { User } from "@/lib/models/User";
 import type { AuthUser, UserRole } from "@/types";
+import { sseManager, SSE_EVENTS } from "@/lib/sse";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -85,6 +87,7 @@ const notifyUserCreatedSchema = z.object({
 
 const NotificationSchema = new mongoose.Schema({
   userId: { type: String, required: true },
+  recipientRole: { type: String, required: true }, // Store recipient role for filtering
   type: { type: String, required: true },
   title: { type: String, required: true },
   message: { type: String, required: true },
@@ -115,8 +118,83 @@ export async function createNotification({
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  const notification = await Notification.create(parsed.data);
+
+  // Verify recipient user exists and get their role
+  const recipientUser = await User.findById(parsed.data.userId);
+  if (!recipientUser) {
+    return { error: "Recipient user not found" };
+  }
+
+  // Validate notification link is accessible to recipient's role
+  if (parsed.data.link) {
+    const linkAccessible = isLinkAccessibleToRole(parsed.data.link, recipientUser.role as UserRole);
+    if (!linkAccessible) {
+      return { error: "Notification link is not accessible to recipient's role" };
+    }
+  }
+
+  const notification = await Notification.create({
+    ...parsed.data,
+    recipientRole: recipientUser.role, // Store recipient role for filtering
+  });
+
+  // Send real-time notification via SSE
+  sseManager.sendToUser(parsed.data.userId, {
+    type: SSE_EVENTS.NOTIFICATION_NEW,
+    payload: {
+      id: notification._id.toString(),
+      type: notification.type,
+      title: notification.title,
+      message: notification.message,
+      link: notification.link,
+      createdAt: notification.createdAt,
+    },
+  });
+
   return { success: true, id: notification._id.toString() };
+}
+
+// Helper function to check if a link path is accessible to a role
+function isLinkAccessibleToRole(link: string, role: UserRole): boolean {
+  // Define route access patterns by role
+  const roleAccessPatterns: Record<UserRole, RegExp[]> = {
+    administrator: [
+      /^\/administrator/,
+      /^\/admin/,
+      /^\/sales-dashboard/,
+      /^\/sales-manager/,
+      /^\/accountant/,
+      /^\/finance/,
+      /^\/profile/,
+    ],
+    admin: [
+      /^\/admin/,
+      /^\/sales-dashboard/,
+      /^\/profile/,
+    ],
+    salesManager: [
+      /^\/sales-manager/,
+      /^\/sales-dashboard/,
+      /^\/profile/,
+    ],
+    salesExecutive: [
+      /^\/sales-dashboard/,
+      /^\/profile/,
+    ],
+    accountant: [
+      /^\/accountant/,
+      /^\/sales-dashboard/,
+      /^\/profile/,
+    ],
+    finance: [
+      /^\/finance/,
+      /^\/sales-dashboard/,
+      /^\/profile/,
+    ],
+  };
+
+  const patterns = roleAccessPatterns[role] || [];
+  return patterns.some(pattern => pattern.test(link));
 }
 
 export async function getNotifications(userId: string, limit = 20) {
@@ -142,6 +220,7 @@ export async function getNotifications(userId: string, limit = 20) {
     message: n.message,
     link: n.link,
     isRead: n.isRead,
+    recipientRole: n.recipientRole,
     createdAt: n.createdAt,
   }));
 }

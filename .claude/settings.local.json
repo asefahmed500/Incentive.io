@@ -7,7 +7,14 @@
       "Bash(echo \"Typecheck completed with status: $?\")",
       "Bash(echo \"Lint completed with status: $?\")",
       "Bash(npm test *)",
-      "Bash(git add *)"
+      "Bash(git add *)",
+      "Bash(git push *)",
+      "Bash(curl -s http://localhost:3000)",
+      "Bash(pkill -f \"next dev\")",
+      "Bash(awk '{print $NF}')",
+      "Bash(curl -s http://localhost:3000/api/health)",
+      "Bash(netstat -ano)",
+      "Bash(findstr \":3000\")"
     ]
   }
 }

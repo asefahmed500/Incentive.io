@@ -12,6 +12,7 @@ import {
 } from "@/lib/actions/notification.actions";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { useSSE } from "@/hooks/use-sse";
 
 export function NotificationBell() {
   const { data: session } = useSession();
@@ -20,9 +21,31 @@ export function NotificationBell() {
   const [unreadCount, setUnreadCount] = useState(0);
   const [show, setShow] = useState(false);
 
+  // Use SSE for real-time notifications
+  const { isConnected } = useSSE({
+    onNotification: async () => {
+      // Fetch new notifications when SSE event received
+      if (session?.user?.id) {
+        const [notifs, count] = await Promise.all([
+          getNotifications(session.user.id, 10),
+          getUnreadCount(session.user.id),
+        ]);
+        setNotifications(Array.isArray(notifs) ? notifs : []);
+        setUnreadCount(typeof count === "number" ? count : 0);
+      }
+    },
+    onSaleUpdate: async () => {
+      // Refresh notifications on sale updates
+      if (session?.user?.id) {
+        const count = await getUnreadCount(session.user.id);
+        setUnreadCount(typeof count === "number" ? count : 0);
+      }
+    },
+  });
+
   useEffect(() => {
     if (!session?.user?.id) return;
-    
+
     const fetchNotifications = async () => {
       const [notifs, count] = await Promise.all([
         getNotifications(session.user.id, 10),
@@ -32,10 +55,8 @@ export function NotificationBell() {
       setUnreadCount(typeof count === "number" ? count : 0);
       if (!Array.isArray(notifs)) console.error((notifs as any)?.error || "Failed to fetch notifications");
     };
-    
+
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000);
-    return () => clearInterval(interval);
   }, [session?.user?.id]);
 
   const handleClick = async (notif: any) => {

@@ -32,67 +32,76 @@ export default async function middleware(request: NextRequest) {
       return NextResponse.redirect(new URL("/login", request.url));
     }
 
-    const ADMIN_PATHS = ["/admin", "/sales-dashboard", "/sales-manager", "/accountant", "/finance"];
+    // Role-based path access control
     const SUPER_PATHS = ["/admin", "/administrator", "/sales-dashboard", "/sales-manager", "/accountant", "/finance"];
+    const ADMIN_PATHS = ["/admin", "/sales-dashboard", "/sales-manager", "/accountant", "/finance"];
+    const MANAGER_PATHS = ["/sales-manager", "/sales-dashboard"];
+    const EXECUTIVE_PATHS = ["/sales-dashboard"];
+    const ACCOUNTANT_PATHS = ["/accountant", "/sales-dashboard"];
+    const FINANCE_PATHS = ["/finance", "/sales-dashboard"];
 
     if (userRole === "administrator") {
+      // Administrator has full access
       if (SUPER_PATHS.some(p => path.startsWith(p))) {
-        return NextResponse.next();
-      }
-      if (path.startsWith("/api/")) {
         return NextResponse.next();
       }
       return NextResponse.redirect(new URL("/administrator", request.url));
     }
 
     if (userRole === "admin") {
+      // Admin blocked from administrator routes
       if (path.startsWith("/administrator")) {
         return NextResponse.redirect(new URL("/admin", request.url));
       }
       if (ADMIN_PATHS.some(p => path.startsWith(p))) {
         return NextResponse.next();
       }
-      if (path.startsWith("/api/")) {
-        return NextResponse.next();
-      }
       return NextResponse.redirect(new URL("/admin", request.url));
     }
 
     if (userRole === "salesManager") {
-      if (path.startsWith("/sales-manager") || path.startsWith("/sales-dashboard")) {
-        return NextResponse.next();
+      // Sales Manager blocked from admin, accountant, finance routes
+      const blockedPaths = ["/admin", "/administrator", "/accountant", "/finance"];
+      if (blockedPaths.some(p => path.startsWith(p))) {
+        return NextResponse.redirect(new URL("/sales-manager", request.url));
       }
-      if (path.startsWith("/api/")) {
+      if (MANAGER_PATHS.some(p => path.startsWith(p))) {
         return NextResponse.next();
       }
       return NextResponse.redirect(new URL("/sales-manager", request.url));
     }
 
     if (userRole === "salesExecutive") {
-      if (path.startsWith("/sales-dashboard")) {
-        return NextResponse.next();
+      // Sales Executive blocked from all other role routes
+      const blockedPaths = ["/admin", "/administrator", "/sales-manager", "/accountant", "/finance"];
+      if (blockedPaths.some(p => path.startsWith(p))) {
+        return NextResponse.redirect(new URL("/sales-dashboard", request.url));
       }
-      if (path.startsWith("/api/")) {
+      if (EXECUTIVE_PATHS.some(p => path.startsWith(p))) {
         return NextResponse.next();
       }
       return NextResponse.redirect(new URL("/sales-dashboard", request.url));
     }
 
     if (userRole === "accountant") {
-      if (path.startsWith("/accountant") || path.startsWith("/sales-dashboard")) {
-        return NextResponse.next();
+      // Accountant blocked from admin, manager, finance routes
+      const blockedPaths = ["/admin", "/administrator", "/sales-manager", "/finance"];
+      if (blockedPaths.some(p => path.startsWith(p))) {
+        return NextResponse.redirect(new URL("/accountant", request.url));
       }
-      if (path.startsWith("/api/")) {
+      if (ACCOUNTANT_PATHS.some(p => path.startsWith(p))) {
         return NextResponse.next();
       }
       return NextResponse.redirect(new URL("/accountant", request.url));
     }
 
     if (userRole === "finance") {
-      if (path.startsWith("/finance") || path.startsWith("/sales-dashboard")) {
-        return NextResponse.next();
+      // Finance blocked from admin, manager, accountant routes
+      const blockedPaths = ["/admin", "/administrator", "/sales-manager", "/accountant"];
+      if (blockedPaths.some(p => path.startsWith(p))) {
+        return NextResponse.redirect(new URL("/finance", request.url));
       }
-      if (path.startsWith("/api/")) {
+      if (FINANCE_PATHS.some(p => path.startsWith(p))) {
         return NextResponse.next();
       }
       return NextResponse.redirect(new URL("/finance", request.url));

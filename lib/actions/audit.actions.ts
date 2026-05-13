@@ -7,9 +7,9 @@ import { z } from "zod";
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
 const logAuditSchema = z.object({
-  userId: z.string().min(1),
-  userEmail: z.string().email(),
-  userRole: z.string().min(1),
+  userId: z.string().min(1).optional().default("system"),
+  userEmail: z.string().email().optional().default("system@incentive.io"),
+  userRole: z.string().min(1).optional().default("system"),
   action: z.string().min(1),
   entity: z.string().min(1),
   entityId: z.string().optional(),
@@ -29,8 +29,8 @@ export async function logAudit({
   ipAddress,
   userAgent,
 }: {
-  userId: string;
-  userEmail: string;
+  userId?: string;
+  userEmail?: string;
   userRole: string;
   action: string;
   entity: string;
@@ -47,8 +47,7 @@ export async function logAudit({
 
   await connectToDatabase();
 
-  await AuditLog.create({
-    userId: parsed.data.userId,
+  const auditData: Record<string, unknown> = {
     userEmail: parsed.data.userEmail,
     userRole: parsed.data.userRole,
     action: parsed.data.action,
@@ -57,7 +56,14 @@ export async function logAudit({
     details: parsed.data.details,
     ipAddress: parsed.data.ipAddress,
     userAgent: parsed.data.userAgent,
-  });
+  };
+
+  // Only include userId if it's a valid ObjectId format (not "system" default)
+  if (parsed.data.userId && parsed.data.userId !== "system") {
+    auditData.userId = parsed.data.userId;
+  }
+
+  await AuditLog.create(auditData);
 
   return { success: true };
 }

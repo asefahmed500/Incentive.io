@@ -13,9 +13,6 @@ if (!process.env.MONGODB_URI) {
   config({ path: ".env.example" });
 }
 
-// Set test environment
-process.env.NODE_ENV = "test";
-
 // Extend Jest timeout for database operations
 jest.setTimeout(30000);
 
@@ -34,6 +31,26 @@ jest.mock("@/lib/auth/auth", () => ({
   signIn: jest.fn(),
   signOut: jest.fn(),
 }));
+
+// Setup test data before all tests
+beforeAll(async () => {
+  const { connectToDatabase } = await import("@/lib/mongodb");
+  const CommissionRule = (await import("@/lib/models/CommissionRule")).default;
+
+  await connectToDatabase();
+
+  // Create commission rules if they don't exist
+  const existingRules = await CommissionRule.countDocuments();
+  if (existingRules === 0) {
+    await CommissionRule.create([
+      { targetPercentageFrom: 0, targetPercentageTo: 80, commissionRate: 2.0, priority: 1, isActive: true },
+      { targetPercentageFrom: 81, targetPercentageTo: 100, commissionRate: 3.0, priority: 2, isActive: true },
+      { targetPercentageFrom: 101, targetPercentageTo: 150, commissionRate: 4.5, priority: 3, isActive: true },
+      { targetPercentageFrom: 151, targetPercentageTo: 999, commissionRate: 5.0, priority: 4, isActive: true },
+    ]);
+    console.log("✓ Commission rules created for tests");
+  }
+});
 
 // Console log test environment start
 console.log("✓ Test environment configured");

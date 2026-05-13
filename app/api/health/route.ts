@@ -1,37 +1,14 @@
 import { NextResponse } from "next/server";
-import mongoose from "mongoose";
+import { checkDatabaseConnection } from "@/lib/mongodb";
 
 export async function GET() {
-  const start = Date.now();
-  
   const check = {
     timestamp: new Date().toISOString(),
-    database: null as any,
+    database: await checkDatabaseConnection(),
     overall: "healthy",
   };
 
-  try {
-    const state = mongoose.connection.readyState;
-    const states = ["disconnected", "connected", "connecting", "disconnecting"];
-    const stateStr = states[state] || "unknown";
-    
-    check.database = {
-      connected: state === 1,
-      state: stateStr,
-      host: mongoose.connection.host || "localhost",
-      name: mongoose.connection.name || "incentiveio",
-      latency: Date.now() - start,
-    };
-    
-    if (state !== 1) {
-      check.overall = state === 2 ? "connecting" : "unhealthy";
-    }
-  } catch (error: any) {
-    check.database = {
-      connected: false,
-      state: "error",
-      error: error.message,
-    };
+  if (!check.database.connected) {
     check.overall = "unhealthy";
   }
 

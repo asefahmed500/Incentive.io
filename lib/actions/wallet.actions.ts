@@ -4,7 +4,7 @@ import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Wallet } from "@/lib/models/Wallet";
-import mongoose from "mongoose";
+import mongoose, { ClientSession } from "mongoose";
 import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
@@ -71,7 +71,7 @@ export async function getOrCreateWallet(employeeId: string) {
   const wallet = await Wallet.findOneAndUpdate(
     { employeeId: toObjectId(parsed.data) },
     { $setOnInsert: { balance: 0, pendingBalance: 0, totalEarned: 0, totalPaid: 0, transactions: [] } },
-    { upsert: true, new: true }
+    { upsert: true, returnDocument: "after" }
   ).lean();
   return wallet;
 }
@@ -102,50 +102,93 @@ export async function creditWallet({
 
   const empOid = toObjectId(parsed.data.employeeId);
 
-  const dbSession = await mongoose.startSession();
-  dbSession.startTransaction();
-
+  // Try transaction first, fall back to non-transactional for local MongoDB
   try {
-    const wallet = await Wallet.findOneAndUpdate(
-      { employeeId: empOid },
-      {
-        $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
-        $setOnInsert: { transactions: [] },
-      },
-      { upsert: true, new: true, session: dbSession }
-    );
+    const dbSession = await mongoose.startSession();
+    dbSession.startTransaction();
 
-    if (!wallet) {
-      await dbSession.abortTransaction();
-      return { error: "Failed to create or update wallet" };
-    }
+    try {
+      const wallet = await Wallet.findOneAndUpdate(
+        { employeeId: empOid },
+        {
+          $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
+          $setOnInsert: { transactions: [] },
+        },
+        { upsert: true, returnDocument: "after", session: dbSession }
+      );
 
-    const balanceAfter = wallet.balance + parsed.data.amount;
+      if (!wallet) {
+        await dbSession.abortTransaction();
+        return { error: "Failed to create or update wallet" };
+      }
 
-    await Wallet.findByIdAndUpdate(
-      wallet._id,
-      {
-        $push: {
-          transactions: {
-            type: "credit",
-            amount: parsed.data.amount,
-            salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
-            description: parsed.data.description,
-            balanceAfter,
-            createdAt: new Date(),
+      const balanceAfter = wallet.balance + parsed.data.amount;
+
+      await Wallet.findByIdAndUpdate(
+        wallet._id,
+        {
+          $push: {
+            transactions: {
+              type: "credit",
+              amount: parsed.data.amount,
+              salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
+              description: parsed.data.description,
+              balanceAfter,
+              createdAt: new Date(),
+            },
           },
         },
-      },
-      { session: dbSession }
-    );
+        { session: dbSession }
+      );
 
-    await dbSession.commitTransaction();
-    return { success: true, newBalance: balanceAfter };
+      await dbSession.commitTransaction();
+      return { success: true, newBalance: balanceAfter };
+    } catch (error) {
+      await dbSession.abortTransaction();
+      throw error;
+    } finally {
+      dbSession.endSession();
+    }
   } catch (error) {
-    await dbSession.abortTransaction();
-    return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
-  } finally {
-    dbSession.endSession();
+    // Check if it's a transaction error (local MongoDB doesn't support transactions)
+    const errorMessage = error instanceof Error ? error.message : "";
+    if (errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
+      // Fall back to non-transactional operation
+      const wallet = await Wallet.findOneAndUpdate(
+        { employeeId: empOid },
+        {
+          $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
+          $setOnInsert: { transactions: [] },
+        },
+        { upsert: true, returnDocument: "after" }
+      );
+
+      if (!wallet) {
+        return { error: "Failed to create or update wallet" };
+      }
+
+      const balanceAfter = wallet.balance + parsed.data.amount;
+
+      await Wallet.findByIdAndUpdate(
+        wallet._id,
+        {
+          $push: {
+            transactions: {
+              type: "credit",
+              amount: parsed.data.amount,
+              salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
+              description: parsed.data.description,
+              balanceAfter,
+              createdAt: new Date(),
+            },
+          },
+        },
+      );
+
+      return { success: true, newBalance: balanceAfter };
+    }
+
+    return { error: "Transaction failed: " + errorMessage };
   }
 }
 
@@ -182,7 +225,7 @@ export async function debitWallet({
     const wallet = await Wallet.findOneAndUpdate(
       { employeeId: empOid, balance: { $gte: parsed.data.amount } },
       { $inc: { balance: -parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount } },
-      { new: true, session: dbSession }
+      { returnDocument: "after", session: dbSession }
     );
 
     if (!wallet) {
@@ -219,6 +262,128 @@ export async function debitWallet({
   }
 }
 
+// Internal function that accepts an external session for transaction consistency
+async function _markCommissionPaidWithSession(
+  employeeId: string,
+  amount: number,
+  salesRecordId: string,
+  externalSession?: ClientSession
+) {
+  const empOid = toObjectId(employeeId);
+  const srOid = toObjectId(salesRecordId);
+
+  const useOwnSession = !externalSession;
+  const dbSession = externalSession || await mongoose.startSession();
+
+  if (useOwnSession) dbSession.startTransaction();
+
+  try {
+    const existingCredit = await Wallet.exists({
+      employeeId: empOid,
+      "transactions.salesRecordId": srOid,
+      "transactions.type": "credit",
+    }).session(dbSession);
+
+    if (existingCredit) {
+      if (useOwnSession) await dbSession.abortTransaction();
+      return { error: "Commission already paid for this sale" };
+    }
+
+    const wallet = await Wallet.findOneAndUpdate(
+      { employeeId: empOid },
+      {
+        $inc: { balance: amount, totalPaid: amount, pendingBalance: -amount },
+        $setOnInsert: { transactions: [] },
+      },
+      { upsert: true, returnDocument: "after", session: dbSession }
+    );
+
+    if (!wallet) {
+      if (useOwnSession) await dbSession.abortTransaction();
+      return { error: "Failed to create or update wallet" };
+    }
+
+    const balanceAfter = wallet.balance + amount;
+
+    await Wallet.findByIdAndUpdate(
+      wallet._id,
+      {
+        $push: {
+          transactions: {
+            type: "credit",
+            amount: amount,
+            salesRecordId: srOid,
+            description: "Commission paid for sale",
+            balanceAfter,
+            createdAt: new Date(),
+          },
+        },
+      },
+      { session: dbSession }
+    );
+
+    if (useOwnSession) await dbSession.commitTransaction();
+    return { success: true, newBalance: balanceAfter, usedSession: dbSession };
+  } catch (error) {
+    if (useOwnSession) {
+      await dbSession.abortTransaction();
+
+      // Check if it's a transaction error (local MongoDB doesn't support transactions)
+      const errorMessage = error instanceof Error ? error.message : "";
+      if (errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
+        // Fall back to non-transactional operation
+        const existingCredit = await Wallet.exists({
+          employeeId: empOid,
+          "transactions.salesRecordId": srOid,
+          "transactions.type": "credit",
+        });
+
+        if (existingCredit) {
+          return { error: "Commission already paid for this sale" };
+        }
+
+        const wallet = await Wallet.findOneAndUpdate(
+          { employeeId: empOid },
+          {
+            $inc: { balance: amount, totalPaid: amount, pendingBalance: -amount },
+            $setOnInsert: { transactions: [] },
+          },
+          { upsert: true, returnDocument: "after" }
+        );
+
+        if (!wallet) {
+          return { error: "Failed to create or update wallet" };
+        }
+
+        const balanceAfter = wallet.balance + amount;
+
+        await Wallet.findByIdAndUpdate(
+          wallet._id,
+          {
+            $push: {
+              transactions: {
+                type: "credit",
+                amount: amount,
+                salesRecordId: srOid,
+                description: "Commission paid for sale",
+                balanceAfter,
+                createdAt: new Date(),
+              },
+            },
+          },
+        );
+
+        return { success: true, newBalance: balanceAfter };
+      }
+
+      return { error: "Transaction failed: " + errorMessage };
+    }
+    return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
+  } finally {
+    if (useOwnSession) dbSession.endSession();
+  }
+}
+
 export async function markCommissionPaid({
   employeeId,
   amount,
@@ -243,66 +408,15 @@ export async function markCommissionPaid({
 
   await connectToDatabase();
 
-  const empOid = toObjectId(parsed.data.employeeId);
-  const srOid = toObjectId(parsed.data.salesRecordId);
-
-  const dbSession = await mongoose.startSession();
-  dbSession.startTransaction();
-
-  try {
-    const existingCredit = await Wallet.exists({
-      employeeId: empOid,
-      "transactions.salesRecordId": srOid,
-      "transactions.type": "credit",
-    }).session(dbSession);
-
-    if (existingCredit) {
-      await dbSession.abortTransaction();
-      return { error: "Commission already paid for this sale" };
-    }
-
-    const wallet = await Wallet.findOneAndUpdate(
-      { employeeId: empOid },
-      {
-        $inc: { balance: parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount },
-        $setOnInsert: { transactions: [] },
-      },
-      { upsert: true, new: true, session: dbSession }
-    );
-
-    if (!wallet) {
-      await dbSession.abortTransaction();
-      return { error: "Failed to create or update wallet" };
-    }
-
-    const balanceAfter = wallet.balance + parsed.data.amount;
-
-    await Wallet.findByIdAndUpdate(
-      wallet._id,
-      {
-        $push: {
-          transactions: {
-            type: "credit",
-            amount: parsed.data.amount,
-            salesRecordId: srOid,
-            description: "Commission paid for sale",
-            balanceAfter,
-            createdAt: new Date(),
-          },
-        },
-      },
-      { session: dbSession }
-    );
-
-    await dbSession.commitTransaction();
-    return { success: true, newBalance: balanceAfter };
-  } catch (error) {
-    await dbSession.abortTransaction();
-    return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
-  } finally {
-    dbSession.endSession();
-  }
+  return await _markCommissionPaidWithSession(
+    parsed.data.employeeId,
+    parsed.data.amount,
+    parsed.data.salesRecordId
+  );
 }
+
+// Export the internal function for use in transactions
+export { _markCommissionPaidWithSession };
 
 export async function getAllWallets() {
   const session = await auth();

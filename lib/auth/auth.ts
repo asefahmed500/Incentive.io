@@ -31,7 +31,13 @@ const config: NextAuthConfig = {
         if (!user) return null;
         const isValid = await bcrypt.compare(credentials.password as string, user.password);
         if (!isValid) return null;
-        return { id: user._id.toString(), email: user.email, name: user.name, role: user.role, employeeId: user.employeeId } as any;
+        return {
+          id: user._id.toString(),
+          email: user.email,
+          name: user.name,
+          role: user.role as string,
+          employeeId: user.employeeId?.toString()
+        };
       },
     }),
   ],
@@ -39,9 +45,9 @@ const config: NextAuthConfig = {
   callbacks: {
     async jwt({ token, user, trigger }) {
       if (user) {
-        token.id = (user as any).id;
-        token.role = (user as any).role;
-        token.employeeId = (user as any).employeeId;
+        token.id = (user as { id: string }).id;
+        token.role = (user as { role: string }).role;
+        token.employeeId = (user as { employeeId?: string }).employeeId;
         token.isActive = true;
       }
       if (trigger === "update" || (!user && token.id)) {
@@ -61,10 +67,16 @@ const config: NextAuthConfig = {
     },
     async session({ session, token }) {
       if (token && session.user) {
-        (session.user as any).id = token.id;
-        (session.user as any).role = token.role;
-        (session.user as any).employeeId = token.employeeId;
-        (session.user as any).isActive = token.isActive as boolean;
+        session.user.id = token.id as string;
+        // Type guard for role
+        const role = token.role;
+        if (typeof role === "string") {
+          session.user.role = role;
+        } else {
+          session.user.role = "salesExecutive";
+        }
+        session.user.employeeId = token.employeeId as string | undefined;
+        session.user.isActive = token.isActive as boolean;
       }
       return session;
     },

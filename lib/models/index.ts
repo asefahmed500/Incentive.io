@@ -9,6 +9,8 @@ export { Product } from "./Product";
 export { Category } from "./Category";
 export { SalesRecord } from "./SalesRecord";
 export { Wallet } from "./Wallet";
-export { CommissionRule } from "./CommissionRule";
 export { AuditLog } from "./AuditLog";
 export { SystemSettings } from "./SystemSettings";
+
+// CommissionRule is a default export
+export { default as CommissionRule } from "./CommissionRule";

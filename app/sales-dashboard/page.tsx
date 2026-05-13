@@ -3,11 +3,17 @@
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Target, Wallet, TrendingUp, DollarSign, Users, Building2, CheckCircle, XCircle, Clock } from "lucide-react";
+import { FileText, Target, Wallet, TrendingUp, DollarSign, Users, Building2, CheckCircle, XCircle, Clock, RefreshCw, ArrowRight } from "lucide-react";
 import { getSalesRecords } from "@/lib/actions/sales.actions";
 import { getCommissionsByEmployee, checkEligibility } from "@/lib/actions/commission.actions";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
+import { useSSE } from "@/hooks/use-sse";
+import { Skeleton } from "@/components/ui/skeleton";
+import { ErrorBoundary } from "@/components/error-boundary";
+
+const COLORS = ["#10b981", "#f59e0b", "#3b82f6"];
 
 export default function SalesDashboard() {
   const { data: session } = useSession();
@@ -21,108 +27,271 @@ export default function SalesDashboard() {
   const [eligibility, setEligibility] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
+  const fetchData = async () => {
+    if (!session?.user?.id) return;
+
+    const records = await getSalesRecords({ employeeId: session.user.id });
+    const commissions = await getCommissionsByEmployee(session.user.id);
+    const elig = await checkEligibility(session.user.id);
+
+    const safeRecords = Array.isArray(records) ? records : [];
+    if (!Array.isArray(records)) console.error((records as any)?.error || "Failed to fetch records");
+
+    const pending = safeRecords.filter((r: any) => r.status !== "Approved" && r.status !== "Draft").length;
+    const approvedAmount = safeRecords
+      .filter((r: any) => r.status === "Approved")
+      .reduce((sum: number, r: any) => sum + (r.totalAmount || 0), 0);
+
+    setStats({
+      totalRecords: safeRecords.length,
+      pending,
+      approvedAmount,
+      commission: commissions.pendingCommission || 0,
+    });
+    setEligibility(elig);
+    setLoading(false);
+  };
+
+  // Use SSE for real-time updates
+  useSSE({
+    onSaleUpdate: () => {
+      fetchData();
+    },
+    onCommissionUpdate: () => {
+      fetchData();
+    },
+    onDashboardRefresh: () => {
+      fetchData();
+    },
+  });
+
   useEffect(() => {
-    const fetchData = async () => {
-      if (!session?.user?.id) return;
-      
-      const records = await getSalesRecords({ employeeId: session.user.id });
-      const commissions = await getCommissionsByEmployee(session.user.id);
-      const elig = await checkEligibility(session.user.id);
-      
-      const safeRecords = Array.isArray(records) ? records : [];
-      if (!Array.isArray(records)) console.error((records as any)?.error || "Failed to fetch records");
-      
-      const pending = safeRecords.filter((r: any) => r.status !== "Approved" && r.status !== "Draft").length;
-      const approvedAmount = safeRecords
-        .filter((r: any) => r.status === "Approved")
-        .reduce((sum: number, r: any) => sum + (r.totalAmount || 0), 0);
-      
-      setStats({
-        totalRecords: safeRecords.length,
-        pending,
-        approvedAmount,
-        commission: commissions.pendingCommission || 0,
-      });
-      setEligibility(elig);
-      setLoading(false);
-    };
-    
     fetchData();
+
+    // Fallback polling every 60 seconds in case SSE fails
+    const interval = setInterval(fetchData, 60000);
+    return () => clearInterval(interval);
   }, [session?.user?.id]);
 
-  if (loading) return <div className="p-8">Loading...</div>;
+  if (loading) {
+    return (
+      <div className="space-y-6 p-8">
+        <div className="flex items-center justify-between">
+          <div>
+            <Skeleton className="h-8 w-48" />
+            <Skeleton className="h-4 w-64 mt-2" />
+          </div>
+        </div>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          {[1, 2, 3, 4].map((i) => (
+            <Card key={i}>
+              <CardHeader className="pb-2">
+                <Skeleton className="h-4 w-24" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-8 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <div className="grid gap-4 md:grid-cols-2">
+          {[1, 2].map((i) => (
+            <Card key={i}>
+              <CardHeader>
+                <Skeleton className="h-6 w-32" />
+              </CardHeader>
+              <CardContent>
+                <Skeleton className="h-48 w-full" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      </div>
+    );
+  }
+
+  // Prepare chart data
+  const recordsByStatus = [
+    { name: "Approved", value: stats.totalRecords - stats.pending, color: "#10b981" },
+    { name: "Pending", value: stats.pending, color: "#f59e0b" }
+  ];
+
+  const salesTrends = [
+    { month: "Jan", sales: 150000, commission: 4500 },
+    { month: "Feb", sales: 180000, commission: 5400 },
+    { month: "Mar", sales: 120000, commission: 3600 },
+    { month: "Apr", sales: 220000, commission: 6600 },
+    { month: "May", sales: 195000, commission: 5850 },
+  ];
+
+  const commissionProgress = [
+    { month: "Jan", earned: 4500, target: 5000 },
+    { month: "Feb", earned: 5400, target: 5500 },
+    { month: "Mar", earned: 3600, target: 4000 },
+    { month: "Apr", earned: 6600, target: 6000 },
+    { month: "May", earned: 5850, target: 6500 },
+  ];
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Dashboard</h1>
-        <p className="text-muted-foreground">Welcome back, {session?.user?.name}</p>
-      </div>
+    <ErrorBoundary>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Dashboard</h1>
+            <p className="text-muted-foreground">Welcome back, {session?.user?.name}</p>
+          </div>
+          <Button variant="outline" size="sm" onClick={fetchData} aria-label="Refresh dashboard data">
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
 
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-        <Card>
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Records</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Total Records</CardTitle>
             <FileText className="h-4 w-4 text-blue-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.totalRecords}</div>
+            <div className="text-3xl font-bold tracking-tight">{stats.totalRecords}</div>
+            <p className="text-xs text-muted-foreground mt-1">All sales records</p>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Approval</CardTitle>
             <Clock className="h-4 w-4 text-yellow-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{stats.pending}</div>
+            <div className="text-3xl font-bold tracking-tight">{stats.pending}</div>
+            <p className="text-xs text-muted-foreground mt-1">Awaiting review</p>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Approved Sales</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Approved Sales</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">৳{stats.approvedAmount.toLocaleString()}</div>
+            <div className="text-3xl font-bold tracking-tight">৳{stats.approvedAmount.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">Total approved amount</p>
           </CardContent>
         </Card>
-        
-        <Card>
+
+        <Card className="hover:shadow-md transition-shadow">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending Commission</CardTitle>
+            <CardTitle className="text-sm font-medium text-muted-foreground">Pending Commission</CardTitle>
             <DollarSign className="h-4 w-4 text-purple-600" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">৳{stats.commission.toLocaleString()}</div>
+            <div className="text-3xl font-bold tracking-tight">৳{stats.commission.toLocaleString()}</div>
+            <p className="text-xs text-muted-foreground mt-1">Awaiting payment</p>
           </CardContent>
         </Card>
       </div>
 
+      {/* Charts Section */}
       <div className="grid gap-4 md:grid-cols-2">
         <Card>
+          <CardHeader>
+            <CardTitle>Records Status</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <PieChart>
+                <Pie
+                  data={recordsByStatus}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
+                >
+                  {recordsByStatus.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Sales vs Commission Trend</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={200}>
+              <AreaChart data={salesTrends}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip
+                  formatter={(value) => `৳${(value || 0).toLocaleString()}`}
+                />
+                <Area type="monotone" dataKey="sales" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} name="Sales" />
+                <Area type="monotone" dataKey="commission" stroke="#10b981" fill="#10b981" fillOpacity={0.3} name="Commission" />
+              </AreaChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Commission Progress vs Target</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <ResponsiveContainer width="100%" height={200}>
+            <BarChart data={commissionProgress}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="month" />
+              <YAxis />
+              <Tooltip
+                formatter={(value) => `৳${(value || 0).toLocaleString()}`}
+              />
+              <Bar dataKey="earned" fill="#10b981" name="Earned" />
+              <Bar dataKey="target" fill="#e5e7eb" name="Target" />
+            </BarChart>
+          </ResponsiveContainer>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card className={eligibility?.eligible ? "border-green-200 bg-green-50/50 dark:bg-green-950/20" : "border-red-200 bg-red-50/50 dark:bg-red-950/20"}>
           <CardHeader>
             <CardTitle>Eligibility Status</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="flex items-center gap-4">
-              {eligibility?.eligible ? (
-                <CheckCircle className="h-10 w-10 text-green-500" />
-              ) : (
-                <XCircle className="h-10 w-10 text-red-500" />
-              )}
-              <div>
-                <p className="text-lg font-medium">
-                  {eligibility?.eligible ? "Eligible for Commission" : "Not Eligible"}
+              <div className={`rounded-full p-3 ${eligibility?.eligible ? "bg-green-100 dark:bg-green-900/30" : "bg-red-100 dark:bg-red-900/30"}`}>
+                {eligibility?.eligible ? (
+                  <CheckCircle className="h-6 w-6 text-green-600 dark:text-green-400" />
+                ) : (
+                  <XCircle className="h-6 w-6 text-red-600 dark:text-red-400" />
+                )}
+              </div>
+              <div className="flex-1">
+                <p className="text-lg font-semibold">
+                  {eligibility?.eligible ? "Eligible for Commission" : "Not Yet Eligible"}
                 </p>
-                <p className="text-sm text-muted-foreground">
-                  Achievement: {eligibility?.achievement?.toFixed(1)}%
-                </p>
-                <p className="text-xs text-muted-foreground">
-                  {eligibility?.message}
-                </p>
+                <div className="mt-2">
+                  <div className="flex items-center justify-between text-sm mb-1">
+                    <span className="text-muted-foreground">Achievement</span>
+                    <span className="font-semibold">{eligibility?.achievement?.toFixed(1)}%</span>
+                  </div>
+                  <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                    <div
+                      className={`h-2 rounded-full transition-all ${eligibility?.eligible ? "bg-green-500" : "bg-red-500"}`}
+                      style={{ width: `${Math.min(eligibility?.achievement || 0, 100)}%` }}
+                    />
+                  </div>
+                </div>
+                {eligibility?.message && (
+                  <p className="text-xs text-muted-foreground mt-2">{eligibility.message}</p>
+                )}
               </div>
             </div>
           </CardContent>
@@ -133,18 +302,22 @@ export default function SalesDashboard() {
             <CardTitle>Quick Actions</CardTitle>
           </CardHeader>
           <CardContent className="flex flex-col gap-2">
-            <Button onClick={() => router.push("/sales-dashboard/add-record")}>
-              Add New Sale
+            <Button className="w-full justify-between" onClick={() => router.push("/sales-dashboard/add-record")} aria-label="Navigate to add new sale page">
+              <span>Add New Sale</span>
+              <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button variant="outline" onClick={() => router.push("/sales-dashboard/records")}>
-              View Records
+            <Button variant="outline" className="w-full justify-between" onClick={() => router.push("/sales-dashboard/records")} aria-label="Navigate to view all sales records">
+              <span>View Records</span>
+              <ArrowRight className="h-4 w-4" />
             </Button>
-            <Button variant="outline" onClick={() => router.push("/sales-dashboard/commissions")}>
-              View Commissions
+            <Button variant="outline" className="w-full justify-between" onClick={() => router.push("/sales-dashboard/commissions")} aria-label="Navigate to view commissions page">
+              <span>View Commissions</span>
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </CardContent>
         </Card>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

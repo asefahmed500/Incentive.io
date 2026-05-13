@@ -108,6 +108,7 @@ SalesRecordSchema.index({ isPaid: 1 });
 SalesRecordSchema.index({ deletedAt: 1 });
 SalesRecordSchema.index({ createdAt: -1 });
 // Performance optimization: compound indexes for common query patterns
+SalesRecordSchema.index({ employeeId: 1, createdAt: -1 });
 SalesRecordSchema.index({ employeeId: 1, financeStatus: 1 });
 SalesRecordSchema.index({ approvalStatus: 1, accountantStatus: 1, financeStatus: 1 });
 SalesRecordSchema.index({ createdAt: -1, status: 1 });

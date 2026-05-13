@@ -13,7 +13,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Eye, Calculator } from "lucide-react";
+import { Eye, Calculator, XCircle } from "lucide-react";
 import { getPendingAccountantApprovals, processByAccountant, rejectSale } from "@/lib/actions/approval.actions";
 import {
   Dialog,
@@ -127,8 +127,8 @@ function AccountantApprovalsContent() {
           </CardContent>
         </Card>
       ) : (
-
-      <div className="grid gap-4 md:grid-cols-3">
+        <>
+        <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Pending</CardTitle>
@@ -336,6 +336,8 @@ function AccountantApprovalsContent() {
           </div>
         </DialogContent>
       </Dialog>
+        </>
+      )}
     </div>
   );
 }

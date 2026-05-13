@@ -7,6 +7,8 @@ import { getUsers } from "@/lib/actions/user.actions";
 import { getTeams } from "@/lib/actions/team.actions";
 import { getSalesStats } from "@/lib/actions/sales.actions";
 import { getCommissions } from "@/lib/actions/commission.actions";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { DashboardSkeleton } from "@/components/loading/dashboard-skeleton";
 
 export default function AdministratorDashboard() {
   const [stats, setStats] = useState({
@@ -71,14 +73,15 @@ export default function AdministratorDashboard() {
     fetchData();
   }, []);
 
-  if (loading) return <div className="p-8">Loading...</div>;
+  if (loading) return <DashboardSkeleton />;
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">SuperAdmin Dashboard</h1>
-        <p className="text-muted-foreground">Full system overview</p>
-      </div>
+    <ErrorBoundary>
+      <div className="space-y-6">
+        <div>
+          <h1 className="text-3xl font-bold">SuperAdmin Dashboard</h1>
+          <p className="text-muted-foreground">Full system overview</p>
+        </div>
 
       <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -181,5 +184,6 @@ export default function AdministratorDashboard() {
         </Card>
       </div>
     </div>
+    </ErrorBoundary>
   );
 }

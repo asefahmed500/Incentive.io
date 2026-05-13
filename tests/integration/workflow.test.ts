@@ -32,13 +32,8 @@ describe("Approval Workflow Integration Tests", () => {
   });
 
   it("should complete full approval workflow: Draft → Approved", async () => {
-    const {
-      createSalesRecord,
-      submitSalesRecord,
-      approveSale,
-      processByAccountant,
-      finalApproveByFinance,
-    } = await import("@/lib/actions/approval.actions");
+    const { createSalesRecord, submitSalesRecord } = await import("@/lib/actions/sales.actions");
+    const { approveSale, processByAccountant, finalApproveByFinance } = await import("@/lib/actions/approval.actions");
 
     // 1. Create sale
     const sale = await createTestSale(salesExecutiveId);
@@ -85,6 +80,9 @@ describe("Approval Workflow Integration Tests", () => {
     // 5. Finance final approve - should be Approved
     const finalResult = await finalApproveByFinance(sale.id, financeId);
     expect(finalResult).toBeDefined();
+    if (finalResult?.error) {
+      console.error("Finance approval error:", finalResult.error);
+    }
     expect(finalResult.success).toBe(true);
 
     const final = await SalesRecord.findById(sale.id).lean();
@@ -94,7 +92,8 @@ describe("Approval Workflow Integration Tests", () => {
   });
 
   it("should handle rejection and return to Draft", async () => {
-    const { createSalesRecord, submitSalesRecord, rejectSale } = await import("@/lib/actions/approval.actions");
+    const { createSalesRecord, submitSalesRecord } = await import("@/lib/actions/sales.actions");
+    const { rejectSale } = await import("@/lib/actions/approval.actions");
 
     // Create and submit sale
     const sale = await createTestSale(salesExecutiveId);
@@ -116,7 +115,8 @@ describe("Approval Workflow Integration Tests", () => {
   });
 
   it("should prevent unauthorized access across roles", async () => {
-    const { createSalesRecord, submitSalesRecord, processByAccountant } = await import("@/lib/actions/approval.actions");
+    const { createSalesRecord, submitSalesRecord } = await import("@/lib/actions/sales.actions");
+    const { processByAccountant } = await import("@/lib/actions/approval.actions");
 
     // Sales executive should not be able to approve
     const sale = await createTestSale(salesExecutiveId);
@@ -166,7 +166,10 @@ describe("Wallet Operations Integration Tests", () => {
     const results = await Promise.all(promises);
 
     // All should succeed
-    results.forEach((result) => {
+    results.forEach((result, index) => {
+      if (result?.error) {
+        console.error(`Credit ${index} error:`, result.error);
+      }
       expect(result?.success).toBe(true);
       expect(result?.error).toBeUndefined();
     });
@@ -179,8 +182,10 @@ describe("Wallet Operations Integration Tests", () => {
 
   it("should prevent double credit for same sale", async () => {
     const { markCommissionPaid } = await import("@/lib/actions/wallet.actions");
+    const mongoose = await import("mongoose");
 
-    const salesRecordId = `test-sale-${Date.now()}`;
+    // Generate valid ObjectId
+    const salesRecordId = new mongoose.Types.ObjectId().toString();
 
     const result1 = await markCommissionPaid({
       employeeId: userId,
@@ -199,7 +204,11 @@ describe("Wallet Operations Integration Tests", () => {
       paidBy: userId,
     });
 
-    expect(result2?.error).toBeDefined();
-    expect(result2?.error).toContain("already paid");
+    expect(result2).toBeDefined();
+    if (result2 && "error" in result2) {
+      expect(result2.error).toContain("already paid");
+    } else {
+      throw new Error("Expected error but got success");
+    }
   });
 });

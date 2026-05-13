@@ -66,6 +66,8 @@ export async function createTestUser(role: AuthUser["role"], uniqueId: string): 
     password,
     role,
     isActive: true,
+    targetAmount: 50000, // Set default target for commission calculations
+    targetPeriod: "monthly",
   });
 
   return user._id.toString();

@@ -12,6 +12,8 @@ import { notifyManagerApproved, notifyManagerRejected, notifyAccountantProcessed
 import { logAudit } from "@/lib/actions/audit.actions";
 import { resetSaleStatuses } from "@/lib/actions/sales.actions";
 import type { AuthUser, UserRole } from "@/types";
+import { sseManager, SSE_EVENTS } from "@/lib/sse";
+import { calculatePercentage, calculateProductTotal, roundMoney } from "@/lib/utils/money";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -50,9 +52,10 @@ export async function getPendingManagerApprovals() {
     .lean();
 
   return records.map((r) => {
-    const totalAmount = r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0);
+    const totalAmount = r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0);
     return {
       id: r._id.toString(),
+      status: r.status,
       employeeName: r.employeeName,
       companyName: r.companyName,
       productCount: r.products.length,
@@ -97,8 +100,7 @@ export async function approveSale(id: string, paidBy?: string) {
   await record.save();
 
   await logAudit({
-    userId: record.managerId?.toString() || "",
-    userEmail: "",
+    userId: record.managerId?.toString(),
     userRole: "salesManager",
     action: "APPROVE_SALE",
     entity: "SalesRecord",
@@ -124,6 +126,23 @@ export async function approveSale(id: string, paidBy?: string) {
   } catch (notifError) {
     console.error("Failed to send in-app notification:", notifError);
   }
+
+  // Send real-time update via SSE
+  sseManager.sendToUser(record.employeeId.toString(), {
+    type: SSE_EVENTS.SALE_APPROVED,
+    payload: {
+      id: record._id.toString(),
+      companyName: record.companyName,
+      status: "Pending_Accountant",
+      commission: record.calculatedCommission,
+    },
+  });
+
+  // Notify dashboard to refresh
+  sseManager.sendToUser(record.employeeId.toString(), {
+    type: SSE_EVENTS.DASHBOARD_REFRESH,
+    payload: { reason: "sale_approved" },
+  });
 
   return { success: true };
 }
@@ -171,8 +190,7 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
 
   {
     await logAudit({
-      userId: record.managerId?.toString() || "",
-      userEmail: "",
+      userId: record.managerId?.toString(),
       userRole: rejectorRole === "finance" ? "finance" : rejectorRole === "accountant" ? "accountant" : "salesManager",
       action: "REJECT_SALE",
       entity: "SalesRecord",
@@ -207,6 +225,23 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
     } catch (notifError) {
       console.error("Failed to send in-app notification:", notifError);
     }
+
+    // Send real-time update via SSE
+    sseManager.sendToUser(record.employeeId.toString(), {
+      type: SSE_EVENTS.SALE_REJECTED,
+      payload: {
+        id: parsed.data.id,
+        companyName: record.companyName,
+        reason: parsed.data.reason,
+        rejectedBy: parsed.data.rejectedBy,
+      },
+    });
+
+    // Notify dashboard to refresh
+    sseManager.sendToUser(record.employeeId.toString(), {
+      type: SSE_EVENTS.DASHBOARD_REFRESH,
+      payload: { reason: "sale_rejected" },
+    });
   }
 
   return { success: true };
@@ -227,11 +262,12 @@ export async function getPendingAccountantApprovals() {
 
   return records.map((r) => ({
     id: r._id.toString(),
+    status: r.status,
     employeeId: (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString(),
     employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
     companyName: r.companyName,
     products: r.products,
-    totalAmount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0),
+    totalAmount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0),
     commission: r.calculatedCommission,
     taxEnabled: r.taxEnabled,
     vatEnabled: r.vatEnabled,
@@ -274,18 +310,18 @@ export async function processByAccountant({
     return { error: "Record is not pending accountant processing" };
   }
 
-  const grossAmount = record.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0);
+  const grossAmount = record.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0);
 
   let taxAmount = 0;
   if (parsed.data.taxRate !== undefined && parsed.data.taxRate !== null && !record.taxEnabled) {
-    taxAmount = grossAmount * (parsed.data.taxRate / 100);
+    taxAmount = calculatePercentage(grossAmount, parsed.data.taxRate);
     record.taxRate = parsed.data.taxRate;
     record.taxAmount = taxAmount;
   }
 
   let vatAmount = 0;
   if (parsed.data.vatRate !== undefined && parsed.data.vatRate !== null && !record.vatEnabled) {
-    vatAmount = grossAmount * (parsed.data.vatRate / 100);
+    vatAmount = calculatePercentage(grossAmount, parsed.data.vatRate);
     record.vatRate = parsed.data.vatRate;
     record.vatAmount = vatAmount;
   }
@@ -293,7 +329,7 @@ export async function processByAccountant({
   record.eoBpAmount = parsed.data.eoBpAmount || 0;
   record.eoBpReason = parsed.data.eoBpReason || "";
 
-  const netSales = grossAmount - taxAmount - vatAmount - (parsed.data.eoBpAmount || 0);
+  const netSales = roundMoney(grossAmount - taxAmount - vatAmount - (parsed.data.eoBpAmount || 0));
   if (netSales < 0) {
     return { error: "Net sales cannot be negative. Adjust deductions to be less than gross amount." };
   }
@@ -310,8 +346,6 @@ export async function processByAccountant({
   await record.save();
 
   await logAudit({
-    userId: "",
-    userEmail: "",
     userRole: "accountant",
     action: "PROCESS_SALE",
     entity: "SalesRecord",
@@ -342,6 +376,31 @@ export async function processByAccountant({
     console.error("Failed to send in-app notification:", notifError);
   }
 
+  // Send real-time update via SSE
+  sseManager.sendToUser(record.employeeId.toString(), {
+    type: SSE_EVENTS.SALE_UPDATED,
+    payload: {
+      id: parsed.data.id,
+      companyName: record.companyName,
+      status: "Pending_Finance",
+      netSales,
+    },
+  });
+
+  // Notify manager dashboard to refresh
+  if (record.managerId) {
+    sseManager.sendToUser(record.managerId.toString(), {
+      type: SSE_EVENTS.DASHBOARD_REFRESH,
+      payload: { reason: "accountant_processed" },
+    });
+  }
+
+  // Notify finance users
+  sseManager.sendToRole("finance", {
+    type: SSE_EVENTS.DASHBOARD_REFRESH,
+    payload: { reason: "pending_finance" },
+  });
+
   return { success: true, netSales };
 }
 
@@ -362,6 +421,7 @@ export async function getPendingFinanceApprovals() {
     const grossAmount = r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0)
     return {
       id: r._id.toString(),
+      status: r.status,
       employeeId: (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString(),
       employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
       companyName: r.companyName,
@@ -405,29 +465,73 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
   record.paymentDate = new Date();
   record.paidBy = new mongoose.Types.ObjectId(parsed.data.paidBy);
 
-  await record.save();
+  // Use a single transaction for both sale approval and wallet credit to prevent race conditions
+  // Try transaction first, fall back to non-transactional for local MongoDB
+  try {
+    const dbSession = await mongoose.startSession();
+    dbSession.startTransaction();
+
+    try {
+      // Save the record within the transaction
+      await record.save({ session: dbSession });
+
+      // Credit wallet within the same transaction
+      const { _markCommissionPaidWithSession } = await import("@/lib/actions/wallet.actions");
+      const walletResult = await _markCommissionPaidWithSession(
+        record.employeeId.toString(),
+        record.commission || record.calculatedCommission,
+        parsed.data.id,
+        dbSession
+      );
+
+      if (walletResult?.error) {
+        await dbSession.abortTransaction();
+        return { error: walletResult.error };
+      }
+
+      // Commit transaction only if both operations succeed
+      await dbSession.commitTransaction();
+    } catch (error) {
+      await dbSession.abortTransaction();
+      throw error;
+    } finally {
+      dbSession.endSession();
+    }
+  } catch (error) {
+    // Check if it's a transaction error (local MongoDB doesn't support transactions)
+    const errorMessage = error instanceof Error ? error.message : "";
+    if (errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
+      // Fall back to non-transactional operation
+      try {
+        await record.save();
+
+        // Credit wallet without session
+        const { _markCommissionPaidWithSession } = await import("@/lib/actions/wallet.actions");
+        const walletResult = await _markCommissionPaidWithSession(
+          record.employeeId.toString(),
+          record.commission || record.calculatedCommission,
+          parsed.data.id
+        );
+
+        if (walletResult?.error) {
+          return { error: walletResult.error };
+        }
+      } catch (fallbackError) {
+        return { error: "Operation failed: " + (fallbackError instanceof Error ? fallbackError.message : "Unknown error") };
+      }
+    } else {
+      return { error: "Transaction failed: " + errorMessage };
+    }
+  }
 
   await logAudit({
     userId: parsed.data.paidBy,
-    userEmail: "",
     userRole: "finance",
     action: "FINAL_APPROVE_SALE",
     entity: "SalesRecord",
     entityId: parsed.data.id,
     details: { commission: record.commission || record.calculatedCommission, netSales: record.netSales },
   });
-
-  try {
-    const { markCommissionPaid } = await import("@/lib/actions/wallet.actions");
-    await markCommissionPaid({
-      employeeId: record.employeeId.toString(),
-      amount: record.commission || record.calculatedCommission,
-      salesRecordId: parsed.data.id,
-      paidBy: parsed.data.paidBy,
-    });
-  } catch (walletError) {
-    console.error("Failed to credit wallet:", walletError);
-  }
 
   try {
     const { checkEligibility: checkEmpEligibility } = await import("@/lib/actions/commission.actions");
@@ -471,6 +575,52 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
     console.error("Failed to send in-app notification:", notifError);
   }
 
+  // Send real-time update via SSE
+  const commission = record.commission || record.calculatedCommission;
+  sseManager.sendToUser(record.employeeId.toString(), {
+    type: SSE_EVENTS.SALE_APPROVED,
+    payload: {
+      id: parsed.data.id,
+      companyName: record.companyName,
+      status: "Approved",
+      commission,
+      isPaid: true,
+    },
+  });
+
+  // Notify manager
+  if (record.managerId) {
+    sseManager.sendToUser(record.managerId.toString(), {
+      type: SSE_EVENTS.SALE_UPDATED,
+      payload: {
+        id: parsed.data.id,
+        companyName: record.companyName,
+        status: "Approved",
+      },
+    });
+  }
+
+  // Notify wallet update
+  sseManager.sendToUser(record.employeeId.toString(), {
+    type: SSE_EVENTS.WALLET_UPDATED,
+    payload: {
+      employeeId: record.employeeId.toString(),
+      amount: commission,
+      salesRecordId: parsed.data.id,
+    },
+  });
+
+  // Notify dashboards to refresh
+  sseManager.sendToRole("salesManager", {
+    type: SSE_EVENTS.DASHBOARD_REFRESH,
+    payload: { reason: "sale_final_approved" },
+  });
+
+  sseManager.sendToRole("accountant", {
+    type: SSE_EVENTS.DASHBOARD_REFRESH,
+    payload: { reason: "sale_final_approved" },
+  });
+
   return { success: true };
 }
 
@@ -496,7 +646,8 @@ async function calculateCommission(record: SalesRecordType): Promise<number> {
 
   if (!employee || !employee.targetAmount) return 0;
 
-  const grossAmount = record.products.reduce((sum: number, p: ProductType) => sum + p.unitPrice * p.quantity, 0);
+  // Use precise calculation for product totals
+  const grossAmount = record.products.reduce((sum: number, p: ProductType) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0);
   const currentSaleAmount = record.netSales && record.netSales > 0 ? record.netSales : grossAmount;
 
   const allApprovedSales = await SalesRecord.find({
@@ -505,10 +656,11 @@ async function calculateCommission(record: SalesRecordType): Promise<number> {
   }).lean();
 
   const totalSales = allApprovedSales.reduce((sum: number, r: { products: ProductType[]; netSales?: number }) => {
-    const amount = (r.netSales ?? 0) > 0 ? (r.netSales ?? 0) : r.products.reduce((s: number, p: ProductType) => s + p.unitPrice * p.quantity, 0);
-    return sum + (amount ?? 0);
-  }, 0) + currentSaleAmount;
-  const achievement = (totalSales / employee.targetAmount) * 100;
+    const amount = (r.netSales ?? 0) > 0 ? (r.netSales ?? 0) : r.products.reduce((s: number, p: ProductType) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
+    return roundMoney(sum + (amount ?? 0));
+  }, currentSaleAmount);
+
+  const achievement = roundMoney((totalSales / employee.targetAmount) * 100);
 
   const rule = await CommissionRule.findOne({
     targetPercentageFrom: { $lte: achievement },
@@ -518,6 +670,7 @@ async function calculateCommission(record: SalesRecordType): Promise<number> {
 
   if (!rule) return 0;
 
-  const commission = (currentSaleAmount * rule.commissionRate) / 100;
-  return commission;
+  // Use precise percentage calculation
+  const commission = calculatePercentage(currentSaleAmount, rule.commissionRate);
+  return roundMoney(commission);
 }

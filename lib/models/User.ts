@@ -13,6 +13,7 @@ export interface IUser extends Document {
   managerId?: mongoose.Types.ObjectId;
   targetAmount: number;
   targetPeriod?: string;
+  previousTargetAmount?: number;
   deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -48,6 +49,7 @@ UserSchema.index({ managerId: 1 });
 UserSchema.index({ teamId: 1 });
 UserSchema.index({ isActive: 1 });
 UserSchema.index({ deletedAt: 1 });
+UserSchema.index({ isEligible: 1 });
 // Performance optimization: compound indexes for user queries
 UserSchema.index({ isEligible: 1, targetAmount: 1 });
 UserSchema.index({ role: 1, isActive: 1 });

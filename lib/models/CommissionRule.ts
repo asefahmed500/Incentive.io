@@ -32,5 +32,6 @@ const CommissionRuleSchema = new Schema<ICommissionRule>(
 CommissionRuleSchema.index({ isActive: 1, priority: -1 });
 CommissionRuleSchema.index({ categoryId: 1 });
 CommissionRuleSchema.index({ targetPercentageFrom: 1, targetPercentageTo: 1 });
+CommissionRuleSchema.index({ targetPercentageTo: 1, targetPercentageFrom: -1 });
 
 export default mongoose.models.CommissionRule || mongoose.model<ICommissionRule>("CommissionRule", CommissionRuleSchema);

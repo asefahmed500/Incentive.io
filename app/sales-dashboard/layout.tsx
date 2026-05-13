@@ -30,7 +30,6 @@ const sidebarItems = [
   { href: "/sales-dashboard/commissions", label: "Commissions", icon: Wallet },
   { href: "/sales-dashboard/approved-sales", label: "Approved Sales", icon: CheckCircle },
   { href: "/sales-dashboard/wallet", label: "Wallet", icon: Wallet },
-  { href: "/sales-dashboard/manager-info", label: "Manager Info", icon: Users },
   { href: "/sales-dashboard/profile", label: "Profile", icon: User },
 ];
 

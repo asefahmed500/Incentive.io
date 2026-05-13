@@ -1,7 +1,7 @@
 "use server";
 
 import { z } from "zod";
-import { connectToDatabase } from "@/lib/mongodb";
+import { connectToDatabase, toObjectId } from "@/lib/mongodb";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { Product } from "@/lib/models/Product";
 import { User } from "@/lib/models/User";
@@ -9,6 +9,7 @@ import { sendNotificationEmail } from "@/lib/email";
 import { notifySaleSubmitted } from "@/lib/actions/notification.actions";
 import { auth } from "@/lib/auth/auth";
 import type { AuthUser, UserRole } from "@/types";
+import { sseManager, SSE_EVENTS } from "@/lib/sse";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -102,7 +103,7 @@ export async function getSalesRecords({
   await connectToDatabase();
 
   const query: Record<string, unknown> = {};
-  if (parsed.data.employeeId) query.employeeId = parsed.data.employeeId;
+  if (parsed.data.employeeId) query.employeeId = toObjectId(parsed.data.employeeId);
   if (parsed.data.status) query.status = parsed.data.status;
   if (parsed.data.search) {
     const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -221,14 +222,15 @@ export async function getSalesRecordsByManagerId(managerId: string) {
   const records = await SalesRecord.find(query).sort({ createdAt: -1 }).lean();
   return records.map((r) => ({
     id: r._id.toString(),
-    employeeId: r.employeeId,
+    employeeId: r.employeeId?.toString() || "",
     employeeName: r.employeeName,
     companyName: r.companyName,
     productCount: r.products.length,
     totalAmount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0),
     status: r.status,
-    commission: r.commission,
+    commission: r.commission || 0,
     createdAt: r.createdAt,
+    managerId: r.managerId?.toString() || "",
   }));
 }
 
@@ -388,6 +390,24 @@ export async function submitSalesRecord(id: string) {
     }
   } catch (notifError) {
     console.error("Failed to send in-app notification:", notifError);
+  }
+
+  // Send real-time update via SSE
+  sseManager.sendToUser(record.employeeId, {
+    type: SSE_EVENTS.SALE_CREATED,
+    payload: {
+      id: parsed.data.id,
+      companyName: record.companyName,
+      status: "Pending_Manager",
+    },
+  });
+
+  // Notify manager dashboard
+  if (record.managerId) {
+    sseManager.sendToUser(record.managerId.toString(), {
+      type: SSE_EVENTS.DASHBOARD_REFRESH,
+      payload: { reason: "new_sale_submitted" },
+    });
   }
 
   return { success: true };

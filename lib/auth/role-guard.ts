@@ -1,4 +1,5 @@
 import { auth } from "@/lib/auth/auth";
+import type { AuthUser } from "@/types";
 
 type Role = "admin" | "administrator" | "salesManager" | "salesExecutive" | "accountant" | "finance";
 
@@ -15,7 +16,7 @@ export async function requireRole(...roles: Role[]) {
   if (!session?.user?.id) {
     return { error: "Unauthorized", status: 401 } as const;
   }
-  const userRole = (session.user as any).role as string;
+  const userRole = (session.user as AuthUser).role;
   if (!roles.includes(userRole as Role)) {
     return { error: "Forbidden: Insufficient permissions", status: 403 } as const;
   }

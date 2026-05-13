@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LayoutDashboard, FileText, Wallet, BarChart3, LogOut, User, Percent } from "lucide-react";
+import { LayoutDashboard, FileText, Wallet, BarChart3, LogOut, User, Percent, Clock, TrendingUp, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
   Sidebar,
@@ -23,9 +23,9 @@ import { logoutAction } from "@/lib/actions/auth.actions";
 const sidebarItems = [
   { href: "/finance", label: "Dashboard", icon: LayoutDashboard },
   { href: "/finance/approvals", label: "Approval Queue", icon: FileText },
-  { href: "/finance/payment-queue", label: "Payment Queue", icon: Wallet },
-  { href: "/finance/payments", label: "Payment History", icon: Wallet },
-  { href: "/finance/commissions", label: "Commissions", icon: Wallet },
+  { href: "/finance/payment-queue", label: "Payment Queue", icon: Clock },
+  { href: "/finance/payments", label: "Payment History", icon: TrendingUp },
+  { href: "/finance/commissions", label: "Commissions", icon: DollarSign },
   { href: "/finance/sales-records", label: "Sales Records", icon: FileText },
   { href: "/finance/wallets", label: "Wallets", icon: Wallet },
   { href: "/finance/analytics", label: "Analytics", icon: BarChart3 },

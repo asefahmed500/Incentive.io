@@ -147,7 +147,7 @@ describe("Performance: Dashboard Queries", () => {
         products: [
           {
             productName: "Test Product",
-            categoryId: "0000000000000000000000001",
+            categoryId: "000000000000000000000001",
             unitPrice: 1000 + i * 10,
             quantity: i + 1,
           },
@@ -184,7 +184,8 @@ describe("Performance: Dashboard Queries", () => {
     expect(Array.isArray(records)).toBe(true);
     expect(duration).toBeLessThan(500);
 
-    console.log(`✓ Loaded ${records.length} records in ${duration}ms`);
+    const recordsArray = Array.isArray(records) ? records : [];
+    console.log(`✓ Loaded ${recordsArray.length} records in ${duration}ms`);
   });
 
   it("should use aggregation for commission calculation efficiently", async () => {
@@ -192,7 +193,7 @@ describe("Performance: Dashboard Queries", () => {
 
     const startTime = Date.now();
 
-    const commissions = await getCommissions(testUserId);
+    const commissions = await getCommissions();
 
     const duration = Date.now() - startTime;
 
@@ -209,7 +210,7 @@ describe("Performance: Database Indexes", () => {
   });
 
   it("should use index for employeeId queries on SalesRecord", async () => {
-    const explain = await SalesRecord.find({ employeeId: "000000000000000000000000" }).explain();
+    const explain = await SalesRecord.find({ employeeId: "000000000000000000000000" }).explain() as any;
 
     // Check if query uses an index
     const hasIndex = explain.executionStats?.totalDocsExamined < explain.executionStats?.totalKeysExamined;
@@ -217,9 +218,10 @@ describe("Performance: Database Indexes", () => {
   });
 
   it("should use compound index for employeeId + status queries", async () => {
-    const explain = await SalesRecord.find({ employeeId: "000000000000000000000000", status: "Approved" }).explain();
+    const explainResult = await SalesRecord.find({ employeeId: "000000000000000000000000", status: "Approved" }).explain();
+    const explain = Array.isArray(explainResult) ? explainResult[0] : explainResult;
 
-    const executionTime = explain.executionStats?.executionTimeMillis || 0;
+    const executionTime = (explain as any)?.executionStats?.executionTimeMillis || 0;
     expect(executionTime).toBeLessThan(20);
   });
 });

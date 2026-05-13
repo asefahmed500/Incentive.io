@@ -196,7 +196,7 @@ describe("Unit: SalesRecord Model", () => {
     expect(sale.status).toBe("Draft");
 
     // Verify total calculation
-    const calculatedTotal = sale.products.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0);
+    const calculatedTotal = sale.products.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0);
     expect(calculatedTotal).toBe(expectedTotal);
   });
 

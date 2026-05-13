@@ -2,7 +2,7 @@
 
 import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
-import { connectToDatabase } from "@/lib/mongodb";
+import { connectToDatabase, toObjectId } from "@/lib/mongodb";
 import CommissionRule from "@/lib/models/CommissionRule";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
@@ -139,12 +139,29 @@ export async function deleteCommissionRule(id: string) {
 export async function getCommissions() {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as AuthUser).role;
+  const userId = session.user.id;
+
   await connectToDatabase();
-  const records = await SalesRecord.find({
+
+  // Build query based on role
+  let query: Record<string, unknown> = {
     approvalStatus: "Approved",
     accountantStatus: "Approved",
     financeStatus: "Approved",
-  }).populate("employeeId", "name isEligible").lean();
+  };
+
+  // Role-based filtering
+  if (userRole === "salesExecutive") {
+    query.employeeId = toObjectId(userId);
+  } else if (userRole === "salesManager") {
+    const teamMembers = await User.find({ managerId: toObjectId(userId) }).select("_id").lean();
+    const teamMemberIds = teamMembers.map((u) => u._id.toString());
+    query.employeeId = { $in: teamMemberIds };
+  }
+  // Admin, administrator, accountant, finance can see all commissions
+
+  const records = await SalesRecord.find(query).populate("employeeId", "name isEligible").lean();
 
   const employeeIds = [...new Set(records.map((r) => (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString()).filter(Boolean))];
   const users = await User.find({ _id: { $in: employeeIds } }, { isEligible: 1 }).lean();
@@ -170,10 +187,26 @@ export async function getCommissions() {
 export async function getCommissionsByEmployee(employeeId: string) {
   const session = await auth();
   if (!session?.user?.id) return { records: [], totalCommission: 0, paidCommission: 0, pendingCommission: 0 };
+  const userRole = (session.user as AuthUser).role;
+  const userId = session.user.id;
+
   const parsed = getCommissionsByEmployeeSchema.safeParse(employeeId);
   if (!parsed.success) {
     return { records: [], totalCommission: 0, paidCommission: 0, pendingCommission: 0 };
   }
+
+  // Role-based access check
+  if (userRole === "salesExecutive" && parsed.data !== userId) {
+    return { error: "Forbidden: You can only view your own commissions" };
+  }
+
+  if (userRole === "salesManager") {
+    const teamMember = await User.findOne({ _id: parsed.data, managerId: userId }).lean();
+    if (!teamMember) {
+      return { error: "Forbidden: Employee is not in your team" };
+    }
+  }
+
   await connectToDatabase();
   const records = await SalesRecord.find({
     employeeId: parsed.data,

@@ -28,14 +28,24 @@ export async function getTeams() {
   if (!session?.user?.id) return { error: "Unauthorized" };
   await connectToDatabase();
   const teams = await Team.find().populate("managerId", "name email").lean();
-  return teams.map((t) => ({
-    id: t._id.toString(),
-    name: t.name,
-    managerId: (t.managerId as unknown as { _id?: { toString: () => string } })?._id?.toString() || "",
-    managerName: (t.managerId as unknown as { name?: string })?.name || "",
-    memberCount: t.members?.length || 0,
-    createdAt: t.createdAt,
-  }));
+  return teams.map((t) => {
+    const managerId = t.managerId;
+    const managerIdStr = typeof managerId === "object" && managerId && "_id" in managerId
+      ? managerId._id?.toString() || ""
+      : "";
+    const managerName = typeof managerId === "object" && managerId && "name" in managerId
+      ? (managerId as { name?: string }).name || ""
+      : "";
+
+    return {
+      id: t._id.toString(),
+      name: t.name,
+      managerId: managerIdStr,
+      managerName: managerName,
+      memberCount: t.members?.length || 0,
+      createdAt: t.createdAt,
+    };
+  });
 }
 
 export async function createTeam({ name, managerId }: { name: string; managerId: string }) {

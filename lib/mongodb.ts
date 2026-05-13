@@ -8,13 +8,26 @@ if (!cached) {
   cached = (global as any).mongoose = { conn: null, promise: null };
 }
 
+/**
+ * Convert a string ID to MongoDB ObjectId
+ * Useful for ensuring consistent ObjectId types in queries
+ */
+export function toObjectId(id: string): mongoose.Types.ObjectId {
+  return new mongoose.Types.ObjectId(id);
+}
+
 export async function connectToDatabase() {
   if (cached.conn) return cached.conn;
 
   if (!cached.promise) {
-    cached.promise = mongoose.connect(MONGODB_URI, {
+    const opts = {
       bufferCommands: false,
-    });
+    };
+    // Add retryWrites=false for local MongoDB deployments that don't support transactions
+    if (MONGODB_URI.includes("localhost") || MONGODB_URI.includes("127.0.0.1")) {
+      (opts as any).retryWrites = false;
+    }
+    cached.promise = mongoose.connect(MONGODB_URI, opts);
   }
 
   try {
