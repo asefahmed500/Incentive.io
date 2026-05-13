@@ -117,7 +117,7 @@ export default function SuperAdminUsers() {
   };
 
   const handleResetPassword = async (id: string) => {
-    const defaultPassword = "Password123!";
+    const defaultPassword = "DefaultPass123!@#";
     const result = await resetPassword({ userId: id, newPassword: defaultPassword });
     if (result?.error) {
       alert(result.error);

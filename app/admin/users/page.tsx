@@ -41,7 +41,13 @@ import * as z from "zod";
 const userSchema = z.object({
   name: z.string().min(2, "Name required"),
   email: z.string().email("Invalid email"),
-  password: z.string().min(8, "Min 8 chars").optional(),
+  password: z.string()
+    .min(12, "Password must be at least 12 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character")
+    .optional(),
   role: z.enum(["admin", "salesManager", "salesExecutive", "accountant", "finance"]),
   phone: z.string().optional(),
 });
