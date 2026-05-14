@@ -1,17 +1,11 @@
 import { updateCategory, deleteCategory } from "@/lib/actions/category.actions";
 import { handleError, getStatusCodeForError } from "@/lib/api-error";
-import { z } from "zod";
+import { updateCategoryApiSchema } from "@/lib/validations/category.validation";
+import { objectIdSchema } from "@/lib/validations/common";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
 import { Category } from "@/lib/models/Category";
 import { connectToDatabase } from "@/lib/mongodb";
-
-const updateCategorySchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().optional(),
-});
-
-const categoryIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid category ID format");
 
 export async function GET(
   request: Request,
@@ -22,7 +16,7 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const parsed = categoryIdSchema.safeParse(id);
+    const parsed = objectIdSchema.safeParse(id);
     if (!parsed.success) {
       return handleError(parsed.error);
     }
@@ -57,14 +51,14 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const parsed = updateCategorySchema.safeParse(body);
+    const parsed = updateCategoryApiSchema.safeParse(body);
     if (!parsed.success) {
       return handleError(parsed.error);
     }
 
     const result = await updateCategory({ id, ...parsed.data }) as { success?: boolean; error?: string };
     if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -82,7 +76,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    const parsed = categoryIdSchema.safeParse(id);
+    const parsed = objectIdSchema.safeParse(id);
     if (!parsed.success) {
       return handleError(parsed.error);
     }

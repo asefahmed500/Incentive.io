@@ -1,4 +1,6 @@
 import { getCategories, createCategory } from "@/lib/actions/category.actions";
+import { handleError, getStatusCodeForError } from "@/lib/api-error";
+import { createCategoryApiSchema } from "@/lib/validations/category.validation";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
 
@@ -11,12 +13,12 @@ export async function GET() {
 
     // Handle error response from server action
     if ("error" in categories) {
-      return NextResponse.json({ error: categories.error }, { status: 400 });
+      return NextResponse.json({ error: categories.error }, { status: getStatusCodeForError(categories.error as string) });
     }
 
     return NextResponse.json(categories);
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return handleError(error);
   }
 }
 
@@ -26,18 +28,24 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const result = await createCategory(body) as { success?: boolean; error?: string } | undefined;
+    const parsed = createCategoryApiSchema.safeParse(body);
+
+    if (!parsed.success) {
+      return handleError(parsed.error);
+    }
+
+    const result = await createCategory(parsed.data) as { success?: boolean; error?: string; id?: string } | undefined;
 
     if (result?.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
 
     if (!result) {
       return NextResponse.json({ error: "Failed to create category" }, { status: 500 });
     }
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true, id: result.id }, { status: 201 });
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return handleError(error);
   }
 }

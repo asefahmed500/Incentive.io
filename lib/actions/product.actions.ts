@@ -45,9 +45,10 @@ export async function getProducts({ categoryId, search }: { categoryId?: string;
   const query: Record<string, unknown> = {};
   if (parsed.data.categoryId) query.categoryId = parsed.data.categoryId;
   if (parsed.data.search) {
+    const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     query.$or = [
-      { name: { $regex: parsed.data.search, $options: "i" } },
-      { sku: { $regex: parsed.data.search, $options: "i" } },
+      { name: { $regex: escapedSearch, $options: "i" } },
+      { sku: { $regex: escapedSearch, $options: "i" } },
     ];
   }
 
