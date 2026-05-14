@@ -8,6 +8,7 @@ import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifyCommissionEligible } from "@/lib/actions/notification.actions";
+import { calculateProductTotal } from "@/lib/utils/money";
 import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
@@ -256,7 +257,7 @@ export async function checkEligibility(employeeId: string) {
   });
 
   const totalSales = approvedSales.reduce((sum, r) => {
-    return sum + r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + p.unitPrice * p.quantity, 0);
+    return sum + r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
   }, 0);
 
   const achievement = (totalSales / user.targetAmount) * 100;
@@ -328,7 +329,7 @@ export async function reevaluateIneligibleRecords(employeeId: string) {
   });
 
   const totalSales = totalApprovedSales.reduce((sum, r) => {
-    const amount = r.netSales > 0 ? r.netSales : r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + p.unitPrice * p.quantity, 0);
+    const amount = r.netSales > 0 ? r.netSales : r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
     return sum + amount;
   }, 0);
 

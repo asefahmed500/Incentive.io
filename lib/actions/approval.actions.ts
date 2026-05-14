@@ -418,7 +418,7 @@ export async function getPendingFinanceApprovals() {
     .lean();
 
   return records.map((r) => {
-    const grossAmount = r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0)
+    const grossAmount = r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0)
     return {
       id: r._id.toString(),
       status: r.status,

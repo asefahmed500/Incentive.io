@@ -11,6 +11,7 @@ import { logAudit } from "@/lib/actions/audit.actions";
 import { auth } from "@/lib/auth/auth";
 import type { AuthUser, UserRole } from "@/types";
 import { sseManager, SSE_EVENTS } from "@/lib/sse";
+import { calculateProductTotal } from "@/lib/utils/money";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -120,7 +121,7 @@ export async function getSalesRecords({
     companyName: r.companyName,
     companyEmail: r.companyEmail,
     productCount: r.products.length,
-    totalAmount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0),
+    totalAmount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0),
     status: r.status,
     commission: r.commission,
     createdAt: r.createdAt,
@@ -193,7 +194,7 @@ export async function getSalesStats() {
     pendingFinance: records.filter(r => r.status === "Pending_Finance").length,
     approved: records.filter(r => r.status === "Approved").length,
     rejected: records.filter(r => r.approvalStatus === "Rejected").length,
-    totalAmount: records.reduce((sum, r) => sum + r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + p.unitPrice * p.quantity, 0), 0),
+    totalAmount: records.reduce((sum, r) => sum + r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + calculateProductTotal(p.unitPrice, p.quantity), 0), 0),
     totalCommission: records.reduce((sum, r) => sum + (r.calculatedCommission || 0), 0),
     approvedToday: records.filter(r => r.status === "Approved" && r.finalApprovedAt && new Date(r.finalApprovedAt) >= today).length,
     processedToday: records.filter(r => r.accountantStatus === "Approved" && r.processedAt && new Date(r.processedAt) >= today).length,
@@ -227,7 +228,7 @@ export async function getSalesRecordsByManagerId(managerId: string) {
     employeeName: r.employeeName,
     companyName: r.companyName,
     productCount: r.products.length,
-    totalAmount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0),
+    totalAmount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0),
     status: r.status,
     commission: r.commission || 0,
     createdAt: r.createdAt,
@@ -272,7 +273,7 @@ export async function getAllSalesRecords({
     companyEmail: r.companyEmail,
     employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
     employeeEmail: (r.employeeId as unknown as { email?: string })?.email || "",
-    amount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + p.unitPrice * p.quantity, 0),
+    amount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0),
     status: r.status,
     approvalStatus: r.approvalStatus,
     accountantStatus: r.accountantStatus,
