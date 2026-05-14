@@ -14,7 +14,12 @@
     "test": "jest",
     "audit": "npm run typecheck && npm run lint && npm test",
     "seed": "npx tsx scripts/seed.ts",
-    "share": "node scripts/dev-tunnel.js"
+    "share": "node scripts/dev-tunnel.js",
+    "test:e2e": "playwright test",
+    "test:e2e:ui": "playwright test --ui",
+    "test:e2e:debug": "playwright test --debug",
+    "test:e2e:headed": "playwright test --headed",
+    "test:e2e:report": "playwright show-report"
   },
   "dependencies": {
     "@hookform/resolvers": "^5.2.2",
@@ -48,6 +53,7 @@
   "devDependencies": {
     "@eslint/eslintrc": "^3",
     "@jest/globals": "^30.4.0",
+    "@playwright/test": "^1.60.0",
     "@tailwindcss/postcss": "^4.2.1",
     "@types/jest": "^30.0.0",
     "@types/node": "^25.5.0",

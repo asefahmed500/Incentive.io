@@ -260,7 +260,8 @@ export async function checkEligibility(employeeId: string) {
     return sum + r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
   }, 0);
 
-  const achievement = (totalSales / user.targetAmount) * 100;
+  // Prevent division by zero or negative target amounts
+  const achievement = user.targetAmount > 0 ? (totalSales / user.targetAmount) * 100 : 0;
   const wasEligible = (user as unknown as { isEligible?: boolean }).isEligible || false;
   const nowEligible = achievement >= 50;
 
@@ -329,7 +330,7 @@ export async function reevaluateIneligibleRecords(employeeId: string) {
   });
 
   const totalSales = totalApprovedSales.reduce((sum, r) => {
-    const amount = r.netSales > 0 ? r.netSales : r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
+    const amount = r.netSales !== undefined && r.netSales !== null ? r.netSales : r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
     return sum + amount;
   }, 0);
 

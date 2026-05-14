@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { Category } from "@/lib/models/Category";
+import { Product } from "@/lib/models/Product";
 import type { ICategory } from "@/lib/models/Category";
 import type { AuthUser, UserRole } from "@/types";
 
@@ -96,6 +97,16 @@ export async function deleteCategory(id: string) {
     return { error: "Invalid ID format" };
   }
   await connectToDatabase();
-  await Category.findByIdAndUpdate(parsed.data, { deletedAt: new Date() });
+
+  const categoryId = parsed.data;
+
+  // Check if category has products
+  const productCount = await Product.countDocuments({ categoryId, deletedAt: null });
+  if (productCount > 0) {
+    return { error: `Cannot delete category with ${productCount} products. Please reassign or delete the products first.` };
+  }
+
+  // Safe to delete the category
+  await Category.findByIdAndUpdate(categoryId, { deletedAt: new Date() });
   return { success: true };
 }

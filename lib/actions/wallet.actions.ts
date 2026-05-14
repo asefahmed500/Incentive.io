@@ -324,6 +324,11 @@ async function _markCommissionPaidWithSession(
   const empOid = toObjectId(employeeId);
   const srOid = toObjectId(salesRecordId);
 
+  // Validate amount is not negative
+  if (amount < 0) {
+    return { error: "Commission amount cannot be negative" };
+  }
+
   const useOwnSession = !externalSession;
   const dbSession = externalSession || await mongoose.startSession();
 

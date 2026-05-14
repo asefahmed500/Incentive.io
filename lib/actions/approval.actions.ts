@@ -38,7 +38,7 @@ const processByAccountantSchema = z.object({
 
 const finalApproveByFinanceSchema = z.object({
   id: objectIdSchema,
-  paidBy: z.string().min(1, "paidBy is required"),
+  paidBy: objectIdSchema,
 });
 
 export async function getPendingManagerApprovals() {
@@ -122,13 +122,13 @@ export async function approveSale(id: string, paidBy?: string) {
   }
 
   try {
-    await notifyManagerApproved(record.employeeId.toString(), record.companyName);
+    await notifyManagerApproved(record.employeeId?.toString(), record.companyName);
   } catch (notifError) {
     console.error("Failed to send in-app notification:", notifError);
   }
 
   // Send real-time update via SSE
-  sseManager.sendToUser(record.employeeId.toString(), {
+  sseManager.sendToUser(record.employeeId?.toString(), {
     type: SSE_EVENTS.SALE_APPROVED,
     payload: {
       id: record._id.toString(),
@@ -139,7 +139,7 @@ export async function approveSale(id: string, paidBy?: string) {
   });
 
   // Notify dashboard to refresh
-  sseManager.sendToUser(record.employeeId.toString(), {
+  sseManager.sendToUser(record.employeeId?.toString(), {
     type: SSE_EVENTS.DASHBOARD_REFRESH,
     payload: { reason: "sale_approved" },
   });
@@ -212,7 +212,7 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
       console.error("Failed to send rejection email:", emailError);
     }
     try {
-      const employeeId = record.employeeId.toString();
+      const employeeId = record.employeeId?.toString();
       const companyName = record.companyName;
       const reason = parsed.data.reason;
       if (parsed.data.rejectedBy === "finance") {
@@ -227,7 +227,7 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
     }
 
     // Send real-time update via SSE
-    sseManager.sendToUser(record.employeeId.toString(), {
+    sseManager.sendToUser(record.employeeId?.toString(), {
       type: SSE_EVENTS.SALE_REJECTED,
       payload: {
         id: parsed.data.id,
@@ -238,7 +238,7 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
     });
 
     // Notify dashboard to refresh
-    sseManager.sendToUser(record.employeeId.toString(), {
+    sseManager.sendToUser(record.employeeId?.toString(), {
       type: SSE_EVENTS.DASHBOARD_REFRESH,
       payload: { reason: "sale_rejected" },
     });
@@ -355,15 +355,19 @@ export async function processByAccountant({
 
   try {
     const financeUsers = await User.find({ role: "finance", isActive: true });
-    for (const financeUser of financeUsers) {
-      if (financeUser.email) {
-        await sendNotificationEmail(
-          financeUser.email,
+    const emailPromises = financeUsers
+      .filter(user => user.email)
+      .map(user =>
+        sendNotificationEmail(
+          user.email,
           "Sale Processed by Accountant",
           `A sale for <strong>${record.companyName}</strong> has been processed by the accountant and is awaiting your final approval. Net Sales: ৳${netSales.toLocaleString()}`
-        );
-      }
-    }
+        ).catch(err => {
+          console.error(`Failed to send email to ${user.email}:`, err);
+        })
+      );
+
+    await Promise.allSettled(emailPromises);
   } catch (emailError) {
     console.error("Failed to send accountant processed email:", emailError);
   }
@@ -377,7 +381,7 @@ export async function processByAccountant({
   }
 
   // Send real-time update via SSE
-  sseManager.sendToUser(record.employeeId.toString(), {
+  sseManager.sendToUser(record.employeeId?.toString(), {
     type: SSE_EVENTS.SALE_UPDATED,
     payload: {
       id: parsed.data.id,
@@ -478,7 +482,7 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
       // Credit wallet within the same transaction
       const { _markCommissionPaidWithSession } = await import("@/lib/actions/wallet.actions");
       const walletResult = await _markCommissionPaidWithSession(
-        record.employeeId.toString(),
+        record.employeeId?.toString(),
         record.commission || record.calculatedCommission,
         parsed.data.id,
         dbSession
@@ -501,19 +505,37 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
     // Check if it's a transaction error (local MongoDB doesn't support transactions)
     const errorMessage = error instanceof Error ? error.message : "";
     if (errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
-      // Fall back to non-transactional operation
+      // Fall back to non-transactional operation with rollback logic
       try {
+        // Store previous state for potential rollback
+        const previousStatus = record.status;
+        const previousFinanceStatus = record.financeStatus;
+        const previousPaymentStatus = record.paymentStatus;
+        const previousIsPaid = record.isPaid;
+
         await record.save();
 
         // Credit wallet without session
         const { _markCommissionPaidWithSession } = await import("@/lib/actions/wallet.actions");
         const walletResult = await _markCommissionPaidWithSession(
-          record.employeeId.toString(),
+          record.employeeId?.toString(),
           record.commission || record.calculatedCommission,
           parsed.data.id
         );
 
         if (walletResult?.error) {
+          // Rollback the record to previous state
+          await SalesRecord.findByIdAndUpdate(parsed.data.id, {
+            status: previousStatus,
+            financeStatus: previousFinanceStatus,
+            paymentStatus: previousPaymentStatus,
+            isPaid: previousIsPaid,
+            $unset: {
+              finalApprovedAt: 1,
+              paymentDate: 1,
+              paidBy: 1
+            }
+          });
           return { error: walletResult.error };
         }
       } catch (fallbackError) {
@@ -535,38 +557,49 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
 
   try {
     const { checkEligibility: checkEmpEligibility } = await import("@/lib/actions/commission.actions");
-    await checkEmpEligibility(record.employeeId.toString());
+    await checkEmpEligibility(record.employeeId?.toString());
   } catch (eligError) {
     console.error("Failed to check eligibility:", eligError);
   }
 
   try {
     const employee = await User.findById(record.employeeId);
+    const manager = record.managerId ? await User.findById(record.managerId) : null;
+
+    const emailPromises = [];
+
     if (employee?.email) {
-      await sendNotificationEmail(
-        employee.email,
-        "Sale Final Approved!",
-        `Your sale for <strong>${record.companyName}</strong> has been final approved! Commission: ৳${(record.commission || record.calculatedCommission).toLocaleString()}`
+      emailPromises.push(
+        sendNotificationEmail(
+          employee.email,
+          "Sale Final Approved!",
+          `Your sale for <strong>${record.companyName}</strong> has been final approved! Commission: ৳${(record.commission || record.calculatedCommission).toLocaleString()}`
+        ).catch(err => {
+          console.error(`Failed to send email to ${employee.email}:`, err);
+        })
       );
     }
 
-    if (record.managerId) {
-      const manager = await User.findById(record.managerId);
-      if (manager?.email) {
-        await sendNotificationEmail(
+    if (manager?.email) {
+      emailPromises.push(
+        sendNotificationEmail(
           manager.email,
           "Team Sale Final Approved",
           `A team member's sale for <strong>${record.companyName}</strong> has been final approved.`
-        );
-      }
+        ).catch(err => {
+          console.error(`Failed to send email to ${manager.email}:`, err);
+        })
+      );
     }
+
+    await Promise.allSettled(emailPromises);
   } catch (emailError) {
     console.error("Failed to send finance approval email:", emailError);
   }
 
   try {
     await notifyFinanceApproved(
-      record.employeeId.toString(),
+      record.employeeId?.toString(),
       record.managerId ? record.managerId.toString() : "",
       record.companyName,
       record.commission || record.calculatedCommission
@@ -577,7 +610,7 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
 
   // Send real-time update via SSE
   const commission = record.commission || record.calculatedCommission;
-  sseManager.sendToUser(record.employeeId.toString(), {
+  sseManager.sendToUser(record.employeeId?.toString(), {
     type: SSE_EVENTS.SALE_APPROVED,
     payload: {
       id: parsed.data.id,
@@ -601,10 +634,10 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
   }
 
   // Notify wallet update
-  sseManager.sendToUser(record.employeeId.toString(), {
+  sseManager.sendToUser(record.employeeId?.toString(), {
     type: SSE_EVENTS.WALLET_UPDATED,
     payload: {
-      employeeId: record.employeeId.toString(),
+      employeeId: record.employeeId?.toString(),
       amount: commission,
       salesRecordId: parsed.data.id,
     },
@@ -648,7 +681,7 @@ async function calculateCommission(record: SalesRecordType): Promise<number> {
 
   // Use precise calculation for product totals
   const grossAmount = record.products.reduce((sum: number, p: ProductType) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0);
-  const currentSaleAmount = record.netSales && record.netSales > 0 ? record.netSales : grossAmount;
+  const currentSaleAmount = record.netSales !== undefined && record.netSales !== null ? record.netSales : grossAmount;
 
   const allApprovedSales = await SalesRecord.find({
     employeeId: record.employeeId,
@@ -656,11 +689,12 @@ async function calculateCommission(record: SalesRecordType): Promise<number> {
   }).lean();
 
   const totalSales = allApprovedSales.reduce((sum: number, r: { products: ProductType[]; netSales?: number }) => {
-    const amount = (r.netSales ?? 0) > 0 ? (r.netSales ?? 0) : r.products.reduce((s: number, p: ProductType) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
+    const amount = r.netSales !== undefined && r.netSales !== null ? r.netSales : r.products.reduce((s: number, p: ProductType) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
     return roundMoney(sum + (amount ?? 0));
   }, currentSaleAmount);
 
-  const achievement = roundMoney((totalSales / employee.targetAmount) * 100);
+  // Prevent division by zero or negative target amounts
+  const achievement = employee.targetAmount > 0 ? roundMoney((totalSales / employee.targetAmount) * 100) : 0;
 
   const rule = await CommissionRule.findOne({
     targetPercentageFrom: { $lte: achievement },

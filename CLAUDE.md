@@ -16,7 +16,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Critical:** Always use `npm run build:webpack` — Mongoose native bindings fail with Turbopack.
 
-**Testing:** Run `npm test` for all tests. Run single test: `npm test -- --testNamePattern="test name"`. Jest configured for `tests/` directory.
+**Testing:**
+- Jest tests: `npm test` for all tests. Run single test: `npm test -- --testNamePattern="test name"`
+- E2E tests: `npm run test:e2e` for Playwright E2E tests
+- E2E UI mode: `npm run test:e2e:ui`
+- E2E debug: `npm run test:e2e:debug`
+- E2E report: `npm run test:e2e:report`
 
 ## Setup
 
@@ -138,6 +143,15 @@ Rejection returns record to `Draft` with `rejectionReason` and `rejectedBy` fiel
 - `wallet.validation.ts`: Credit/debit wallet operations
 - `target.validation.ts`: Target assignment and removal
 - `commission.validation.ts`: Commission rule CRUD operations
+- `audit.validation.ts`: Audit log API validation
+- `commissions-api.validation.ts`: Commissions query validation
+- `notification.validation.ts`: Notification operations validation
+- `settings.validation.ts`: Settings API validation
+- `team.validation.ts`: Teams API validation
+- `product.validation.ts`: Product API validation with NoSQL injection prevention
+- `category.validation.ts`: Category API validation
+- `user.validation.ts`: User API validation
+- `common.ts`: Shared schemas like `objectIdSchema`
 - Applied in API routes before calling server actions
 
 **Error Handling** (`lib/api-error.ts`):
@@ -208,11 +222,11 @@ export async function GET(request: Request) {
     const data = await getSomeData();
     // Handle error response from server action
     if ("error" in data) {
-      return NextResponse.json({ error: data.error }, { status: 400 });
+      return NextResponse.json({ error: data.error }, { status: getStatusCodeForError(data.error as string) });
     }
     return NextResponse.json(data);
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return handleError(error); // Uses lib/api-error.ts
   }
 }
 
@@ -225,15 +239,25 @@ export async function POST(request: Request) {
     const result = await createData(body) as { success?: boolean; error?: string } | undefined;
 
     if (result?.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     if (!result) {
       return NextResponse.json({ error: "Failed to create resource" }, { status: 500 });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return handleError(error); // Uses lib/api-error.ts
   }
+}
+```
+
+**Error Type Handling Pattern** (for lib/ files):
+```typescript
+// Avoid `error: any` — use proper type guards
+catch (error) {
+  const errorMessage = error instanceof Error ? error.message : "Unknown error";
+  console.error("Operation failed:", errorMessage);
+  return { success: false, error: errorMessage };
 }
 ```
 
@@ -317,6 +341,8 @@ useEffect(() => {
 25. **Test ObjectId format:** Must be exactly 24 hex characters (e.g., `new mongoose.Types.ObjectId().toString()` or valid 24-char hex string). 25-character strings will fail validation.
 26. **Commission rules in tests:** Tests require commission rules to exist. `tests/setup.ts` automatically creates them if missing. Users need `targetAmount` set for commission calculation (see `tests/helpers/test-actions.ts`).
 27. **Health check pattern:** Use `checkDatabaseConnection()` from `lib/mongodb` for health endpoints. Returns `{ connected, message, latency }` and triggers connection if needed.
+28. **API-level validation required:** All new API endpoints must have validation schemas in `lib/validations/*.ts` (defense-in-depth). Never trust client input at the API boundary alone.
+29. **Error type safety:** In lib/ files, avoid `catch (error: any)` — use `error instanceof Error ? error.message : "Unknown error"` pattern for type safety.
 
 ## Key Files
 
@@ -330,7 +356,7 @@ useEffect(() => {
 | `lib/utils/money.ts` | Precise monetary calculations (use for all currency operations) |
 | `lib/rate-limit.ts` | In-memory rate limiting for public API endpoints |
 | `lib/api-error.ts` | Standardized error handling with ApiError class and handleError |
-| `lib/validations/*.ts` | API-level Zod validation schemas |
+| `lib/validations/*.ts` | API-level Zod validation schemas (14 files: approval, audit, category, commission, commissions-api, common, notification, product, sales, settings, target, team, user, wallet) |
 | `lib/sse.ts` | Server-Sent Events manager for real-time updates |
 | `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()`, `requireAdminOrAbove()`, `requireFinanceOrAbove()` helpers |
 | `middleware.ts` | Route-level RBAC enforcement with jose JWT verification |
@@ -474,6 +500,16 @@ Test suites in `tests/`:
 - Test users created via `createTestUser()` now have `targetAmount: 50000` for commission calculations
 - Local MongoDB connection uses `retryWrites=false` automatically
 
+**E2E Testing with Playwright:**
+- Configuration: `playwright.config.ts` in project root
+- Test specs: `tests/e2e/specs/` organized by feature (auth, sales-executive, sales-manager, accountant, finance, admin, administrator, ui)
+- Screenshots: `tests/e2e/screenshots/` for test artifacts
+- Coverage: All 6 user roles, complete approval workflow, RBAC, responsive design
+- Prerequisites: MongoDB running, database seeded (`npm run seed`)
+- Run specific suite: `npx playwright test specs/auth/`
+- Run specific file: `npx playwright test specs/auth/login.spec.ts`
+- Run with single worker: `npx playwright test --workers=1` (use if parallel tests timeout)
+
 ## Pre-Deployment
 
 **GitHub Actions** (`.github/workflows/pre-deploy.yml`):
@@ -558,6 +594,8 @@ try {
 - **Atomic transactions**: Commission approval + wallet credit in single MongoDB transaction with fallback for local MongoDB
 - **Precise calculations**: Integer-based monetary math prevents floating point errors
 - **API error handling**: All API routes have try-catch blocks with proper error responses
+- **Path traversal protection**: File upload/delete endpoints validate for both Unix (`/`) and Windows (`\\`) path separators
+- **NoSQL injection prevention**: Regex patterns for search escape special characters with `.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")`
 
 ## Runtime Validation Best Practices
 

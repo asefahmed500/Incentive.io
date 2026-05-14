@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { useSession } from "next-auth/react";
 
+// Proper TypeScript interfaces for SSE payloads
+interface SSEConnectedPayload {
+  clientId: string;
+}
+
 interface SSEMessage {
   type: string;
   payload: unknown;
@@ -50,8 +55,9 @@ export function useSSE(options: UseSSEOptions = {}) {
 
         switch (message.type) {
           case "connected":
-            setClientId((message.payload as any).clientId);
-            options.onConnected?.((message.payload as any).clientId);
+            const connectedPayload = message.payload as SSEConnectedPayload;
+            setClientId(connectedPayload.clientId);
+            options.onConnected?.(connectedPayload.clientId);
             break;
           case "notification.new":
             options.onNotification?.(message.payload);
@@ -110,8 +116,9 @@ export function useSSE(options: UseSSEOptions = {}) {
 
               switch (message.type) {
                 case "connected":
-                  setClientId((message.payload as any).clientId);
-                  options.onConnected?.((message.payload as any).clientId);
+                  const connectedPayload = message.payload as SSEConnectedPayload;
+                  setClientId(connectedPayload.clientId);
+                  options.onConnected?.(connectedPayload.clientId);
                   break;
                 case "notification.new":
                   options.onNotification?.(message.payload);

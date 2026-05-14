@@ -34,4 +34,17 @@ CommissionRuleSchema.index({ categoryId: 1 });
 CommissionRuleSchema.index({ targetPercentageFrom: 1, targetPercentageTo: 1 });
 CommissionRuleSchema.index({ targetPercentageTo: 1, targetPercentageFrom: -1 });
 
+// Soft delete hooks - auto-filter deleted records
+CommissionRuleSchema.pre("find", function() {
+  this.where({ deletedAt: null });
+});
+
+CommissionRuleSchema.pre("findOne", function() {
+  this.where({ deletedAt: null });
+});
+
+CommissionRuleSchema.pre("countDocuments", function() {
+  this.where({ deletedAt: null });
+});
+
 export default mongoose.models.CommissionRule || mongoose.model<ICommissionRule>("CommissionRule", CommissionRuleSchema);

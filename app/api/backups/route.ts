@@ -94,8 +94,9 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Filename required" }, { status: 400 });
     }
 
-    // Security: Prevent path traversal attacks
-    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+    // Security: Prevent path traversal attacks using path normalization
+    const normalizedFilename = path.normalize(filename);
+    if (normalizedFilename !== filename || path.isAbsolute(filename)) {
       return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
     }
 
@@ -104,7 +105,7 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Invalid file type. Only JSON backup files are allowed." }, { status: 400 });
     }
 
-    const filepath = path.join(BACKUP_DIR, filename);
+    const filepath = path.join(BACKUP_DIR, normalizedFilename);
 
     if (!fs.existsSync(filepath)) {
       return NextResponse.json({ error: "Backup not found" }, { status: 404 });

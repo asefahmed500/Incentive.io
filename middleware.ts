@@ -24,7 +24,11 @@ export default async function middleware(request: NextRequest) {
   }
 
   try {
-    const secret = new TextEncoder().encode(process.env.NEXTAUTH_SECRET || "");
+    const secretStr = process.env.NEXTAUTH_SECRET;
+    if (!secretStr) {
+      throw new Error("NEXTAUTH_SECRET environment variable is not set");
+    }
+    const secret = new TextEncoder().encode(secretStr);
     const { payload } = await jwtVerify(token.value, secret);
     const userRole = payload.role as string;
 

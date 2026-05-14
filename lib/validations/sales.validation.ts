@@ -8,8 +8,8 @@ import { z } from "zod";
 export const productSchema = z.object({
   productName: z.string().min(1, "Product name is required").max(200, "Product name is too long"),
   categoryId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid category ID format"),
-  unitPrice: z.number().positive("Unit price must be positive").finite("Unit price must be a valid number"),
-  quantity: z.number().int("Quantity must be a whole number").positive("Quantity must be positive").finite("Quantity must be a valid number"),
+  unitPrice: z.number().positive("Unit price must be positive").max(1000000000, "Unit price cannot exceed 1,000,000,000").finite("Unit price must be a valid number"),
+  quantity: z.number().int("Quantity must be a whole number").positive("Quantity must be positive").max(10000, "Quantity cannot exceed 10,000").finite("Quantity must be a valid number"),
 });
 
 // Submit action validation

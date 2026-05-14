@@ -128,7 +128,9 @@ export function handleError(error: unknown, context?: { requestId?: string }): N
   if (error instanceof Error) {
     return NextResponse.json(
       {
-        error: error.message || "An unexpected error occurred",
+        error: process.env.NODE_ENV === "production"
+          ? "An unexpected error occurred"
+          : error.message || "An unexpected error occurred",
         code: ErrorCodes.INTERNAL_ERROR,
         requestId: context?.requestId,
       },

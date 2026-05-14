@@ -5,6 +5,9 @@ import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
+import { SalesRecord } from "@/lib/models/SalesRecord";
+import { Wallet } from "@/lib/models/Wallet";
+import { Team } from "@/lib/models/Team";
 import { sendWelcomeEmail, sendNotificationEmail } from "@/lib/email";
 import { notifyUserCreated } from "@/lib/actions/notification.actions";
 import { logAudit } from "@/lib/actions/audit.actions";
@@ -241,7 +244,37 @@ export async function deleteUser(id: string) {
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
-  await User.findByIdAndUpdate(parsed.data.id, { deletedAt: new Date() });
+
+  // Cascading delete: Clean up related data before deleting user
+  const userId = parsed.data;
+
+  // 1. Soft delete user's sales records
+  await SalesRecord.updateMany(
+    { employeeId: userId },
+    { deletedAt: new Date() }
+  );
+
+  // 2. Soft delete user's wallet
+  await Wallet.findOneAndUpdate(
+    { employeeId: userId },
+    { deletedAt: new Date() }
+  );
+
+  // 3. Remove user from teams (unset from members array)
+  await Team.updateMany(
+    { members: userId },
+    { $pull: { members: userId } }
+  );
+
+  // 4. Clear managerId for users who report to this user
+  await User.updateMany(
+    { managerId: userId },
+    { managerId: null }
+  );
+
+  // 5. Finally, soft delete the user
+  await User.findByIdAndUpdate(userId, { deletedAt: new Date() });
+
   return { success: true };
 }
 
