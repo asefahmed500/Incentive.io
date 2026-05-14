@@ -1,4 +1,6 @@
 import { getCommissions, getCommissionsByEmployee, checkEligibility } from "@/lib/actions/commission.actions";
+import { handleError, getStatusCodeForError } from "@/lib/api-error";
+import { commissionsQuerySchema } from "@/lib/validations/commissions-api.validation";
 import { NextResponse } from "next/server";
 import { requireAuth } from "@/lib/auth/role-guard";
 
@@ -8,15 +10,23 @@ export async function GET(request: Request) {
 
   try {
     const { searchParams } = new URL(request.url);
-    const employeeId = searchParams.get("employeeId");
-    const action = searchParams.get("action");
+    const queryParams = {
+      employeeId: searchParams.get("employeeId") || undefined,
+      action: searchParams.get("action") || undefined,
+    };
+
+    const parsed = commissionsQuerySchema.safeParse(queryParams);
+    if (!parsed.success) {
+      return handleError(parsed.error);
+    }
+
+    const { employeeId, action } = parsed.data;
 
     if (action === "check-eligibility" && employeeId) {
       const eligibility = await checkEligibility(employeeId);
 
-      // Handle error response from server action
       if ("error" in eligibility) {
-        return NextResponse.json({ error: eligibility.error }, { status: 400 });
+        return NextResponse.json({ error: eligibility.error }, { status: getStatusCodeForError(eligibility.error as string) });
       }
 
       return NextResponse.json(eligibility);
@@ -25,9 +35,8 @@ export async function GET(request: Request) {
     if (employeeId) {
       const commissions = await getCommissionsByEmployee(employeeId);
 
-      // Handle error response from server action
       if ("error" in commissions) {
-        return NextResponse.json({ error: commissions.error }, { status: 400 });
+        return NextResponse.json({ error: commissions.error }, { status: getStatusCodeForError(commissions.error as string) });
       }
 
       return NextResponse.json(commissions);
@@ -35,13 +44,12 @@ export async function GET(request: Request) {
 
     const commissions = await getCommissions();
 
-    // Handle error response from server action
     if ("error" in commissions) {
-      return NextResponse.json({ error: commissions.error }, { status: 400 });
+      return NextResponse.json({ error: commissions.error }, { status: getStatusCodeForError(commissions.error as string) });
     }
 
     return NextResponse.json(commissions);
   } catch (error) {
-    return NextResponse.json({ error: "Internal server error" }, { status: 500 });
+    return handleError(error);
   }
 }

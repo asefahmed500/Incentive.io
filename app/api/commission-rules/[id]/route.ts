@@ -1,21 +1,10 @@
 import { updateCommissionRule, deleteCommissionRule } from "@/lib/actions/commission.actions";
 import { handleError, getStatusCodeForError } from "@/lib/api-error";
-import { z } from "zod";
+import { updateCommissionRuleSchema, deleteCommissionRuleSchema } from "@/lib/validations/commission.validation";
 import { NextResponse } from "next/server";
 import { requireAdminOrAbove } from "@/lib/auth/role-guard";
 import CommissionRule from "@/lib/models/CommissionRule";
 import { connectToDatabase } from "@/lib/mongodb";
-
-const updateCommissionRuleSchema = z.object({
-  targetPercentageFrom: z.number().min(0).optional(),
-  targetPercentageTo: z.number().max(999).optional(),
-  commissionRate: z.number().min(0).max(100).optional(),
-  categoryId: z.string().regex(/^[a-f\d]{24}$/i).optional(),
-  priority: z.number().int().positive().optional(),
-  isActive: z.boolean().optional(),
-});
-
-const deleteCommissionRuleSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid commission rule ID format");
 
 export async function GET(
   request: Request,

@@ -42,23 +42,24 @@ export async function connectToDatabase() {
 
 export async function checkDatabaseConnection(): Promise<{ connected: boolean; message: string; latency?: number }> {
   const start = Date.now();
-  
+
   try {
     await connectToDatabase();
     const latency = Date.now() - start;
-    
+
     const state = mongoose.connection.readyState;
     const states = ["disconnected", "connected", "connecting", "disconnecting"];
-    
+
     return {
       connected: state === 1,
       message: states[state] || "unknown",
       latency,
     };
-  } catch (error: any) {
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Connection failed";
     return {
       connected: false,
-      message: error.message || "Connection failed",
+      message: errorMessage,
     };
   }
 }

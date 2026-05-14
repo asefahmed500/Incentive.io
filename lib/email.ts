@@ -33,9 +33,10 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
       html,
     });
     return { success: true, messageId: info.messageId };
-  } catch (error: any) {
-    console.error("Email error:", error.message);
-    return { success: false, error: error.message };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    console.error("Email error:", errorMessage);
+    return { success: false, error: errorMessage };
   }
 }
 
@@ -91,7 +92,8 @@ export async function testEmailConnection(): Promise<EmailResult> {
   try {
     await transporter.verify();
     return { success: true, error: "SMTP connected successfully" };
-  } catch (error: any) {
-    return { success: false, error: error.message };
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    return { success: false, error: errorMessage };
   }
 }

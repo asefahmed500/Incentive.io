@@ -3,6 +3,7 @@ import { auth } from "@/lib/auth/auth";
 import { writeFile, mkdir } from "fs/promises";
 import { join } from "path";
 import { existsSync } from "fs";
+import { handleError } from "@/lib/api-error";
 
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
@@ -59,11 +60,7 @@ export async function POST(request: Request) {
       size: file.size,
     });
   } catch (error) {
-    console.error("Upload error:", error);
-    return NextResponse.json(
-      { error: "Failed to upload file" },
-      { status: 500 }
-    );
+    return handleError(error);
   }
 }
 
@@ -76,8 +73,13 @@ export async function DELETE(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const filePath = searchParams.get("path");
-    
-    if (!filePath || filePath.includes("..") || filePath.startsWith("/")) {
+
+    // Security: Prevent path traversal attacks on both Unix and Windows
+    if (!filePath ||
+        filePath.includes("..") ||
+        filePath.includes("/") ||
+        filePath.includes("\\") ||
+        filePath.startsWith("/")) {
       return NextResponse.json({ error: "Invalid file path" }, { status: 400 });
     }
     
@@ -97,10 +99,6 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("Delete file error:", error);
-    return NextResponse.json(
-      { error: "Failed to delete file" },
-      { status: 500 }
-    );
+    return handleError(error);
   }
 }

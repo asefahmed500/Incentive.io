@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { AuditLog } from "@/lib/models/AuditLog";
 import { requireAdminOrAbove } from "@/lib/auth/role-guard";
+import { handleError, getStatusCodeForError } from "@/lib/api-error";
+import { createAuditLogApiSchema, auditLogQuerySchema } from "@/lib/validations/audit.validation";
 
 export async function GET(request: NextRequest) {
   const authResult = await requireAdminOrAbove();
@@ -10,26 +12,34 @@ export async function GET(request: NextRequest) {
   try {
     await connectToDatabase();
     const { searchParams } = new URL(request.url);
-    const limit = parseInt(searchParams.get("limit") || "50");
-    const offset = parseInt(searchParams.get("offset") || "0");
-    const userId = searchParams.get("userId");
-    const action = searchParams.get("action");
-    const entity = searchParams.get("entity");
-    
-    const query: Record<string, any> = {};
+    const queryParams = {
+      userId: searchParams.get("userId") || undefined,
+      action: searchParams.get("action") || undefined,
+      entity: searchParams.get("entity") || undefined,
+      limit: searchParams.get("limit") || undefined,
+      offset: searchParams.get("offset") || undefined,
+    };
+
+    const parsed = auditLogQuerySchema.safeParse(queryParams);
+    if (!parsed.success) {
+      return handleError(parsed.error);
+    }
+
+    const { userId, action, entity, limit, offset } = parsed.data;
+    const query: Record<string, unknown> = {};
     if (userId) query.userId = userId;
     if (action) query.action = action;
     if (entity) query.entity = entity;
-    
+
     const [logs, total] = await Promise.all([
       AuditLog.find(query).sort({ createdAt: -1 }).skip(offset).limit(limit).lean(),
       AuditLog.countDocuments(query),
     ]);
-    
+
     return NextResponse.json({
       logs: logs.map(l => ({
         id: l._id.toString(),
-        userId: l.userId.toString(),
+        userId: l.userId?.toString(),
         userEmail: l.userEmail,
         userRole: l.userRole,
         action: l.action,
@@ -43,8 +53,8 @@ export async function GET(request: NextRequest) {
       limit,
       offset,
     });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleError(error);
   }
 }
 
@@ -54,14 +64,15 @@ export async function POST(request: NextRequest) {
   try {
     await connectToDatabase();
     const body = await request.json();
-    const { userId, userEmail, userRole, action, entity, entityId, details, ipAddress, userAgent } = body;
-    
-    if (!userId || !action || !entity) {
-      return NextResponse.json({ error: "userId, action, and entity are required" }, { status: 400 });
+
+    const parsed = createAuditLogApiSchema.safeParse(body);
+    if (!parsed.success) {
+      return handleError(parsed.error);
     }
-    
-    const log = await AuditLog.create({
-      userId: new mongoose.Types.ObjectId(userId),
+
+    const { userId, userEmail, userRole, action, entity, entityId, details, ipAddress, userAgent } = parsed.data;
+
+    const logData: Record<string, unknown> = {
       userEmail: userEmail || "",
       userRole: userRole || "",
       action,
@@ -70,10 +81,17 @@ export async function POST(request: NextRequest) {
       details,
       ipAddress,
       userAgent,
-    });
-    
-    return NextResponse.json({ success: true, id: log._id.toString() });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    };
+
+    // Only include userId if it's provided (not undefined)
+    if (userId) {
+      logData.userId = new mongoose.Types.ObjectId(userId);
+    }
+
+    const log = await AuditLog.create(logData);
+
+    return NextResponse.json({ success: true, id: log._id.toString() }, { status: 201 });
+  } catch (error) {
+    return handleError(error);
   }
 }

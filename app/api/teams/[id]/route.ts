@@ -1,17 +1,11 @@
 import { updateTeam, deleteTeam, getTeamMembers } from "@/lib/actions/team.actions";
 import { handleError, getStatusCodeForError } from "@/lib/api-error";
-import { z } from "zod";
+import { updateTeamApiSchema } from "@/lib/validations/team.validation";
+import { objectIdSchema } from "@/lib/validations/common";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
 import { Team } from "@/lib/models/Team";
 import { connectToDatabase } from "@/lib/mongodb";
-
-const updateTeamSchema = z.object({
-  name: z.string().min(1).max(200).optional(),
-  managerId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid manager ID format").optional(),
-});
-
-const teamIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid team ID format");
 
 export async function GET(
   request: Request,
@@ -22,7 +16,7 @@ export async function GET(
 
   try {
     const { id } = await params;
-    const parsed = teamIdSchema.safeParse(id);
+    const parsed = objectIdSchema.safeParse(id);
     if (!parsed.success) {
       return handleError(parsed.error);
     }
@@ -62,14 +56,14 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
-    const parsed = updateTeamSchema.safeParse(body);
+    const parsed = updateTeamApiSchema.safeParse(body);
     if (!parsed.success) {
       return handleError(parsed.error);
     }
 
     const result = await updateTeam({ id, ...parsed.data }) as { success?: boolean; error?: string };
     if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -87,7 +81,7 @@ export async function DELETE(
   try {
     const { id } = await params;
 
-    const parsed = teamIdSchema.safeParse(id);
+    const parsed = objectIdSchema.safeParse(id);
     if (!parsed.success) {
       return handleError(parsed.error);
     }

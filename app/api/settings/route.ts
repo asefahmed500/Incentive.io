@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { SystemSettings } from "@/lib/models/SystemSettings";
 import { requireAdminOrAbove } from "@/lib/auth/role-guard";
+import { handleError } from "@/lib/api-error";
+import { updateSettingSchema, updateSettingsSchema } from "@/lib/validations/settings.validation";
 
 const DEFAULT_SETTINGS = [
   { key: "companyName", value: "AlgoIncentive", category: "system", description: "Company name displayed in the application" },
@@ -20,21 +22,21 @@ export async function GET() {
   try {
     await connectToDatabase();
     const settings = await SystemSettings.find().lean();
-    
-    const settingsMap: Record<string, any> = {};
+
+    const settingsMap: Record<string, string | number | boolean> = {};
     for (const s of settings) {
       settingsMap[s.key] = s.value;
     }
-    
+
     for (const def of DEFAULT_SETTINGS) {
       if (!(def.key in settingsMap)) {
         settingsMap[def.key] = def.value;
       }
     }
-    
+
     return NextResponse.json({ settings: settingsMap });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleError(error);
   }
 }
 
@@ -44,26 +46,24 @@ export async function PUT(request: Request) {
   try {
     await connectToDatabase();
     const body = await request.json();
-    const { key, value } = body;
-    
-    if (!key) {
-      return NextResponse.json({ error: "Key is required" }, { status: 400 });
+
+    const parsed = updateSettingSchema.safeParse(body);
+    if (!parsed.success) {
+      return handleError(parsed.error);
     }
-    
+
+    const { key, value } = parsed.data;
+
     const defaultKey = DEFAULT_SETTINGS.find(s => s.key === key);
-    if (!defaultKey && !key.startsWith("custom_")) {
-      return NextResponse.json({ error: "Unknown setting key" }, { status: 400 });
-    }
-    
     await SystemSettings.findOneAndUpdate(
       { key },
       { key, value, category: defaultKey?.category || "system" },
       { upsert: true, new: true }
     );
-    
+
     return NextResponse.json({ success: true, key, value });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleError(error);
   }
 }
 
@@ -74,8 +74,13 @@ export async function POST(request: Request) {
     await connectToDatabase();
     const body = await request.json();
     const settingsMap = body.settings || body;
-    
-    for (const [key, value] of Object.entries(settingsMap)) {
+
+    const parsed = updateSettingsSchema.safeParse(settingsMap);
+    if (!parsed.success) {
+      return handleError(parsed.error);
+    }
+
+    for (const [key, value] of Object.entries(parsed.data)) {
       const defaultKey = DEFAULT_SETTINGS.find(s => s.key === key);
       await SystemSettings.findOneAndUpdate(
         { key },
@@ -83,9 +88,9 @@ export async function POST(request: Request) {
         { upsert: true, new: true }
       );
     }
-    
+
     return NextResponse.json({ success: true });
-  } catch (error: any) {
-    return NextResponse.json({ error: error.message }, { status: 500 });
+  } catch (error) {
+    return handleError(error);
   }
 }
