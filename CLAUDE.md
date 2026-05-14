@@ -290,7 +290,7 @@ useEffect(() => {
 
 ## Critical Gotchas
 
-1. **Sales amount calculation:** Use `products.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0)` — no `saleAmount` field exists
+1. **Sales amount calculation:** Use `calculateProductTotal()` from `lib/utils/money.ts` — NEVER use direct multiplication `p.unitPrice * p.quantity` due to floating-point precision errors. No `saleAmount` field exists in the schema.
 2. **Category reference:** Schema uses `categoryId`, not `category`
 3. **Dual status fields:** `status` = workflow stage, but `approvalStatus`/`accountantStatus`/`financeStatus` also exist
 4. **Draft-only operations:** Only `Draft` records can be submitted/deleted
