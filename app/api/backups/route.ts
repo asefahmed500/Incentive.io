@@ -89,21 +89,32 @@ export async function DELETE(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
     const filename = searchParams.get("filename");
-    
+
     if (!filename) {
       return NextResponse.json({ error: "Filename required" }, { status: 400 });
     }
-    
+
+    // Security: Prevent path traversal attacks
+    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
+      return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
+    }
+
+    // Security: Only allow .json files in backup directory
+    if (!filename.endsWith(".json")) {
+      return NextResponse.json({ error: "Invalid file type. Only JSON backup files are allowed." }, { status: 400 });
+    }
+
     const filepath = path.join(BACKUP_DIR, filename);
-    
+
     if (!fs.existsSync(filepath)) {
       return NextResponse.json({ error: "Backup not found" }, { status: 404 });
     }
-    
+
     fs.unlinkSync(filepath);
-    
+
     return NextResponse.json({ success: true, message: "Backup deleted" });
   } catch (error: any) {
+    console.error("Delete backup failed:", error);
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
 }
