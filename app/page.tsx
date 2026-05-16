@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import {
   Menu,
@@ -31,6 +31,8 @@ import { EnhancedHero } from "@/components/home/enhanced-hero";
 import { Testimonials } from "@/components/home/testimonials";
 import { SocialProof } from "@/components/home/social-proof";
 import { InteractiveDemo } from "@/components/home/interactive-demo";
+import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 function SkipLink() {
   return (
@@ -488,6 +490,30 @@ function Footer() {
 }
 
 export default function LandingPage() {
+  const { data: session, status } = useSession();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (status === "authenticated" && session?.user) {
+      const role = session.user.role;
+      const path = role === "administrator" ? "/administrator" 
+                 : role === "admin" ? "/admin" 
+                 : role === "salesManager" ? "/sales-manager" 
+                 : role === "accountant" ? "/accountant" 
+                 : role === "finance" ? "/finance" 
+                 : "/sales-dashboard";
+      router.push(path);
+    }
+  }, [session, status, router]);
+
+  if (status === "loading") {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-sky-500"></div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-white dark:bg-gray-950 font-sans">
       <SkipLink />

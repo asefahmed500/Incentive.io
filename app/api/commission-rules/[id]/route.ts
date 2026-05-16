@@ -3,7 +3,7 @@ import { handleError, getStatusCodeForError } from "@/lib/api-error";
 import { updateCommissionRuleSchema, deleteCommissionRuleSchema } from "@/lib/validations/commission.validation";
 import { NextResponse } from "next/server";
 import { requireAdminOrAbove } from "@/lib/auth/role-guard";
-import CommissionRule from "@/lib/models/CommissionRule";
+import { CommissionRule } from "@/lib/models/CommissionRule";
 import { connectToDatabase } from "@/lib/mongodb";
 
 export async function GET(

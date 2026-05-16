@@ -45,7 +45,7 @@ export function LoginForm() {
     if (result?.error) {
       showError(new Error(result.error))
     } else if (result?.ok) {
-      router.refresh()
+      router.push("/")
     }
   }
 

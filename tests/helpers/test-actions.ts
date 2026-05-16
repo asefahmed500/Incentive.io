@@ -101,9 +101,18 @@ export async function ensureMongoConnection() {
 
 /**
  * Helper to create a test sales record
+ * Creates a non-auto-approve category for testing standard approval workflow
  */
 export async function createTestSale(employeeId: string, overrides: Record<string, unknown> = {}) {
   const { createSalesRecord } = await import("@/lib/actions/sales.actions");
+  const { Category } = await import("@/lib/models/Category");
+
+  // Create a category that is NOT auto-approve for testing standard workflow
+  const category = await Category.findOneAndUpdate(
+    { name: "Test Category (Non-Auto-Approve)" },
+    { name: "Test Category (Non-Auto-Approve)", description: "Category for integration testing", autoApprove: false },
+    { upsert: true, returnDocument: "after" }
+  );
 
   return await createSalesRecord({
     employeeId,
@@ -113,7 +122,7 @@ export async function createTestSale(employeeId: string, overrides: Record<strin
     products: [
       {
         productName: "Test Product",
-        categoryId: "000000000000000000000001",
+        categoryId: category._id.toString(),
         unitPrice: 1000,
         quantity: 5,
       },

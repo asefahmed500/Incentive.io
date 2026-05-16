@@ -59,7 +59,7 @@ export default function ManagerTeamEligibility() {
                 <TableRow>
                   <TableCell colSpan={4} className="text-center">Loading...</TableCell>
                 </TableRow>
-              ) : teamMembers.length === 0 ? (
+              ) : !Array.isArray(teamMembers) || teamMembers.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center">No team members</TableCell>
                 </TableRow>

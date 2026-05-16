@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
 import { connectToDatabase, toObjectId } from "@/lib/mongodb";
-import CommissionRule from "@/lib/models/CommissionRule";
+import { CommissionRule } from "@/lib/models/CommissionRule";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
 import { sendNotificationEmail } from "@/lib/email";

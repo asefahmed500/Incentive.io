@@ -50,7 +50,7 @@ export default function AccountantCommissionRules() {
                 <TableRow>
                   <TableCell colSpan={4} className="text-center">Loading...</TableCell>
                 </TableRow>
-              ) : rules.length === 0 ? (
+              ) : !Array.isArray(rules) || rules.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={4} className="text-center">No rules configured</TableCell>
                 </TableRow>

@@ -1,6 +1,19 @@
-import mongoose from "mongoose";
+import mongoose, { Schema, Document } from "mongoose";
 
-const NotificationSchema = new mongoose.Schema(
+export interface INotification extends Document {
+  userId: string;
+  recipientRole: "administrator" | "admin" | "salesManager" | "salesExecutive" | "accountant" | "finance";
+  type: string;
+  title: string;
+  message: string;
+  link?: string;
+  isRead: boolean;
+  deletedAt?: Date;
+  createdAt: Date;
+  updatedAt: Date;
+}
+
+const NotificationSchema = new mongoose.Schema<INotification>(
   {
     userId: { type: String, required: true, index: true },
     recipientRole: {
@@ -24,6 +37,9 @@ const NotificationSchema = new mongoose.Schema(
         "NEW_TARGET",
         "COMMISSION_ELIGIBLE",
         "USER_CREATED",
+        "AUTO_APPROVED",
+        "TEAM_SALE_AUTO_APPROVED",
+        "SALE_AUTO_APPROVED",
       ],
     },
     title: { type: String, required: true },
@@ -53,6 +69,6 @@ NotificationSchema.pre("findOne", function () {
   this.where({ deletedAt: null });
 });
 
-const Notification = mongoose.models.Notification || mongoose.model("Notification", NotificationSchema);
+const Notification = mongoose.models.Notification || mongoose.model<INotification>("Notification", NotificationSchema);
 
-export default Notification;
+export { Notification };

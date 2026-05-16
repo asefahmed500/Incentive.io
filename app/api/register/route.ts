@@ -63,27 +63,36 @@ export async function POST(request: NextRequest) {
 
     await connectToDatabase();
 
-    // Check if user already exists
-    const existingUser = await User.findOne({ email: parsed.data.email });
-    if (existingUser) {
-      return handleError(
-        new Error("Email already registered. Please use a different email or sign in.")
-      );
-    }
-
     // Hash password and create user
+    // Note: Email has unique constraint in schema, so duplicate emails will be rejected by database
     const hashedPassword = await bcrypt.hash(parsed.data.password, 12);
 
-    await User.create({
-      name: parsed.data.name,
-      email: parsed.data.email,
-      password: hashedPassword,
-      phone: parsed.data.phone || "",
-      role: "salesExecutive",
-      isActive: true,
-      isEligible: false,
-      targetAmount: 0,
-    });
+    try {
+      await User.create({
+        name: parsed.data.name,
+        email: parsed.data.email,
+        password: hashedPassword,
+        phone: parsed.data.phone || "",
+        role: "salesExecutive",
+        isActive: true,
+        isEligible: false,
+        targetAmount: 0,
+      });
+    } catch (createError: unknown) {
+      // Handle duplicate key error (MongoError code 11000)
+      if (
+        createError &&
+        typeof createError === "object" &&
+        "code" in createError &&
+        createError.code === 11000
+      ) {
+        return NextResponse.json(
+          { error: "Email already registered. Please use a different email or sign in." },
+          { status: 409 }
+        );
+      }
+      throw createError; // Re-throw other errors
+    }
 
     return NextResponse.json(
       { success: true, message: "Account created successfully" },

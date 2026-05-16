@@ -161,7 +161,7 @@ function AccountantApprovalsContent() {
                     Loading...
                   </TableCell>
                 </TableRow>
-              ) : records.length === 0 ? (
+              ) : !Array.isArray(records) || records.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center">
                     No pending approvals

@@ -12,5 +12,4 @@ export { Wallet } from "./Wallet";
 export { AuditLog } from "./AuditLog";
 export { SystemSettings } from "./SystemSettings";
 
-// CommissionRule is a default export
-export { default as CommissionRule } from "./CommissionRule";
+export { CommissionRule } from "./CommissionRule";

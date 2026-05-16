@@ -35,7 +35,7 @@ jest.mock("@/lib/auth/auth", () => ({
 // Setup test data before all tests
 beforeAll(async () => {
   const { connectToDatabase } = await import("@/lib/mongodb");
-  const CommissionRule = (await import("@/lib/models/CommissionRule")).default;
+  const { CommissionRule } = await import("@/lib/models/CommissionRule");
 
   await connectToDatabase();
 

@@ -1,6 +1,6 @@
-import { updateCategory, deleteCategory } from "@/lib/actions/category.actions";
+import { updateCategory, deleteCategory, toggleCategoryAutoApprove } from "@/lib/actions/category.actions";
 import { handleError, getStatusCodeForError } from "@/lib/api-error";
-import { updateCategoryApiSchema } from "@/lib/validations/category.validation";
+import { updateCategoryApiSchema, toggleAutoApproveApiSchema } from "@/lib/validations/category.validation";
 import { objectIdSchema } from "@/lib/validations/common";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
@@ -32,6 +32,7 @@ export async function GET(
       id: category._id.toString(),
       name: category.name,
       description: category.description,
+      autoApprove: category.autoApprove || false,
     };
 
     return NextResponse.json(response);
@@ -51,6 +52,21 @@ export async function PATCH(
     const { id } = await params;
     const body = await request.json();
 
+    // Check if this is a toggle auto-approve request (only contains autoApprove field)
+    if (Object.keys(body).length === 1 && "autoApprove" in body) {
+      const parsed = toggleAutoApproveApiSchema.safeParse(body);
+      if (!parsed.success) {
+        return handleError(parsed.error);
+      }
+
+      const result = await toggleCategoryAutoApprove({ id, ...parsed.data }) as { success?: boolean; error?: string; autoApprove?: boolean } | undefined;
+      if (result?.error) {
+        return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
+      }
+      return NextResponse.json({ success: true, autoApprove: result?.autoApprove });
+    }
+
+    // General category update
     const parsed = updateCategoryApiSchema.safeParse(body);
     if (!parsed.success) {
       return handleError(parsed.error);

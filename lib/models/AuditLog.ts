@@ -25,4 +25,10 @@ const AuditLogSchema = new Schema<IAuditLog>({
   userAgent: { type: String },
 }, { timestamps: { createdAt: true, updatedAt: false } });
 
+// Performance indexes for audit log queries
+AuditLogSchema.index({ userId: 1, createdAt: -1 });
+AuditLogSchema.index({ action: 1, createdAt: -1 });
+AuditLogSchema.index({ entity: 1, createdAt: -1 });
+AuditLogSchema.index({ createdAt: -1 });
+
 export const AuditLog = mongoose.models.AuditLog || mongoose.model<IAuditLog>("AuditLog", AuditLogSchema);

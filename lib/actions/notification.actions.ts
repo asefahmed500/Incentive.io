@@ -5,7 +5,7 @@ import { z } from "zod";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
-import Notification from "@/lib/models/Notification";
+import { Notification } from "@/lib/models/Notification";
 import type { AuthUser, UserRole } from "@/types";
 import { sseManager, SSE_EVENTS } from "@/lib/sse";
 
@@ -449,4 +449,74 @@ export async function notifySaleResubmitted(employeeId: string, companyName: str
 
   await Promise.allSettled(notifications);
   return { success: true };
+}
+
+// Auto-approval notification schemas
+const notifySaleAutoApprovedSchema = z.object({
+  employeeId: z.string(),
+  companyName: z.string().min(1).max(500),
+  commission: z.number().min(0),
+});
+
+const notifyManagerAutoApprovedSchema = z.object({
+  managerId: z.string(),
+  employeeName: z.string().min(1).max(200),
+  companyName: z.string().min(1).max(500),
+});
+
+const notifyFinanceAutoApprovedSchema = z.object({
+  financeUserId: z.string(),
+  companyName: z.string().min(1).max(500),
+  commission: z.number().min(0),
+});
+
+/**
+ * Notify employee that their sale was auto-approved
+ */
+export async function notifySaleAutoApproved(employeeId: string, companyName: string, commission: number) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const parsed = notifySaleAutoApprovedSchema.safeParse({ employeeId, companyName, commission });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return createNotification({
+    userId: parsed.data.employeeId,
+    type: "AUTO_APPROVED",
+    title: "Sale Auto-Approved!",
+    message: `${parsed.data.companyName} - Auto-approved. Commission: ৳${parsed.data.commission}`,
+    link: "/sales-dashboard/records",
+  });
+}
+
+/**
+ * Notify manager that a team member's sale was auto-approved
+ */
+export async function notifyManagerAutoApproved(managerId: string, employeeName: string, companyName: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const parsed = notifyManagerAutoApprovedSchema.safeParse({ managerId, employeeName, companyName });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return createNotification({
+    userId: parsed.data.managerId,
+    type: "TEAM_SALE_AUTO_APPROVED",
+    title: "Team Sale Auto-Approved",
+    message: `${parsed.data.employeeName} - ${parsed.data.companyName} auto-approved`,
+    link: "/sales-manager/records",
+  });
+}
+
+/**
+ * Notify finance user that a sale was auto-approved
+ */
+export async function notifyFinanceAutoApproved(financeUserId: string, companyName: string, commission: number) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const parsed = notifyFinanceAutoApprovedSchema.safeParse({ financeUserId, companyName, commission });
+  if (!parsed.success) return { error: parsed.error.issues[0].message };
+  return createNotification({
+    userId: parsed.data.financeUserId,
+    type: "SALE_AUTO_APPROVED",
+    title: "Sale Auto-Approved",
+    message: `${parsed.data.companyName} - Auto-approved and paid. Commission: ৳${parsed.data.commission}`,
+    link: "/finance/records",
+  });
 }

@@ -47,4 +47,14 @@ CommissionRuleSchema.pre("countDocuments", function() {
   this.where({ deletedAt: null });
 });
 
-export default mongoose.models.CommissionRule || mongoose.model<ICommissionRule>("CommissionRule", CommissionRuleSchema);
+// Validation hook for percentage ranges and commission rate
+CommissionRuleSchema.pre("save", function() {
+  if (this.targetPercentageFrom > this.targetPercentageTo) {
+    throw new Error("targetPercentageFrom must be less than or equal to targetPercentageTo");
+  }
+  if (this.commissionRate < 0 || this.commissionRate > 100) {
+    throw new Error("commissionRate must be between 0 and 100");
+  }
+});
+
+export const CommissionRule = mongoose.models.CommissionRule || mongoose.model<ICommissionRule>("CommissionRule", CommissionRuleSchema);

@@ -5,7 +5,7 @@ import { User } from "../lib/models/User";
 import { Team } from "../lib/models/Team";
 import { Category } from "../lib/models/Category";
 import { Product } from "../lib/models/Product";
-import CommissionRule from "../lib/models/CommissionRule";
+import { CommissionRule } from "../lib/models/CommissionRule";
 import { SalesRecord } from "../lib/models/SalesRecord";
 import { Wallet } from "../lib/models/Wallet";
 

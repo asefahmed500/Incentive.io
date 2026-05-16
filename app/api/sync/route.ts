@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
-import CommissionRule from "@/lib/models/CommissionRule";
+import { CommissionRule } from "@/lib/models/CommissionRule";
 import { Wallet } from "@/lib/models/Wallet";
 import { requireAdminOrAbove } from "@/lib/auth/role-guard";
 import { handleError } from "@/lib/api-error";

@@ -5,6 +5,7 @@ import { connectToDatabase, toObjectId } from "@/lib/mongodb";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { Product } from "@/lib/models/Product";
 import { User } from "@/lib/models/User";
+import { Category } from "@/lib/models/Category";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifySaleSubmitted } from "@/lib/actions/notification.actions";
 import { logAudit } from "@/lib/actions/audit.actions";
@@ -34,6 +35,27 @@ export async function resetSaleStatuses(saleId: string) {
     processedAt: undefined,
     finalApprovedAt: undefined,
   });
+}
+
+/**
+ * Check if all products in a sale are from auto-approve categories
+ * Returns true if ALL products have categories with autoApprove = true
+ */
+export async function checkAutoApproveEligibility(products: Array<{ categoryId: string }>): Promise<boolean> {
+  if (!products || products.length === 0) return false;
+
+  await connectToDatabase();
+
+  // Get unique category IDs from products
+  const categoryIds = [...new Set(products.map(p => p.categoryId).filter(Boolean))];
+
+  if (categoryIds.length === 0) return false;
+
+  // Fetch all categories
+  const categories = await Category.find({ _id: { $in: categoryIds } }).lean();
+
+  // Check if ALL categories have autoApprove = true
+  return categories.every(c => c.autoApprove === true);
 }
 
 const productLineSchema = z.object({
@@ -125,6 +147,7 @@ export async function getSalesRecords({
     status: r.status,
     commission: r.commission,
     createdAt: r.createdAt,
+    autoApproved: r.autoApproved || false,
   }));
 }
 
@@ -138,14 +161,14 @@ export async function getSalesRecord(id: string) {
   if (!record) return null;
 
   // Convert products to plain objects with string IDs for client serialization
-  const products = record.products.map((p: any) => ({
+  const products = Array.isArray(record.products) ? record.products.map((p: any) => ({
     productName: p.productName,
     categoryId: p.categoryId?.toString() || "",
     unitPrice: p.unitPrice,
     originalPrice: p.originalPrice,
     quantity: p.quantity,
     dealNotes: p.dealNotes,
-  }));
+  })) : [];
 
   return {
     id: record._id.toString(),
@@ -383,6 +406,22 @@ export async function submitSalesRecord(id: string) {
     await resetSaleStatuses(parsed.data.id);
   }
 
+  // Check if all products are from auto-approve categories
+  const isAutoApproveEligible = await checkAutoApproveEligibility(record.products);
+
+  if (isAutoApproveEligible) {
+    // Process auto-approval
+    const { processAutoApproval } = await import("@/lib/actions/approval.actions");
+    const result = await processAutoApproval(parsed.data.id);
+
+    if (result?.error) {
+      return { error: result.error };
+    }
+
+    return { success: true, autoApproved: true, commission: result.commission };
+  }
+
+  // Normal workflow: submit to manager
   await SalesRecord.findByIdAndUpdate(parsed.data.id, {
     status: "Pending_Manager",
     approvalStatus: "Pending",

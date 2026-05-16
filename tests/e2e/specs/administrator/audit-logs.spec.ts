@@ -40,7 +40,14 @@ test.describe("Administrator - Audit Logs", () => {
 
     const filterSelect = page.locator("select").first();
     if (await filterSelect.count() > 0) {
-      await filterSelect.selectOption({ label: /login|user|create/i });
+      const options = await filterSelect.locator("option").all();
+      for (const option of options) {
+        const text = await option.textContent();
+        if (text && /login|user|create/i.test(text)) {
+          await filterSelect.selectOption({ label: text });
+          break;
+        }
+      }
       await page.waitForTimeout(1000);
 
       await page.screenshot({ path: "tests/e2e/screenshots/superadmin-audit-logs-filtered.png" });

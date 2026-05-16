@@ -482,16 +482,16 @@ export async function getAllWallets() {
   if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   await connectToDatabase();
   const wallets = await Wallet.find().populate("employeeId", "name email role").lean();
-  return wallets.map((w) => ({
+  return wallets.map((w: any) => ({
     id: w._id.toString(),
-    employeeId: (w.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString() || "",
-    employeeName: (w.employeeId as unknown as { name?: string })?.name || "Unknown",
-    employeeEmail: (w.employeeId as unknown as { email?: string })?.email || "",
+    employeeId: w.employeeId?._id?.toString() || "",
+    employeeName: w.employeeId?.name || "Unknown",
+    employeeEmail: w.employeeId?.email || "",
     balance: w.balance,
     pendingBalance: w.pendingBalance,
     totalEarned: w.totalEarned,
     totalPaid: w.totalPaid,
-    transactionCount: w.transactions?.length || 0,
+    transactionCount: Array.isArray(w.transactions) ? w.transactions.length : 0,
   }));
 }
 

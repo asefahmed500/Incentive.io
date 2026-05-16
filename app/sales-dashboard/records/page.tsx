@@ -76,7 +76,7 @@ export default function SalesRecords() {
     fetchRecords();
   };
 
-  const getStatusBadge = (status: string) => {
+  const getStatusBadge = (status: string, autoApproved?: boolean) => {
     const variantMap: Record<string, "default" | "secondary" | "destructive"> = {
       Draft: "secondary",
       Pending_Manager: "secondary",
@@ -86,7 +86,14 @@ export default function SalesRecords() {
       Rejected: "destructive",
     };
     const variant = variantMap[status] || "secondary";
-    return <Badge variant={variant}>{status.replace(/_/g, " ")}</Badge>;
+    return (
+      <div className="flex gap-1">
+        <Badge variant={variant}>{status.replace(/_/g, " ")}</Badge>
+        {autoApproved && (
+          <Badge variant="outline" className="text-xs">Auto-Approved</Badge>
+        )}
+      </div>
+    );
   };
 
   const exportToCSV = () => {
@@ -203,7 +210,7 @@ export default function SalesRecords() {
                     <TableCell className="font-medium">{record.companyName}</TableCell>
                     <TableCell>{record.productCount} products</TableCell>
                     <TableCell>৳{record.totalAmount?.toLocaleString() || 0}</TableCell>
-                    <TableCell>{getStatusBadge(record.status)}</TableCell>
+                    <TableCell>{getStatusBadge(record.status, record.autoApproved)}</TableCell>
                     <TableCell>৳{record.commission || 0}</TableCell>
                     <TableCell>
                       <Button variant="ghost" size="sm" onClick={() => router.push(`/sales-dashboard/records/${record.id}`)}>

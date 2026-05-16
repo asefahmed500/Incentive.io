@@ -4,6 +4,8 @@ import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
 import { notifyTargetAssigned } from "@/lib/actions/notification.actions";
+import { auth } from "@/lib/auth/auth";
+import type { AuthUser } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -18,6 +20,13 @@ const removeTargetSchema = z.object({
 });
 
 export async function getTargets() {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as AuthUser).role;
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) {
+    return { error: "Forbidden: Insufficient permissions" };
+  }
+
   await connectToDatabase();
   const users = await User.find({
     role: { $in: ["salesExecutive", "salesManager"] },
@@ -43,6 +52,13 @@ export async function assignTarget({
   targetAmount: number;
   period?: string;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as AuthUser).role;
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) {
+    return { error: "Forbidden: Insufficient permissions" };
+  }
+
   const parsed = assignTargetSchema.safeParse({ userId, targetAmount, period });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -63,6 +79,13 @@ export async function assignTarget({
 }
 
 export async function removeTarget(userId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as AuthUser).role;
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) {
+    return { error: "Forbidden: Insufficient permissions" };
+  }
+
   const parsed = removeTargetSchema.safeParse({ userId });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };

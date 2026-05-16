@@ -32,7 +32,16 @@ test.describe("Sales Executive - Create Sale", () => {
     await page.screenshot({ path: "tests/e2e/screenshots/se-company-info.png" });
 
     await page.fill('input[name="products[0][productName]"]', "Wireless Mouse");
-    await page.selectOption('select[name="products[0][categoryId]"]', { label: /electronics/i });
+    // Select category by matching "electronics" in the label
+    const categorySelect0 = page.locator('select[name="products[0][categoryId]"]');
+    const options0 = await categorySelect0.locator("option").all();
+    for (const option of options0) {
+      const text = await option.textContent();
+      if (text && /electronics/i.test(text)) {
+        await categorySelect0.selectOption({ label: text });
+        break;
+      }
+    }
     await page.fill('input[name="products[0][unitPrice]"]', "1500");
     await page.fill('input[name="products[0][quantity]"]', "5");
 
@@ -43,7 +52,16 @@ test.describe("Sales Executive - Create Sale", () => {
     await page.waitForTimeout(500);
 
     await page.fill('input[name="products[1][productName]"]', "USB Keyboard");
-    await page.selectOption('select[name="products[1][categoryId]"]', { label: /electronics/i });
+    // Select category by matching "electronics" in the label
+    const categorySelect1 = page.locator('select[name="products[1][categoryId]"]');
+    const options1 = await categorySelect1.locator("option").all();
+    for (const option of options1) {
+      const text = await option.textContent();
+      if (text && /electronics/i.test(text)) {
+        await categorySelect1.selectOption({ label: text });
+        break;
+      }
+    }
     await page.fill('input[name="products[1][unitPrice]"]', "3000");
     await page.fill('input[name="products[1][quantity]"]', "2");
 

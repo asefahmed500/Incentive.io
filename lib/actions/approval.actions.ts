@@ -6,7 +6,7 @@ import { z } from "zod";
 import { connectToDatabase } from "@/lib/mongodb";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { User } from "@/lib/models/User";
-import CommissionRule from "@/lib/models/CommissionRule";
+import { CommissionRule } from "@/lib/models/CommissionRule";
 import { sendNotificationEmail } from "@/lib/email";
 import { notifyManagerApproved, notifyManagerRejected, notifyAccountantProcessed, notifyAccountantRejected, notifyFinanceApproved, notifyFinanceRejected } from "@/lib/actions/notification.actions";
 import { logAudit } from "@/lib/actions/audit.actions";
@@ -660,6 +660,261 @@ export async function finalApproveByFinance(id: string, paidBy: string) {
 interface ProductType {
   unitPrice: number;
   quantity: number;
+}
+
+/**
+ * Process auto-approval for sales records with all products from auto-approve categories
+ * This function bypasses the normal approval workflow and directly approves the sale
+ * with commission calculation and wallet credit
+ */
+export async function processAutoApproval(saleId: string) {
+  await connectToDatabase();
+  const record = await SalesRecord.findById(saleId);
+  if (!record) return { error: "Record not found" };
+
+  if (record.status !== "Draft") {
+    return { error: "Only draft records can be auto-approved" };
+  }
+
+  // Get category IDs from products for tracking
+  const categoryIds = record.products.map((p: { categoryId: mongoose.Types.ObjectId }) => p.categoryId) as mongoose.Types.ObjectId[];
+
+  // Calculate commission using existing logic (use gross amount since no accountant processing)
+  const commission = await calculateCommission({ ...record, netSales: undefined });
+
+  // Prepare the update data (don't save yet - wait for wallet credit to succeed)
+  const updateData = {
+    status: "Approved" as const,
+    approvalStatus: "Approved" as const,
+    accountantStatus: "Approved" as const,
+    financeStatus: "Approved" as const,
+    commission,
+    calculatedCommission: commission,
+    autoApproved: true,
+    autoApprovedAt: new Date(),
+    autoApprovedCategories: categoryIds,
+    approvedAt: new Date(),
+    processedAt: new Date(),
+    finalApprovedAt: new Date(),
+    paymentStatus: "Paid" as const,
+    isPaid: true,
+    paymentDate: new Date(),
+  };
+
+  // Use transaction for wallet credit if possible, fall back for local MongoDB
+  try {
+    const dbSession = await mongoose.startSession();
+    dbSession.startTransaction();
+
+    try {
+      // Update record within transaction
+      await SalesRecord.findByIdAndUpdate(saleId, updateData, { session: dbSession });
+
+      const { _markCommissionPaidWithSession } = await import("@/lib/actions/wallet.actions");
+      const walletResult = await _markCommissionPaidWithSession(
+        record.employeeId?.toString(),
+        commission,
+        saleId,
+        dbSession
+      );
+
+      if (walletResult?.error) {
+        await dbSession.abortTransaction();
+        return { error: walletResult.error };
+      }
+
+      await dbSession.commitTransaction();
+    } catch (error) {
+      await dbSession.abortTransaction();
+      throw error;
+    } finally {
+      dbSession.endSession();
+    }
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : "";
+    if (errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
+      // Fallback for local MongoDB: update record first, then credit wallet
+      try {
+        await SalesRecord.findByIdAndUpdate(saleId, updateData);
+
+        const { _markCommissionPaidWithSession } = await import("@/lib/actions/wallet.actions");
+        const walletResult = await _markCommissionPaidWithSession(
+          record.employeeId?.toString(),
+          commission,
+          saleId
+        );
+
+        if (walletResult?.error) {
+          // Rollback record status since wallet credit failed
+          await SalesRecord.findByIdAndUpdate(saleId, {
+            status: "Draft",
+            approvalStatus: "Pending",
+            accountantStatus: "Pending",
+            financeStatus: "Pending",
+            autoApproved: false,
+            autoApprovedAt: undefined,
+            autoApprovedCategories: undefined,
+            approvedAt: undefined,
+            processedAt: undefined,
+            finalApprovedAt: undefined,
+            paymentStatus: "Pending",
+            isPaid: false,
+            paymentDate: undefined,
+          });
+          return { error: walletResult.error };
+        }
+      } catch (fallbackError) {
+        return { error: "Auto-approval failed: " + (fallbackError instanceof Error ? fallbackError.message : "Unknown error") };
+      }
+    } else {
+      return { error: "Transaction failed: " + errorMessage };
+    }
+  }
+
+  // Audit log the auto-approval
+  await logAudit({
+    userId: record.employeeId?.toString(),
+    userRole: "system",
+    action: "SALE_AUTO_APPROVED",
+    entity: "SalesRecord",
+    entityId: saleId,
+    details: {
+      companyName: record.companyName,
+      commission,
+      autoApprovedCategories: categoryIds.map(id => id.toString()),
+    },
+  });
+
+  // Send email notifications
+  try {
+    const employee = await User.findById(record.employeeId);
+    const manager = record.managerId ? await User.findById(record.managerId) : null;
+    const financeUsers = await User.find({ role: "finance", isActive: true });
+
+    const emailPromises = [];
+
+    if (employee?.email) {
+      emailPromises.push(
+        sendNotificationEmail(
+          employee.email,
+          "Sale Auto-Approved!",
+          `Your sale for <strong>${record.companyName}</strong> has been automatically approved. Commission: ৳${commission.toLocaleString()}`
+        ).catch(err => console.error(`Failed to send email to ${employee.email}:`, err))
+      );
+    }
+
+    if (manager?.email) {
+      emailPromises.push(
+        sendNotificationEmail(
+          manager.email,
+          "Team Sale Auto-Approved",
+          `A team member's sale for <strong>${record.companyName}</strong> has been automatically approved.`
+        ).catch(err => console.error(`Failed to send email to ${manager.email}:`, err))
+      );
+    }
+
+    financeUsers.forEach(user => {
+      if (user.email) {
+        emailPromises.push(
+          sendNotificationEmail(
+            user.email,
+            "Sale Auto-Approved Notification",
+            `A sale for <strong>${record.companyName}</strong> has been automatically approved and paid. Commission: ৳${commission.toLocaleString()}`
+          ).catch(err => console.error(`Failed to send email to ${user.email}:`, err))
+        );
+      }
+    });
+
+    await Promise.allSettled(emailPromises);
+  } catch (emailError) {
+    console.error("Failed to send auto-approval emails:", emailError);
+  }
+
+  // Send in-app notifications
+  try {
+    const { notifySaleAutoApproved, notifyManagerAutoApproved, notifyFinanceAutoApproved } = await import("@/lib/actions/notification.actions");
+
+    await notifySaleAutoApproved(
+      record.employeeId?.toString(),
+      record.companyName,
+      commission
+    );
+
+    if (record.managerId) {
+      await notifyManagerAutoApproved(
+        record.managerId.toString(),
+        record.employeeName,
+        record.companyName
+      );
+    }
+
+    const financeUsers = await User.find({ role: "finance", isActive: true });
+    await Promise.all(
+      financeUsers.map(user =>
+        notifyFinanceAutoApproved(
+          user._id.toString(),
+          record.companyName,
+          commission
+        )
+      )
+    );
+  } catch (notifError) {
+    console.error("Failed to send auto-approval notifications:", notifError);
+  }
+
+  // Send SSE events
+  sseManager.sendToUser(record.employeeId?.toString(), {
+    type: SSE_EVENTS.SALE_APPROVED,
+    payload: {
+      id: saleId,
+      companyName: record.companyName,
+      status: "Approved",
+      commission,
+      autoApproved: true,
+      isPaid: true,
+    },
+  });
+
+  sseManager.sendToUser(record.employeeId?.toString(), {
+    type: SSE_EVENTS.WALLET_UPDATED,
+    payload: {
+      employeeId: record.employeeId?.toString(),
+      amount: commission,
+      salesRecordId: saleId,
+    },
+  });
+
+  if (record.managerId) {
+    sseManager.sendToUser(record.managerId.toString(), {
+      type: SSE_EVENTS.SALE_UPDATED,
+      payload: {
+        id: saleId,
+        companyName: record.companyName,
+        status: "Approved",
+        autoApproved: true,
+      },
+    });
+  }
+
+  sseManager.sendToRole("finance", {
+    type: SSE_EVENTS.DASHBOARD_REFRESH,
+    payload: { reason: "sale_auto_approved" },
+  });
+
+  sseManager.sendToRole("salesManager", {
+    type: SSE_EVENTS.DASHBOARD_REFRESH,
+    payload: { reason: "sale_auto_approved" },
+  });
+
+  // Check and update employee eligibility
+  try {
+    const { checkEligibility } = await import("@/lib/actions/commission.actions");
+    await checkEligibility(record.employeeId?.toString());
+  } catch (eligError) {
+    console.error("Failed to check eligibility after auto-approval:", eligError);
+  }
+
+  return { success: true, commission, autoApproved: true };
 }
 
 interface SalesRecordType {

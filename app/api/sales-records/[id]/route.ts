@@ -1,6 +1,7 @@
 import { getSalesRecord, updateSalesRecord, deleteSalesRecord } from "@/lib/actions/sales.actions";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
+import { getStatusCodeForError } from "@/lib/api-error";
 
 export async function GET(
   request: Request,
@@ -28,11 +29,11 @@ export async function PUT(
   const body = await request.json();
   
   const result = await updateSalesRecord(id, body) as { success?: boolean; error?: string };
-  
+
   if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
   }
-  
+
   return NextResponse.json({ success: true });
 }
 
@@ -45,10 +46,10 @@ export async function DELETE(
   const { id } = await params;
   
   const result = await deleteSalesRecord(id) as { success?: boolean; error?: string };
-  
+
   if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: 400 });
+    return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
   }
-  
+
   return NextResponse.json({ success: true });
 }

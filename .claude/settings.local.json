@@ -24,7 +24,11 @@
       "Bash(agent-browser open *)",
       "Bash(agent-browser screenshot *)",
       "Bash(agent-browser close *)",
-      "Bash(npx tsc *)"
+      "Bash(npx tsc *)",
+      "Bash(grep -E \"\\(lib|app\\)$\")",
+      "Bash(npx agent-browser@latest install)",
+      "Bash(npx playwright *)",
+      "Bash(mongosh --quiet mongodb://localhost:27017/incentiveio --eval 'db.serverStatus\\(\\).ok')"
     ]
   }
 }

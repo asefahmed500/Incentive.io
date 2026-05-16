@@ -5,6 +5,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Table,
   TableBody,
@@ -14,7 +16,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Plus, Search, Pencil, Trash2 } from "lucide-react";
-import { getCategories, createCategory, updateCategory, deleteCategory } from "@/lib/actions/category.actions";
+import { getCategories, createCategory, updateCategory, deleteCategory, toggleCategoryAutoApprove } from "@/lib/actions/category.actions";
 import {
   Dialog,
   DialogContent,
@@ -26,10 +28,12 @@ import {
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
+import { useNotifications } from "@/hooks/useNotifications";
 
 const categorySchema = z.object({
   name: z.string().min(1, "Name required"),
   description: z.string().optional(),
+  autoApprove: z.boolean().optional(),
 });
 
 export default function AdminCategories() {
@@ -107,19 +111,20 @@ export default function AdminCategories() {
               <TableRow>
                 <TableHead>Name</TableHead>
                 <TableHead>Description</TableHead>
+                <TableHead>Auto-Approve</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center">
+                  <TableCell colSpan={4} className="text-center">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : categories.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={3} className="text-center">
+                  <TableCell colSpan={4} className="text-center">
                     No categories found
                   </TableCell>
                 </TableRow>
@@ -133,6 +138,28 @@ export default function AdminCategories() {
                     <TableCell className="font-medium">{cat.name}</TableCell>
                     <TableCell>{cat.description || "—"}</TableCell>
                     <TableCell>
+                      {cat.autoApprove ? (
+                        <Badge variant="default">Enabled</Badge>
+                      ) : (
+                        <Badge variant="secondary">Disabled</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={async () => {
+                          const result = await toggleCategoryAutoApprove({ id: cat.id, autoApprove: !cat.autoApprove });
+                          if (result.error) {
+                            alert(result.error);
+                          } else {
+                            fetchCategories();
+                          }
+                        }}
+                        title={cat.autoApprove ? "Disable auto-approve" : "Enable auto-approve"}
+                      >
+                        {cat.autoApprove ? "Disable" : "Enable"} Auto-Approve
+                      </Button>
                       <Button
                         variant="ghost"
                         size="sm"
@@ -170,21 +197,47 @@ function CategoryForm({
   onSuccess: () => void;
 }) {
   const [isPending, startTransition] = useTransition();
-  const { register, handleSubmit, formState: { errors } } = useForm({
+  const { showSuccess, showError } = useNotifications();
+  const { register, handleSubmit, formState: { errors }, watch } = useForm({
     resolver: zodResolver(categorySchema),
     defaultValues: {
       name: editCategory?.name || "",
       description: editCategory?.description || "",
+      autoApprove: editCategory?.autoApprove || false,
     },
   });
 
   const onSubmit = async (data: any) => {
-    if (editCategory) {
-      await updateCategory({ id: editCategory.id, name: data.name, description: data.description });
-    } else {
-      await createCategory({ name: data.name, description: data.description });
-    }
-    onSuccess();
+    startTransition(async () => {
+      try {
+        if (editCategory) {
+          const result = await updateCategory({
+            id: editCategory.id,
+            name: data.name,
+            description: data.description,
+            autoApprove: data.autoApprove,
+          }) as { success?: boolean; error?: string } | undefined;
+          if (result?.error) {
+            showError(result.error);
+            return;
+          }
+        } else {
+          const result = await createCategory({
+            name: data.name,
+            description: data.description,
+            autoApprove: data.autoApprove,
+          }) as { success?: boolean; error?: string } | undefined;
+          if (result?.error) {
+            showError(result.error);
+            return;
+          }
+        }
+        showSuccess(editCategory ? "Category updated" : "Category created");
+        onSuccess();
+      } catch (err) {
+        showError(err instanceof Error ? err.message : "An error occurred");
+      }
+    });
   };
 
   return (
@@ -200,6 +253,23 @@ function CategoryForm({
         <Label htmlFor="description">Description (optional)</Label>
         <Input id="description" {...register("description")} />
       </div>
+      <div className="flex items-center space-x-2">
+        <Checkbox
+          id="autoApprove"
+          {...register("autoApprove")}
+          checked={watch("autoApprove")}
+          onCheckedChange={(checked) => {
+            // Manually update the form value when checkbox changes
+            (register("autoApprove") as any).onChange({ target: { value: checked, name: "autoApprove" } });
+          }}
+        />
+        <Label htmlFor="autoApprove" className="cursor-pointer">
+          Enable Auto-Approve for this category
+        </Label>
+      </div>
+      <p className="text-sm text-muted-foreground">
+        Sales with all products from auto-approve categories will be automatically approved upon submission, bypassing the normal approval workflow.
+      </p>
       <Button type="submit" disabled={isPending}>
         {isPending ? "Saving..." : editCategory ? "Update Category" : "Create Category"}
       </Button>

@@ -9,10 +9,17 @@ import { z } from "zod";
 export const createCategoryApiSchema = z.object({
   name: z.string().min(1, "Category name is required").max(200, "Category name is too long"),
   description: z.string().max(500, "Description is too long").optional(),
+  autoApprove: z.boolean().optional(),
 });
 
 // Update category API schema
 export const updateCategoryApiSchema = z.object({
   name: z.string().min(1).max(200).optional(),
   description: z.string().max(500).optional(),
+  autoApprove: z.boolean().optional(),
+});
+
+// Toggle auto-approve API schema
+export const toggleAutoApproveApiSchema = z.object({
+  autoApprove: z.boolean(),
 });

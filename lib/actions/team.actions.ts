@@ -26,6 +26,11 @@ const deleteTeamSchema = objectIdSchema;
 export async function getTeams() {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as AuthUser).role;
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) {
+    return { error: "Forbidden: Insufficient permissions" };
+  }
+
   await connectToDatabase();
   const teams = await Team.find().populate("managerId", "name email").lean();
   return teams.map((t) => {

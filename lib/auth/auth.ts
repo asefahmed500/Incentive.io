@@ -1,9 +1,10 @@
 import NextAuth from "next-auth";
-import type { NextAuthConfig, DefaultSession } from "next-auth";
+import { authConfig } from "./auth.config";
 import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { User } from "@/lib/models/User";
 import { connectToDatabase } from "@/lib/mongodb";
+import type { DefaultSession } from "next-auth";
 
 declare module "next-auth" {
   interface Session extends DefaultSession {
@@ -16,18 +17,18 @@ declare module "next-auth" {
   }
 }
 
-const config: NextAuthConfig = {
+export const { handlers, auth, signOut, signIn } = NextAuth({
+  ...authConfig,
   providers: [
     CredentialsProvider({
-      name: "Credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
+      ...authConfig.providers[0],
       async authorize(credentials) {
         if (!credentials?.email || !credentials?.password) return null;
         await connectToDatabase();
-        const user = await User.findOne({ email: (credentials.email as string).toLowerCase(), isActive: true });
+        const user = await User.findOne({ 
+          email: (credentials.email as string).toLowerCase(), 
+          isActive: true 
+        });
         if (!user) return null;
         const isValid = await bcrypt.compare(credentials.password as string, user.password);
         if (!isValid) return null;
@@ -41,66 +42,32 @@ const config: NextAuthConfig = {
       },
     }),
   ],
-  session: { strategy: "jwt", maxAge: 60 * 60 * 24 },
   callbacks: {
+    ...authConfig.callbacks,
     async jwt({ token, user, trigger }) {
+      // Use base jwt logic
       if (user) {
-        // Validate role from user object
         const userRole = (user as { role: string }).role;
-        const validRoles = ["administrator", "admin", "salesManager", "salesExecutive", "accountant", "finance"];
-
-        if (typeof userRole !== "string" || !validRoles.includes(userRole)) {
-          // Reject invalid role
-          throw new Error("Invalid user role");
-        }
-
         token.id = (user as { id: string }).id;
         token.role = userRole;
         token.employeeId = (user as { employeeId?: string }).employeeId;
         token.isActive = true;
       }
+      
+      // Add DB-recheck logic only when NOT in Edge Runtime
+      // This trigger/user check is a safe bet for non-edge cases
       if (trigger === "update" || (!user && token.id)) {
         try {
+          // Note: In Next.js middleware, this might still trigger a Mongoose import
+          // but if we use authConfig in middleware, we avoids this file entirely.
           await connectToDatabase();
           const dbUser = await User.findById(token.id).lean();
-          if (!dbUser || !dbUser.isActive) {
-            token.isActive = false;
-          } else {
-            token.isActive = true;
-          }
+          token.isActive = !!(dbUser && dbUser.isActive);
         } catch {
-          token.isActive = false;
+          // If DB fails (e.g. in Edge), we assume previous state
         }
       }
       return token;
     },
-    async session({ session, token }) {
-      // Validate token structure before proceeding
-      if (!token || !token.id) {
-        // Return session with minimal data - will be caught by middleware
-        return session;
-      }
-
-      if (token && session.user) {
-        session.user.id = token.id as string;
-
-        // Strict type guard for role - reject invalid roles
-        const role = token.role;
-        const validRoles = ["administrator", "admin", "salesManager", "salesExecutive", "accountant", "finance"];
-        if (typeof role === "string" && validRoles.includes(role)) {
-          session.user.role = role;
-        } else {
-          // Set invalid role marker - middleware will redirect
-          session.user.role = "INVALID";
-        }
-
-        session.user.employeeId = token.employeeId as string | undefined;
-        session.user.isActive = token.isActive as boolean;
-      }
-      return session;
-    },
-  },
-  pages: { signIn: "/login" },
-};
-
-export const { handlers, auth, signOut } = NextAuth(config);
+  }
+});

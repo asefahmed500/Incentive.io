@@ -41,6 +41,9 @@ export interface ISalesRecord extends Document {
   isPaid: boolean;
   paymentStatus: "Pending" | "Paid";
   paymentDate?: Date;
+  autoApproved: boolean;
+  autoApprovedAt?: Date;
+  autoApprovedCategories?: mongoose.Types.ObjectId[];
   deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -94,6 +97,9 @@ const SalesRecordSchema = new Schema<ISalesRecord>(
     isPaid: { type: Boolean, default: false },
     paymentStatus: { type: String, enum: ["Pending", "Paid"], default: "Pending" },
     paymentDate: { type: Date },
+    autoApproved: { type: Boolean, default: false },
+    autoApprovedAt: { type: Date },
+    autoApprovedCategories: [{ type: Schema.Types.ObjectId, ref: "Category" }],
     deletedAt: { type: Date },
   },
   { timestamps: true }
@@ -114,6 +120,8 @@ SalesRecordSchema.index({ employeeId: 1, financeStatus: 1 });
 SalesRecordSchema.index({ approvalStatus: 1, accountantStatus: 1, financeStatus: 1 });
 SalesRecordSchema.index({ createdAt: -1, status: 1 });
 SalesRecordSchema.index({ paymentStatus: 1, isPaid: 1 });
+SalesRecordSchema.index({ autoApproved: 1 });
+SalesRecordSchema.index({ autoApproved: 1, autoApprovedAt: -1 });
 
 SalesRecordSchema.pre("find", function () {
   this.where({ deletedAt: null });

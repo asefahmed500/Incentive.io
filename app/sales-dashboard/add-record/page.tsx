@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 
 function Checkbox({ 
   checked, 
@@ -64,6 +65,7 @@ function AddSalesRecord() {
     { productName: "", categoryId: "", unitPrice: "", quantity: "1", originalPrice: "", dealNotes: "" }
   ]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [autoApproveCategories, setAutoApproveCategories] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -73,6 +75,12 @@ function AddSalesRecord() {
     const loadCategories = async () => {
       const data = await getCategories();
       setCategories(data);
+
+      // Identify auto-approve categories
+      const autoApproveIds = new Set(
+        data.filter((cat) => cat.autoApprove && cat.id).map((cat) => cat.id as string)
+      );
+      setAutoApproveCategories(autoApproveIds);
     };
     loadCategories();
   }, []);
@@ -176,6 +184,10 @@ function AddSalesRecord() {
 
   const removeFile = (index: number) => {
     setUploadedFiles(prev => prev.filter((_, i) => i !== index));
+  };
+
+  const allProductsAutoApprove = () => {
+    return products.length > 0 && products.every(p => p.categoryId && autoApproveCategories.has(p.categoryId));
   };
 
   const buildRecordData = () => ({
@@ -342,7 +354,12 @@ function AddSalesRecord() {
                     <SelectContent>
                       {categories.map((cat) => (
                         <SelectItem key={cat.id} value={cat.id}>
-                          {cat.name}
+                          <div className="flex items-center gap-2">
+                            {cat.name}
+                            {cat.autoApprove && (
+                              <Badge variant="secondary" className="text-xs">Auto-Approve</Badge>
+                            )}
+                          </div>
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -453,6 +470,14 @@ function AddSalesRecord() {
 
       <Card>
         <CardContent className="p-6">
+          {allProductsAutoApprove() && (
+            <div className="mb-4 p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+              <p className="text-sm text-green-800 dark:text-green-200 font-medium">
+                <span className="inline-block mr-2">✓</span>
+                Auto-Approve: All products are from auto-approve categories. This sale will be automatically approved upon submission.
+              </p>
+            </div>
+          )}
           <div className="flex items-center justify-between">
             <div>
               <p className="text-lg font-medium">Total Amount</p>
@@ -465,7 +490,7 @@ function AddSalesRecord() {
               </Button>
               <Button onClick={handleSubmitForApproval} disabled={!isValid || isPending}>
                 <Send className="mr-2 h-4 w-4" />
-                Submit for Approval
+                {allProductsAutoApprove() ? "Submit (Auto-Approve)" : "Submit for Approval"}
               </Button>
             </div>
           </div>

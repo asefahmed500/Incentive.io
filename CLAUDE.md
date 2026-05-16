@@ -88,6 +88,12 @@ if (userRole === "salesExecutive") {
 }
 ```
 
+**Auth Configuration Split** (Edge Runtime compatibility):
+- `lib/auth/auth.config.ts` — Pure NextAuth config (providers, callbacks, pages), no DB logic
+- `lib/auth/auth.ts` — Full NextAuth instance with database recheck for session updates
+- Middleware uses `authConfig` directly to avoid Mongoose imports (Edge Runtime incompatible)
+- Server components/actions use `auth()` from `lib/auth/auth.ts` for full auth with DB recheck
+
 **Server Action Role Filtering:** Data queries must filter by role:
 ```typescript
 // In lib/actions/commission.actions.ts
@@ -102,12 +108,26 @@ if (userRole === "salesExecutive") {
 
 ### Approval Workflow
 
+**Standard Workflow:**
 ```
 Draft → Pending_Manager → Pending_Accountant → Pending_Finance → Approved
    (Manager)       (Accountant)        (Finance)
 ```
 
+**Auto-Approve Workflow:**
+When ALL products in a sale are from auto-approve categories, the sale bypasses all approval stages:
+```
+Draft → Approved (immediate commission calculation + wallet credit)
+```
+
 Rejection returns record to `Draft` with `rejectionReason` and `rejectedBy` field.
+
+**Auto-Approve Feature:**
+- Admins can mark categories as `autoApprove: true` via `/admin/categories`
+- Sales creation form shows "Auto-Approve" badge on eligible categories
+- Sales with all products from auto-approve categories auto-approve on submit
+- Auto-approved sales trigger notifications to employee, manager, and finance
+- Commission rules still apply (achievement % → commission rate)
 
 ### Notification System
 
@@ -181,6 +201,8 @@ Rejection returns record to `Draft` with `rejectionReason` and `rejectedBy` fiel
 - Indexes on common query patterns (see Performance section below)
 - References between models (User, Team, Product, Category, etc.)
 - **Notification model** (`lib/models/Notification.ts`): Stores in-app notifications with recipientRole filtering and SSE integration
+- **Soft delete consistency**: All models except AuditLog implement soft delete (AuditLog by design - audit logs should never be deleted)
+- **Validation**: Models with numeric fields use `min: 0` to prevent negative values (Product price/stock, Wallet balances, CommissionRule rates)
 
 **Database Connection** (`lib/mongodb.ts`):
 - Singleton pattern with global cache
@@ -251,6 +273,19 @@ export async function POST(request: Request) {
 }
 ```
 
+**Duplicate Key Error Pattern** (for unique constraint violations):
+```typescript
+try {
+  await Model.create({ email: "test@example.com" });
+} catch (createError: unknown) {
+  // Handle MongoDB duplicate key error (code 11000)
+  if (createError && typeof createError === "object" && "code" in createError && createError.code === 11000) {
+    return NextResponse.json({ error: "Email already exists" }, { status: 409 });
+  }
+  throw createError;
+}
+```
+
 **Error Type Handling Pattern** (for lib/ files):
 ```typescript
 // Avoid `error: any` — use proper type guards
@@ -274,11 +309,14 @@ catch (error) {
 **Database Indexes** (added during comprehensive audit):
 - `User`: `{ isEligible: 1 }`, `{ isEligible: 1, targetAmount: 1 }`, `{ role: 1, isActive: 1 }`, `{ managerId: 1, isActive: 1 }`
 - `SalesRecord`: `{ employeeId: 1, createdAt: -1 }`, `{ createdAt: -1, status: 1 }`, `{ paymentStatus: 1, isPaid: 1 }`, `{ companyEmail: 1 }`
-- `Wallet`: `{ balance: 1 }`, `{ employeeId: 1, balance: 1 }`, `{ "transactions.createdAt": -1 }` (note: employeeId has unique index)
+- `Wallet`: `{ balance: 1 }`, `{ employeeId: 1, balance: 1 }`, `{ "transactions.createdAt": -1 }`, `{ deletedAt: 1 }`
 - `Team`: `{ managerId: 1 }`, `{ members: 1 }`, `{ deletedAt: 1 }`
 - `Product`: `{ deletedAt: 1 }`, `{ categoryId: 1 }`
+- `Category`: `{ deletedAt: 1 }`, `{ autoApprove: 1 }` (for auto-approve feature)
 - `Notification`: `{ userId: 1, createdAt: -1 }`, `{ userId: 1, isRead: 1 }`, `{ recipientRole: 1, createdAt: -1 }`
 - `CommissionRule`: `{ targetPercentageTo: 1, targetPercentageFrom: -1 }` for range queries
+- `AuditLog`: `{ userId: 1, createdAt: -1 }`, `{ action: 1, createdAt: -1 }`, `{ entity: 1, createdAt: -1 }`, `{ createdAt: -1 }`
+- `SystemSettings`: `{ key: 1 }` (unique), `{ category: 1 }`, `{ deletedAt: 1 }`
 
 **Atomic Transactions:**
 - Commission approval + wallet credit wrapped in single MongoDB session
@@ -329,29 +367,34 @@ useEffect(() => {
 13. **ObjectId serialization:** MongoDB `ObjectId` fields (like `_id`, `categoryId`) cannot be passed directly to client components. Always convert to strings using `.toString()` before returning from server actions. See `getSalesRecord()` for the pattern.
 14. **Mongoose duplicate indexes:** Never define indexes both in schema (`unique: true`) AND via `schema.index()`. Choose one method to avoid duplicate index warnings.
 15. **Client vs Server auth:** Use `signIn` from `"next-auth/react"` in client components only. For server-side operations, use `auth()` from `@/lib/auth/auth`. Server actions cannot call client-side `signIn`.
-16. **Recharts null-safety:** All tooltip `formatter` callbacks must handle undefined values: `formatter={(value) => (value || 0).toLocaleString()}`. Pie chart `label` callbacks also need `percent || 0`.
-17. **Monetary calculations:** Always use functions from `lib/utils/money.ts` for calculations involving money. Avoid direct arithmetic on floats to prevent precision errors. Use `calculatePercentage()`, `calculateProductTotal()`, `roundMoney()`.
-18. **ObjectId type consistency:** Use `toObjectId()` from `lib/mongodb` when converting string IDs to ObjectId for database queries. This ensures consistent type handling.
-19. **Atomic transactions:** The commission approval + wallet credit flow uses MongoDB transactions (`lib/actions/approval.actions.ts:finalApproveByFinance`). Both operations succeed or both fail together.
-20. **Rate limiting:** Public endpoints (`/api/register`, `/api/auth/[...nextauth]`) have rate limiting. Use `rateLimit` from `lib/rate-limit.ts` for new public endpoints.
-21. **SSE retry logic:** The `useSSE` hook's retry mechanism inlines connection logic to avoid React hooks dependency violations. Do not extract the retry function to a separate callback.
-22. **Server action return types:** Server actions may return data arrays, error objects, or undefined. Always check for `error` property first: `if ("error" in data) return error`. Use `Array.isArray()` before mapping. Use optional chaining `result?.error` when casting.
-23. **API route null safety:** When casting server action results, always handle undefined: `const result = await action() as { success?: boolean; error?: string } | undefined`. Check `result?.error` not `result.error`.
-24. **Local MongoDB transactions:** Local MongoDB (localhost/127.0.0.1) doesn't support transactions. Code automatically detects this and falls back to non-transactional operations. Connection string uses `retryWrites=false` automatically.
-25. **Test ObjectId format:** Must be exactly 24 hex characters (e.g., `new mongoose.Types.ObjectId().toString()` or valid 24-char hex string). 25-character strings will fail validation.
-26. **Commission rules in tests:** Tests require commission rules to exist. `tests/setup.ts` automatically creates them if missing. Users need `targetAmount` set for commission calculation (see `tests/helpers/test-actions.ts`).
-27. **Health check pattern:** Use `checkDatabaseConnection()` from `lib/mongodb` for health endpoints. Returns `{ connected, message, latency }` and triggers connection if needed.
-28. **API-level validation required:** All new API endpoints must have validation schemas in `lib/validations/*.ts` (defense-in-depth). Never trust client input at the API boundary alone.
-29. **Error type safety:** In lib/ files, avoid `catch (error: any)` — use `error instanceof Error ? error.message : "Unknown error"` pattern for type safety.
+16. **Edge Runtime auth:** Middleware uses `authConfig` from `lib/auth/auth.config.ts` (not full `auth()`) because Edge Runtime doesn't support Mongoose. Only use `auth()` in Node.js contexts (server components, API routes, server actions).
+17. **Recharts null-safety:** All tooltip `formatter` callbacks must handle undefined values: `formatter={(value) => (value || 0).toLocaleString()}`. Pie chart `label` callbacks also need `percent || 0`.
+18. **Monetary calculations:** Always use functions from `lib/utils/money.ts` for calculations involving money. Avoid direct arithmetic on floats to prevent precision errors. Use `calculatePercentage()`, `calculateProductTotal()`, `roundMoney()`.
+19. **ObjectId type consistency:** Use `toObjectId()` from `lib/mongodb` when converting string IDs to ObjectId for database queries. This ensures consistent type handling.
+20. **Atomic transactions:** The commission approval + wallet credit flow uses MongoDB transactions (`lib/actions/approval.actions.ts:finalApproveByFinance`). Both operations succeed or both fail together.
+21. **Rate limiting:** Public endpoints (`/api/register`, `/api/auth/[...nextauth]`) have rate limiting. Use `rateLimit` from `lib/rate-limit.ts` for new public endpoints.
+22. **SSE retry logic:** The `useSSE` hook's retry mechanism inlines connection logic to avoid React hooks dependency violations. Do not extract the retry function to a separate callback.
+23. **Server action return types:** Server actions may return data arrays, error objects, or undefined. Always check for `error` property first: `if ("error" in data) return error`. Use `Array.isArray()` before mapping. Use optional chaining `result?.error` when casting.
+24. **API route null safety:** When casting server action results, always handle undefined: `const result = await action() as { success?: boolean; error?: string } | undefined`. Check `result?.error` not `result.error`.
+25. **Local MongoDB transactions:** Local MongoDB (localhost/127.0.0.1) doesn't support transactions. Code automatically detects this and falls back to non-transactional operations. Connection string uses `retryWrites=false` automatically.
+26. **Test ObjectId format:** Must be exactly 24 hex characters (e.g., `new mongoose.Types.ObjectId().toString()` or valid 24-char hex string). 25-character strings will fail validation.
+27. **Commission rules in tests:** Tests require commission rules to exist. `tests/setup.ts` automatically creates them if missing. Users need `targetAmount` set for commission calculation (see `tests/helpers/test-actions.ts`).
+28. **Auto-approve eligibility:** ALL products must be from auto-approve categories. Mixed categories (auto-approve + regular) follow standard workflow.
+29. **CommissionRule validation:** Pre-save hook validates `targetPercentageFrom <= targetPercentageTo` and `0 <= commissionRate <= 100`.
+28. **Health check pattern:** Use `checkDatabaseConnection()` from `lib/mongodb` for health endpoints. Returns `{ connected, message, latency }` and triggers connection if needed.
+29. **API-level validation required:** All new API endpoints must have validation schemas in `lib/validations/*.ts` (defense-in-depth). Never trust client input at the API boundary alone.
+30. **Error type safety:** In lib/ files, avoid `catch (error: any)` — use `error instanceof Error ? error.message : "Unknown error"` pattern for type safety.
+31. **NoSQL injection prevention:** When creating validation schemas for string query parameters, add refinement to reject strings starting with `$` to prevent MongoDB operator injection. Pattern: `z.string().refine(val => !val.startsWith('$'), { message: "Invalid characters" })`
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `lib/actions/sales.actions.ts` | Sales CRUD with ownership checks, ObjectId serialization handling |
-| `lib/actions/approval.actions.ts` | Multi-stage approve/reject/process with atomic transactions + local MongoDB fallback |
+| `lib/actions/sales.actions.ts` | Sales CRUD with ownership checks, ObjectId serialization, auto-approve eligibility check |
+| `lib/actions/approval.actions.ts` | Multi-stage approve/reject/process with atomic transactions + auto-approve processing |
+| `lib/actions/category.actions.ts` | Category CRUD with auto-approve toggle functionality |
 | `lib/actions/wallet.actions.ts` | Atomic credit/debit operations with MongoDB sessions + local MongoDB fallback |
-| `lib/actions/notification.actions.ts` | Notification creation, retrieval, role-based link validation |
+| `lib/actions/notification.actions.ts` | Notification creation, retrieval, role-based link validation + auto-approve notifications |
 | `lib/actions/auth.actions.ts` | Logout action (use for all signout flows) |
 | `lib/utils/money.ts` | Precise monetary calculations (use for all currency operations) |
 | `lib/rate-limit.ts` | In-memory rate limiting for public API endpoints |
@@ -359,8 +402,9 @@ useEffect(() => {
 | `lib/validations/*.ts` | API-level Zod validation schemas (14 files: approval, audit, category, commission, commissions-api, common, notification, product, sales, settings, target, team, user, wallet) |
 | `lib/sse.ts` | Server-Sent Events manager for real-time updates |
 | `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()`, `requireAdminOrAbove()`, `requireFinanceOrAbove()` helpers |
-| `middleware.ts` | Route-level RBAC enforcement with jose JWT verification |
-| `lib/auth/auth.ts` | NextAuth v5 config with JWT, exports `signOut` |
+| `middleware.ts` | Route-level RBAC enforcement using `authConfig` (Edge Runtime compatible) |
+| `lib/auth/auth.config.ts` | NextAuth v5 config (providers, callbacks, pages) — Edge Runtime safe |
+| `lib/auth/auth.ts` | NextAuth v5 instance with DB recheck, exports `auth`, `signIn`, `signOut` |
 | `lib/mongodb.ts` | Database connection singleton, exports `toObjectId()` and `checkDatabaseConnection()` helpers |
 | `lib/models/Notification.ts` | Notification model with SSE integration and soft delete |
 | `app/login/login-form.tsx` | Client-side login form using `signIn` from next-auth/react |
@@ -404,10 +448,12 @@ The application is named **Incentive.io** (not "incentiveio" or "IncentiveIO").
 
 - **TypeScript:** Zero type errors — comprehensive types in `types/index.ts`
 - **ESLint:** Zero critical errors — all `as any` usages replaced with proper types
-- **Tests:** Integration, E2E, performance, and security test suites available — 35/35 passing
-- **Security:** JWT verification with jose library, atomic wallet transactions, rate limiting, npm vulnerabilities patched
-- **Performance:** Optimized database indexes, aggregation pipelines, precise monetary calculations
-- **Reliability:** Error boundaries on all dashboards, standardized error handling, atomic transactions with local MongoDB fallback
+- **Tests:** Integration, E2E, performance, and security test suites available — all passing
+- **Security:** JWT verification with jose library, atomic wallet transactions, rate limiting, npm vulnerabilities patched, NoSQL injection prevention
+- **Performance:** Optimized database indexes (AuditLog, SystemSettings added), aggregation pipelines, precise monetary calculations
+- **Reliability:** Error boundaries on all dashboards, standardized error handling, atomic transactions with rollback logic
+- **Data Integrity:** All models have proper validation (min: 0 on numeric fields), consistent soft delete implementation, pre-save hooks for business logic
+- **Recent Fixes:** NoSQL injection vulnerabilities patched, registration race condition fixed, auto-approval transaction rollback implemented, unsafe array operations guarded with Array.isArray checks
 
 ## Type System
 
@@ -544,6 +590,7 @@ Run manually with `act` or automatically on push to main.
 - Middleware cross-role blocking — Each role explicitly blocked from other role routes (no blanket API bypass)
 - Server action role filtering — Data queries filter by role (`salesExecutive` sees own data only, `salesManager` sees team data, others see all)
 - JWT verification with jose library in middleware.ts
+- Edge Runtime compatible auth — Middleware uses `authConfig` (not full `auth()`) to avoid Mongoose imports in Edge Runtime
 
 **Local MongoDB Transaction Fallback Pattern:**
 ```typescript
@@ -566,6 +613,23 @@ try {
   }
 } finally {
   dbSession?.endSession();
+}
+```
+
+**Transaction Rollback Pattern** (for operations that must succeed together):
+```typescript
+// For local MongoDB fallback, if wallet credit fails after record update:
+try {
+  await SalesRecord.findByIdAndUpdate(saleId, updateData);
+  const walletResult = await creditWallet(...);
+  
+  if (walletResult?.error) {
+    // Rollback record status since wallet credit failed
+    await SalesRecord.findByIdAndUpdate(saleId, { status: "Draft" });
+    return { error: walletResult.error };
+  }
+} catch (error) {
+  // Handle error and cleanup
 }
 ```
 
@@ -595,7 +659,11 @@ try {
 - **Precise calculations**: Integer-based monetary math prevents floating point errors
 - **API error handling**: All API routes have try-catch blocks with proper error responses
 - **Path traversal protection**: File upload/delete endpoints validate for both Unix (`/`) and Windows (`\\`) path separators
-- **NoSQL injection prevention**: Regex patterns for search escape special characters with `.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")`
+- **NoSQL injection prevention**: 
+  - Regex patterns for search escape special characters with `.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")`
+  - String validation schemas reject MongoDB operators starting with `$` to prevent operator injection
+- **Duplicate key handling**: Registration properly handles MongoDB duplicate key errors (code 11000) with 409 Conflict status
+- **Transaction rollback**: Auto-approval and wallet credit operations include rollback logic for data integrity
 
 ## Runtime Validation Best Practices
 
