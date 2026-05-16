@@ -710,3 +710,78 @@ EMAIL_FROM="Incentive.io <your-email@gmail.com>"
 **Note:** For local development, `retryWrites=false` is automatically added to localhost/127.0.0.1 connections in `lib/mongodb.ts`.
 
 **MongoDB Compass:** The database is fully compatible with MongoDB Compass for GUI access. Connect to `mongodb://localhost:27017/incentiveio` to view collections, run queries, and monitor data in real-time. All collections use soft delete (`deletedAt` field), so filter `{ deletedAt: null }` to see active records.
+
+## Deployment
+
+### Vercel Configuration
+
+**Production URLs:**
+- Production: https://incentio.vercel.app
+- Repository: https://github.com/asefahmed500/Incentive.io.git
+
+**vercel.json** (required for Mongoose compatibility):
+```json
+{
+  "buildCommand": "npm run build:webpack",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "env": {
+    "NEXT_PRIVATE_BUILD_WORKER": "webpack"
+  }
+}
+```
+
+**Critical:** Always use `npm run build:webpack` for Vercel deployment — Mongoose native bindings fail with Turbopack.
+
+### Production Environment Variables
+
+Required environment variables in Vercel:
+
+```
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/incentiveio?retryWrites=true&w=majority
+NEXTAUTH_SECRET=<32+ character secret>
+NEXTAUTH_URL=https://incentio.vercel.app
+EMAIL_HOST=smtp.gmail.com
+EMAIL_PORT=587
+EMAIL_SECURE=false
+EMAIL_USER=your-email@gmail.com
+EMAIL_PASS=your-app-password
+EMAIL_FROM="Incentive.io <your-email@gmail.com>"
+```
+
+**MongoDB Atlas Setup:**
+1. Create a free cluster at https://www.mongodb.com/cloud/atlas
+2. Create a database user with read/write permissions
+3. Whitelist 0.0.0.0/0 (all IPs) for Vercel serverless functions
+4. Copy the connection string and add to Vercel environment variables
+5. Replace `<username>` and `<password>` with your actual credentials
+
+**Note:** Production MongoDB uses `retryWrites=true` (Atlas supports this), unlike local development which uses `retryWrites=false`.
+
+### Deployment Commands
+
+```bash
+# Deploy to production
+vercel --prod
+
+# Set environment variables via CLI
+vercel env add MONGODB_URI production
+vercel env add NEXTAUTH_SECRET production
+# ... add other variables
+
+# Deploy to preview
+vercel
+```
+
+### Deployment Checklist
+
+Before deploying to production:
+- [ ] Run `npm run typecheck` — zero TypeScript errors
+- [ ] Run `npm run lint` — zero critical errors
+- [ ] Run `npm run build:webpack` — successful build
+- [ ] Run `npm test` — all tests pass
+- [ ] Run `npm run test:e2e` — all E2E tests pass
+- [ ] MongoDB Atlas cluster created and configured
+- [ ] All environment variables added to Vercel
+- [ ] Email SMTP credentials configured
+- [ ] NEXTAUTH_SECRET is ≥32 characters
