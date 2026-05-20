@@ -34,6 +34,10 @@ agent-browser fill 'textarea[name="rejectionReason"]' 'Test rejection: Incomplet
 sleep 1
 agent-browser screenshot --output tests/screenshots/sm-reject-filled.png)
 
+
+
+
+
 # Confirm rejection
 echo "Confirming rejection..."
 agent-browser click 'button:has-text("Confirm")'

@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,7 +60,21 @@ export function RegisterForm() {
           return;
         }
 
-        router.push("/login?registered=true");
+        // Automatically sign in the user after successful registration
+        const signInResult = await signIn("credentials", {
+          email: data.email,
+          password: data.password,
+          redirect: false,
+        });
+
+        if (signInResult?.ok) {
+          // Redirect to sales dashboard
+          router.push("/sales-dashboard");
+          router.refresh();
+        } else {
+          // If auto-signin fails, redirect to login
+          router.push("/login?registered=true");
+        }
       } catch (err) {
         setError("An error occurred. Please try again.");
       }
@@ -67,10 +82,12 @@ export function RegisterForm() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-4">
-      <div className="w-full max-w-md space-y-6">
+    <div className="w-full max-w-md mx-4">
+      <div className="backdrop-blur-sm bg-white/80 dark:bg-gray-900/80 rounded-2xl shadow-2xl border border-sky-100 dark:border-sky-900/50 p-8 space-y-6">
         <div className="space-y-2 text-center">
-          <h1 className="text-3xl font-bold">Incentive.io</h1>
+          <h1 className="text-4xl font-bold bg-gradient-to-r from-sky-600 to-blue-600 bg-clip-text text-transparent">
+            Incentive.io
+          </h1>
           <p className="text-muted-foreground">Create your account</p>
         </div>
 
@@ -151,7 +168,7 @@ export function RegisterForm() {
           </div>
           <Button
             type="submit"
-            className="w-full"
+            className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white"
             disabled={isPending || Boolean(password && !allRequirementsMet)}
           >
             {isPending ? (
@@ -167,7 +184,7 @@ export function RegisterForm() {
 
         <div className="text-center text-sm text-muted-foreground">
           Already have an account?{" "}
-          <Link href="/login" className="text-primary hover:underline font-medium">
+          <Link href="/login" className="text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 font-medium hover:underline">
             Sign In
           </Link>
         </div>
