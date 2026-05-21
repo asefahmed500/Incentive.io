@@ -1,115 +1,116 @@
-"use client";
+"use client"
 
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Database, Download, Trash2, Upload, Plus, Loader2, AlertTriangle } from "lucide-react";
+import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Database, Download, Trash2, Upload, Plus, Loader2, AlertTriangle } from "lucide-react"
 
 interface BackupFile {
-  name: string;
-  size: number;
-  createdAt: string;
+  id: string
+  name: string
+  size: number
+  createdAt: string
 }
 
 export default function Backups() {
-  const [backups, setBackups] = useState<BackupFile[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [creating, setCreating] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [restoreConfirm, setRestoreConfirm] = useState<BackupFile | null>(null);
-  const [restoreLoading, setRestoreLoading] = useState(false);
-  const [confirmText, setConfirmText] = useState("");
+  const [backups, setBackups] = useState<BackupFile[]>([])
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [deleting, setDeleting] = useState<string | null>(null)
+  const [restoreConfirm, setRestoreConfirm] = useState<BackupFile | null>(null)
+  const [restoreLoading, setRestoreLoading] = useState(false)
+  const [confirmText, setConfirmText] = useState("")
 
   const fetchBackups = async () => {
-    setLoading(true);
+    setLoading(true)
     try {
-      const res = await fetch("/api/backups");
-      const data = await res.json();
-      setBackups(data.backups || []);
+      const res = await fetch("/api/backups")
+      const data = await res.json()
+      setBackups(data.backups || [])
     } catch (error) {
-      console.error("Failed to fetch backups:", error);
+      console.error("Failed to fetch backups:", error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   useEffect(() => {
-    fetchBackups();
-  }, []);
+    fetchBackups()
+  }, [])
 
   const createBackup = async () => {
-    setCreating(true);
+    setCreating(true)
     try {
-      const res = await fetch("/api/backups", { method: "POST" });
-      const data = await res.json();
+      const res = await fetch("/api/backups", { method: "POST" })
+      const data = await res.json()
       if (data.success) {
-        await fetchBackups();
+        await fetchBackups()
       } else {
-        alert("Failed: " + data.error);
+        alert("Failed: " + data.error)
       }
     } catch (error) {
-      alert("Failed: " + error);
+      alert("Failed: " + error)
     } finally {
-      setCreating(false);
+      setCreating(false)
     }
-  };
+  }
 
-  const deleteBackup = async (filename: string) => {
-    if (!confirm(`Delete ${filename}?`)) return;
-    setDeleting(filename);
+  const deleteBackup = async (backupId: string) => {
+    if (!confirm("Delete this backup?")) return
+    setDeleting(backupId)
     try {
-      const res = await fetch(`/api/backups?filename=${encodeURIComponent(filename)}`, { method: "DELETE" });
-      const data = await res.json();
+      const res = await fetch(`/api/backups?id=${encodeURIComponent(backupId)}`, { method: "DELETE" })
+      const data = await res.json()
       if (data.success) {
-        setBackups(prev => prev.filter(b => b.name !== filename));
+        setBackups((prev) => prev.filter((b) => b.id !== backupId))
       } else {
-        alert("Failed: " + data.error);
+        alert("Failed: " + data.error)
       }
     } catch (error) {
-      alert("Failed: " + error);
+      alert("Failed: " + error)
     } finally {
-      setDeleting(null);
+      setDeleting(null)
     }
-  };
+  }
 
-  const downloadBackup = (filename: string) => {
-    const link = document.createElement("a");
-    link.href = `/api/backups/restore?filename=${encodeURIComponent(filename)}`;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-  };
+  const downloadBackup = (backupId: string, name: string) => {
+    const link = document.createElement("a")
+    link.href = `/api/backups/restore?id=${encodeURIComponent(backupId)}`
+    link.download = name
+    document.body.appendChild(link)
+    link.click()
+    document.body.removeChild(link)
+  }
 
   const restoreBackup = async () => {
-    if (!restoreConfirm || confirmText !== restoreConfirm.name) return;
-    setRestoreLoading(true);
+    if (!restoreConfirm || confirmText !== restoreConfirm.name) return
+    setRestoreLoading(true)
     try {
-      const res = await fetch(`/api/backups/restore?filename=${encodeURIComponent(restoreConfirm.name)}`, { method: "POST" });
-      const data = await res.json();
+      const res = await fetch(`/api/backups/restore?id=${encodeURIComponent(restoreConfirm.id)}`, { method: "POST" })
+      const data = await res.json()
       if (data.success) {
-        alert("Restore completed successfully!");
-        setRestoreConfirm(null);
-        setConfirmText("");
+        alert("Restore completed successfully!")
+        setRestoreConfirm(null)
+        setConfirmText("")
       } else {
-        alert("Failed: " + data.error);
+        alert("Failed: " + data.error)
       }
     } catch (error) {
-      alert("Failed: " + error);
+      alert("Failed: " + error)
     } finally {
-      setRestoreLoading(false);
+      setRestoreLoading(false)
     }
-  };
+  }
 
   const formatSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + " B";
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB";
-    return (bytes / (1024 * 1024)).toFixed(1) + " MB";
-  };
+    if (bytes < 1024) return bytes + " B"
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + " KB"
+    return (bytes / (1024 * 1024)).toFixed(1) + " MB"
+  }
 
   return (
     <div className="flex flex-col gap-6">
@@ -140,7 +141,7 @@ export default function Backups() {
           ) : backups.length === 0 ? (
             <div className="text-center py-8 text-muted-foreground">
               <Database className="h-12 w-12 mx-auto mb-4 opacity-20" />
-              <p>No backups yet. Click "Create Backup" to create your first backup.</p>
+              <p>No backups yet. Click &#8220;Create Backup&#8221; to create your first backup.</p>
             </div>
           ) : (
             <Table>
@@ -154,16 +155,16 @@ export default function Backups() {
               </TableHeader>
               <TableBody>
                 {backups.map((backup) => (
-                  <TableRow key={backup.name}>
+                  <TableRow key={backup.id}>
                     <TableCell className="font-medium">{backup.name}</TableCell>
                     <TableCell>{formatSize(backup.size)}</TableCell>
                     <TableCell>{new Date(backup.createdAt).toLocaleString()}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex justify-end gap-2">
-                        <Button variant="ghost" size="sm" onClick={() => downloadBackup(backup.name)}>
+                        <Button variant="ghost" size="sm" onClick={() => downloadBackup(backup.id, backup.name)}>
                           <Download className="h-4 w-4" />
                         </Button>
-                        <Button variant="ghost" size="sm" onClick={() => deleteBackup(backup.name)} disabled={deleting === backup.name}>
+                        <Button variant="ghost" size="sm" onClick={() => deleteBackup(backup.id)} disabled={deleting === backup.id}>
                           <Trash2 className="h-4 w-4 text-red-500" />
                         </Button>
                         <Button variant="outline" size="sm" onClick={() => setRestoreConfirm(backup)}>
@@ -180,7 +181,7 @@ export default function Backups() {
         </CardContent>
       </Card>
 
-      <Dialog open={!!restoreConfirm} onOpenChange={() => { setRestoreConfirm(null); setConfirmText(""); }}>
+      <Dialog open={!!restoreConfirm} onOpenChange={() => { setRestoreConfirm(null); setConfirmText("") }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -203,7 +204,7 @@ export default function Backups() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setRestoreConfirm(null); setConfirmText(""); }}>
+            <Button variant="outline" onClick={() => { setRestoreConfirm(null); setConfirmText("") }}>
               Cancel
             </Button>
             <Button
@@ -218,5 +219,5 @@ export default function Backups() {
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

@@ -3,6 +3,8 @@
 import { AuditLog } from "@/lib/models/AuditLog";
 import { connectToDatabase } from "@/lib/mongodb";
 import { z } from "zod";
+import { auth } from "@/lib/auth/auth";
+import type { AuthUser } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
@@ -79,6 +81,11 @@ export async function getAuditLogs({
   entity?: string;
   limit?: number;
 }) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as AuthUser).role;
+  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+
   await connectToDatabase();
 
   const query: Record<string, unknown> = {};

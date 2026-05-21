@@ -32,7 +32,7 @@ export async function getSalesTrends(employeeId: string, months: number = 6) {
     const trends = await SalesRecord.aggregate([
       {
         $match: {
-          employeeId: toObjectId(employeeId),
+          employeeId: employeeId,
           createdAt: { $gte: startDate },
           status: "Approved",
           deletedAt: null,
@@ -96,7 +96,7 @@ export async function getCommissionProgress(employeeId: string, months: number =
     const progress = await SalesRecord.aggregate([
       {
         $match: {
-          employeeId: toObjectId(employeeId),
+          employeeId: employeeId,
           createdAt: { $gte: startDate },
           status: "Approved",
           deletedAt: null,
@@ -143,7 +143,7 @@ export async function getTeamSalesTrends(managerId: string, months: number = 6) 
       .select("_id")
       .lean();
 
-    const teamMemberIds = teamMembers.map((m) => m._id);
+    const teamMemberIds = teamMembers.map((m) => m._id.toString());
     const startDate = new Date();
     startDate.setMonth(startDate.getMonth() - months);
     startDate.setHours(0, 0, 0, 0);

@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Users, TrendingUp, DollarSign, Clock, AlertCircle, RefreshCw } from "lucide-react";
@@ -15,10 +15,18 @@ import { useSession } from "next-auth/react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSkeleton } from "@/components/loading/dashboard-skeleton";
 
-const COLORS = ["#10b981", "#f59e0b", "#3b82f6", "#ef4444"];
+// Hoist static data outside component (rendering-hoist-jsx)
+const MONTHLY_TRENDS = [
+  { month: "Jan", sales: 450000, commission: 13500, approvals: 42 },
+  { month: "Feb", sales: 520000, commission: 15600, approvals: 48 },
+  { month: "Mar", sales: 380000, commission: 11400, approvals: 35 },
+  { month: "Apr", sales: 650000, commission: 19500, approvals: 62 },
+  { month: "May", sales: 580000, commission: 17400, approvals: 55 },
+];
 
 export default function SalesManagerDashboard() {
   const { data: session } = useSession();
+  const userId = session?.user?.id;
   const router = useRouter();
   const [stats, setStats] = useState({
     teamSize: 0,
@@ -29,15 +37,21 @@ export default function SalesManagerDashboard() {
     teamEligible: 0,
   });
   const [loading, setLoading] = useState(true);
-  const [teamMembersData, setTeamMembersData] = useState<any[]>([]);
+  const [teamMembersData, setTeamMembersData] = useState<Array<{
+    name: string;
+    sales: number;
+    commission: number;
+    achievement: number;
+  }>>([]);
 
-  const fetchData = async () => {
-    if (!session?.user?.id) return;
+  // Memoize fetchData to prevent unnecessary re-renders (rerender-defer-reads)
+  const fetchData = useCallback(async () => {
+    if (!userId) return;
 
     const [pending, users, sales] = await Promise.all([
       getPendingManagerApprovals(),
       getUsers({ role: "salesExecutive", search: "" }),
-      getSalesRecordsByManagerId(session.user.id),
+      getSalesRecordsByManagerId(userId),
     ]);
 
     const safePending = Array.isArray(pending) ? pending : [];
@@ -48,44 +62,44 @@ export default function SalesManagerDashboard() {
     if (!Array.isArray(sales)) console.error((sales as any)?.error || "Failed to fetch sales");
 
     // Filter users to only those managed by this manager
-    const teamMembers = safeUsers.filter((u: any) => u.managerId === session.user.id);
+    const teamMembers = safeUsers.filter((u: any) => u.managerId === userId);
 
-    // Calculate team commissions and member stats
-    let totalCommissions = 0;
-    let eligibleCount = 0;
-    const memberStats: any[] = [];
+    // Use Promise.all for parallel fetching instead of sequential awaits (async-parallel)
+    const memberResults = await Promise.all(
+      teamMembers.map(async (member) => {
+        const [commissions, elig] = await Promise.all([
+          getCommissionsByEmployee(member.id),
+          checkEligibility(member.id),
+        ]);
 
-    for (const member of teamMembers) {
-      const commissions = await getCommissionsByEmployee(member.id);
-      totalCommissions += commissions.totalCommission || 0;
+        const memberSales = safeSales.filter((s: any) => s.employeeId === member.id);
+        const memberSalesAmount = memberSales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
 
-      const elig = await checkEligibility(member.id);
-      if (elig.eligible) eligibleCount++;
+        return {
+          name: member.name,
+          sales: memberSalesAmount,
+          commission: commissions.totalCommission || 0,
+          achievement: elig.achievement || 0,
+        };
+      })
+    );
 
-      const memberSales = safeSales.filter((s: any) => s.employeeId === member.id);
-      const memberSalesAmount = memberSales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
-
-      memberStats.push({
-        name: member.name,
-        sales: memberSalesAmount,
-        commission: commissions.totalCommission || 0,
-        achievement: elig.achievement || 0,
-      });
-    }
-
+    const totalCommissions = memberResults.reduce((sum, m) => sum + m.commission, 0);
+    const eligibleCount = memberResults.filter(m => m.achievement >= 50).length;
     const teamSalesAmount = safeSales.reduce((sum: number, s: any) => sum + (s.totalAmount || 0), 0);
 
-    setStats({
+    setStats((prev) => ({
+      ...prev,
       teamSize: teamMembers.length,
       pendingApprovals: safePending.length,
       teamSales: safeSales.length,
       teamSalesAmount,
       teamCommissions: totalCommissions,
       teamEligible: eligibleCount,
-    });
-    setTeamMembersData(memberStats);
+    }));
+    setTeamMembersData(memberResults);
     setLoading(false);
-  };
+  }, [userId]);
 
   useEffect(() => {
     fetchData();
@@ -93,23 +107,18 @@ export default function SalesManagerDashboard() {
     // Poll every 30 seconds for real-time updates
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [session?.user?.id]);
+  }, [fetchData]);
+
+  // Memoize chart data to prevent recalculation on every render
+  const salesByStatus = useMemo(
+    () => [
+      { name: "Approved", value: stats.teamSales - stats.pendingApprovals, color: "#10b981" },
+      { name: "Pending", value: stats.pendingApprovals, color: "#f59e0b" },
+    ],
+    [stats.teamSales, stats.pendingApprovals]
+  );
 
   if (loading) return <DashboardSkeleton />;
-
-  // Prepare chart data
-  const salesByStatus = [
-    { name: "Approved", value: stats.teamSales - stats.pendingApprovals, color: "#10b981" },
-    { name: "Pending", value: stats.pendingApprovals, color: "#f59e0b" }
-  ];
-
-  const monthlyTrends = [
-    { month: "Jan", sales: 450000, commission: 13500, approvals: 42 },
-    { month: "Feb", sales: 520000, commission: 15600, approvals: 48 },
-    { month: "Mar", sales: 380000, commission: 11400, approvals: 35 },
-    { month: "Apr", sales: 650000, commission: 19500, approvals: 62 },
-    { month: "May", sales: 580000, commission: 17400, approvals: 55 },
-  ];
 
   return (
     <ErrorBoundary>
@@ -119,7 +128,7 @@ export default function SalesManagerDashboard() {
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground">Welcome back, {session?.user?.name}</p>
           </div>
-          <Button variant="outline" size="sm" onClick={fetchData}>
+          <Button variant="outline" size="sm" onClick={fetchData} aria-label="Refresh dashboard data">
             <RefreshCw className="h-4 w-4 mr-2" />
             Refresh
           </Button>
@@ -201,7 +210,7 @@ export default function SalesManagerDashboard() {
           </CardHeader>
           <CardContent>
             <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={monthlyTrends}>
+              <LineChart data={MONTHLY_TRENDS}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
                 <YAxis />
@@ -239,7 +248,7 @@ export default function SalesManagerDashboard() {
       </Card>
 
       <div className="grid gap-4 md:grid-cols-2">
-        {stats.pendingApprovals > 0 && (
+        {stats.pendingApprovals > 0 ? (
           <Card className="border-yellow-500">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
@@ -254,7 +263,7 @@ export default function SalesManagerDashboard() {
               </Button>
             </CardContent>
           </Card>
-        )}
+        ) : null}
 
         <Card>
           <CardHeader>

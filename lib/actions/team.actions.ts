@@ -79,7 +79,7 @@ export async function updateTeam({ id, name, managerId }: { id: string; name?: s
   }
   await connectToDatabase();
   const updateData: Record<string, unknown> = {};
-  if (parsed.data.name) updateData.name = parsed.data.name;
+  if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.managerId) {
     updateData.managerId = parsed.data.managerId;
     await User.findByIdAndUpdate(parsed.data.managerId, { teamId: id });

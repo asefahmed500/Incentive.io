@@ -71,7 +71,9 @@ function ManagerAddRecord() {
   useEffect(() => {
     const loadCategories = async () => {
       const data = await getCategories();
-      setCategories(data);
+      if (Array.isArray(data)) {
+        setCategories(data);
+      }
     };
     loadCategories();
   }, []);

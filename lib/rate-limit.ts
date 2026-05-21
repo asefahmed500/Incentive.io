@@ -45,6 +45,14 @@ class RateLimitCache {
     return entry;
   }
 
+  delete(key: string): void {
+    this.cache.delete(key);
+  }
+
+  reset(): void {
+    this.cache.clear();
+  }
+
   increment(key: string, ttl: number): RateLimitEntry {
     let entry = this.get(key);
     if (!entry) {
@@ -80,7 +88,10 @@ export function rateLimit(options: RateLimitOptions) {
 
     // Allow manual reset (e.g., for testing)
     reset: (identifier: string) => {
-      cache.get(identifier); // Will trigger cleanup if expired
+      cache.delete(identifier);
+    },
+    resetAll: () => {
+      cache.reset();
     },
   };
 }

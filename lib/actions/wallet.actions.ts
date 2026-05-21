@@ -103,128 +103,145 @@ export async function creditWallet({
 
   const empOid = toObjectId(parsed.data.employeeId);
 
-  // Try transaction first, fall back to non-transactional for local MongoDB
-  try {
-    const dbSession = await mongoose.startSession();
-    dbSession.startTransaction();
-
+  let retries = 5;
+  let delay = 50; // ms
+  while (retries > 0) {
     try {
-      const wallet = await Wallet.findOneAndUpdate(
-        { employeeId: empOid },
-        {
-          $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
-          $setOnInsert: { transactions: [] },
-        },
-        { upsert: true, returnDocument: "after", session: dbSession }
-      );
+      const dbSession = await mongoose.startSession();
+      dbSession.startTransaction();
 
-      if (!wallet) {
+      try {
+        const wallet = await Wallet.findOneAndUpdate(
+          { employeeId: empOid },
+          {
+            $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
+            $setOnInsert: { transactions: [] },
+          },
+          { upsert: true, returnDocument: "after", session: dbSession }
+        );
+
+        if (!wallet) {
+          await dbSession.abortTransaction();
+          return { error: "Failed to create or update wallet" };
+        }
+
+        const balanceAfter = wallet.balance;
+
+        await Wallet.findByIdAndUpdate(
+          wallet._id,
+          {
+            $push: {
+              transactions: {
+                type: "credit",
+                amount: parsed.data.amount,
+                salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
+                description: parsed.data.description,
+                balanceAfter,
+                createdAt: new Date(),
+              },
+            },
+          },
+          { session: dbSession }
+        );
+
+        await dbSession.commitTransaction();
+
+        // Audit logging for wallet credit
+        await logAudit({
+          userId: session.user.id,
+          userEmail: session.user.email || undefined,
+          userRole,
+          action: "wallet.credit",
+          entity: "Wallet",
+          entityId: empOid.toString(),
+          details: {
+            amount: parsed.data.amount,
+            balanceAfter,
+            description: parsed.data.description,
+            salesRecordId: parsed.data.salesRecordId,
+          },
+        });
+
+        return { success: true, newBalance: balanceAfter };
+      } catch (error) {
         await dbSession.abortTransaction();
-        return { error: "Failed to create or update wallet" };
+        throw error;
+      } finally {
+        dbSession.endSession();
       }
-
-      const balanceAfter = wallet.balance + parsed.data.amount;
-
-      await Wallet.findByIdAndUpdate(
-        wallet._id,
-        {
-          $push: {
-            transactions: {
-              type: "credit",
-              amount: parsed.data.amount,
-              salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
-              description: parsed.data.description,
-              balanceAfter,
-              createdAt: new Date(),
-            },
-          },
-        },
-        { session: dbSession }
-      );
-
-      await dbSession.commitTransaction();
-
-      // Audit logging for wallet credit
-      await logAudit({
-        userId: session.user.id,
-        userEmail: session.user.email || undefined,
-        userRole,
-        action: "wallet.credit",
-        entity: "Wallet",
-        entityId: empOid.toString(),
-        details: {
-          amount: parsed.data.amount,
-          balanceAfter,
-          description: parsed.data.description,
-          salesRecordId: parsed.data.salesRecordId,
-        },
-      });
-
-      return { success: true, newBalance: balanceAfter };
     } catch (error) {
-      await dbSession.abortTransaction();
-      throw error;
-    } finally {
-      dbSession.endSession();
-    }
-  } catch (error) {
-    // Check if it's a transaction error (local MongoDB doesn't support transactions)
-    const errorMessage = error instanceof Error ? error.message : "";
-    if (errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
-      // Fall back to non-transactional operation
-      const wallet = await Wallet.findOneAndUpdate(
-        { employeeId: empOid },
-        {
-          $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
-          $setOnInsert: { transactions: [] },
-        },
-        { upsert: true, returnDocument: "after" }
-      );
+      const errorMessage = error instanceof Error ? error.message : "";
+      const isTransient = errorMessage.includes("TransientTransactionError") || 
+                          errorMessage.includes("WriteConflict") || 
+                          errorMessage.includes("Please retry your operation") ||
+                          (error as any).code === 112 ||
+                          (error as any).errorLabels?.includes("TransientTransactionError");
 
-      if (!wallet) {
-        return { error: "Failed to create or update wallet" };
+      if (isTransient && retries > 1) {
+        retries--;
+        await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 50));
+        delay *= 2;
+        continue;
       }
 
-      const balanceAfter = wallet.balance + parsed.data.amount;
+      // Check if it's a transaction error (local MongoDB doesn't support transactions) or if retries were exhausted
+      if (isTransient || errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
+        // Fall back to non-transactional operation
+        const wallet = await Wallet.findOneAndUpdate(
+          { employeeId: empOid },
+          {
+            $inc: { balance: parsed.data.amount, totalEarned: parsed.data.amount, pendingBalance: parsed.data.amount },
+            $setOnInsert: { transactions: [] },
+          },
+          { upsert: true, returnDocument: "after" }
+        );
 
-      await Wallet.findByIdAndUpdate(
-        wallet._id,
-        {
-          $push: {
-            transactions: {
-              type: "credit",
-              amount: parsed.data.amount,
-              salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
-              description: parsed.data.description,
-              balanceAfter,
-              createdAt: new Date(),
+        if (!wallet) {
+          return { error: "Failed to create or update wallet" };
+        }
+
+        const balanceAfter = wallet.balance;
+
+        await Wallet.findByIdAndUpdate(
+          wallet._id,
+          {
+            $push: {
+              transactions: {
+                type: "credit",
+                amount: parsed.data.amount,
+                salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
+                description: parsed.data.description,
+                balanceAfter,
+                createdAt: new Date(),
+              },
             },
           },
-        },
-      );
+        );
 
-      // Audit logging for wallet credit (fallback path)
-      await logAudit({
-        userId: session.user.id,
-        userEmail: session.user.email || undefined,
-        userRole,
-        action: "wallet.credit",
-        entity: "Wallet",
-        entityId: empOid.toString(),
-        details: {
-          amount: parsed.data.amount,
-          balanceAfter,
-          description: parsed.data.description,
-          salesRecordId: parsed.data.salesRecordId,
-          fallback: true,
-        },
-      });
+        // Audit logging for wallet credit (fallback path)
+        await logAudit({
+          userId: session.user.id,
+          userEmail: session.user.email || undefined,
+          userRole,
+          action: "wallet.credit",
+          entity: "Wallet",
+          entityId: empOid.toString(),
+          details: {
+            amount: parsed.data.amount,
+            balanceAfter,
+            description: parsed.data.description,
+            salesRecordId: parsed.data.salesRecordId,
+            fallback: true,
+          },
+        });
 
-      return { success: true, newBalance: balanceAfter };
+        return { success: true, newBalance: balanceAfter };
+      }
+
+      return { error: "Transaction failed: " + errorMessage };
     }
-
-    return { error: "Transaction failed: " + errorMessage };
   }
+  return { error: "Transaction failed: Maximum retries exceeded due to write conflicts" };
 }
 
 export async function debitWallet({
@@ -253,65 +270,139 @@ export async function debitWallet({
 
   const empOid = toObjectId(parsed.data.employeeId);
 
-  const dbSession = await mongoose.startSession();
-  dbSession.startTransaction();
+  let retries = 5;
+  let delay = 50; // ms
+  while (retries > 0) {
+    try {
+      const dbSession = await mongoose.startSession();
+      dbSession.startTransaction();
 
-  try {
-    const wallet = await Wallet.findOneAndUpdate(
-      { employeeId: empOid, balance: { $gte: parsed.data.amount } },
-      { $inc: { balance: -parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount } },
-      { returnDocument: "after", session: dbSession }
-    );
+      try {
+        const wallet = await Wallet.findOneAndUpdate(
+          { employeeId: empOid, balance: { $gte: parsed.data.amount } },
+          { $inc: { balance: -parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount } },
+          { returnDocument: "after", session: dbSession }
+        );
 
-    if (!wallet) {
-      await dbSession.abortTransaction();
-      return { error: "Insufficient balance or wallet not found" };
-    }
+        if (!wallet) {
+          await dbSession.abortTransaction();
+          return { error: "Insufficient balance or wallet not found" };
+        }
 
-    const balanceAfter = wallet.balance;
+        const balanceAfter = wallet.balance;
 
-    await Wallet.findByIdAndUpdate(
-      wallet._id,
-      {
-        $push: {
-          transactions: {
-            type: "debit",
-            amount: parsed.data.amount,
-            salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
-            description: parsed.data.description,
-            balanceAfter,
-            createdAt: new Date(),
+        await Wallet.findByIdAndUpdate(
+          wallet._id,
+          {
+            $push: {
+              transactions: {
+                type: "debit",
+                amount: parsed.data.amount,
+                salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
+                description: parsed.data.description,
+                balanceAfter,
+                createdAt: new Date(),
+              },
+            },
           },
-        },
-      },
-      { session: dbSession }
-    );
+          { session: dbSession }
+        );
 
-    await dbSession.commitTransaction();
+        await dbSession.commitTransaction();
 
-    // Audit logging for wallet debit
-    await logAudit({
-      userId: session.user.id,
-      userEmail: session.user.email || undefined,
-      userRole,
-      action: "wallet.debit",
-      entity: "Wallet",
-      entityId: empOid.toString(),
-      details: {
-        amount: parsed.data.amount,
-        balanceAfter,
-        description: parsed.data.description,
-        salesRecordId: parsed.data.salesRecordId,
-      },
-    });
+        // Audit logging for wallet debit
+        await logAudit({
+          userId: session.user.id,
+          userEmail: session.user.email || undefined,
+          userRole,
+          action: "wallet.debit",
+          entity: "Wallet",
+          entityId: empOid.toString(),
+          details: {
+            amount: parsed.data.amount,
+            balanceAfter,
+            description: parsed.data.description,
+            salesRecordId: parsed.data.salesRecordId,
+          },
+        });
 
-    return { success: true, newBalance: balanceAfter };
-  } catch (error) {
-    await dbSession.abortTransaction();
-    return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
-  } finally {
-    dbSession.endSession();
+        return { success: true, newBalance: balanceAfter };
+      } catch (error) {
+        await dbSession.abortTransaction();
+        throw error;
+      } finally {
+        dbSession.endSession();
+      }
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : "";
+      const isTransient = errorMessage.includes("TransientTransactionError") || 
+                          errorMessage.includes("WriteConflict") || 
+                          errorMessage.includes("Please retry your operation") ||
+                          (error as any).code === 112 ||
+                          (error as any).errorLabels?.includes("TransientTransactionError");
+
+      if (isTransient && retries > 1) {
+        retries--;
+        await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 50));
+        delay *= 2;
+        continue;
+      }
+
+      // Check if it's a transaction error (local MongoDB doesn't support transactions) or if retries were exhausted
+      if (isTransient || errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
+        // Fall back to non-transactional operation
+        const wallet = await Wallet.findOneAndUpdate(
+          { employeeId: empOid, balance: { $gte: parsed.data.amount } },
+          { $inc: { balance: -parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount } },
+          { returnDocument: "after" }
+        );
+
+        if (!wallet) {
+          return { error: "Insufficient balance or wallet not found" };
+        }
+
+        const balanceAfter = wallet.balance;
+
+        await Wallet.findByIdAndUpdate(
+          wallet._id,
+          {
+            $push: {
+              transactions: {
+                type: "debit",
+                amount: parsed.data.amount,
+                salesRecordId: parsed.data.salesRecordId ? toObjectId(parsed.data.salesRecordId) : undefined,
+                description: parsed.data.description,
+                balanceAfter,
+                createdAt: new Date(),
+              },
+            },
+          },
+        );
+
+        // Audit logging for wallet debit (fallback path)
+        await logAudit({
+          userId: session.user.id,
+          userEmail: session.user.email || undefined,
+          userRole,
+          action: "wallet.debit",
+          entity: "Wallet",
+          entityId: empOid.toString(),
+          details: {
+            amount: parsed.data.amount,
+            balanceAfter,
+            description: parsed.data.description,
+            salesRecordId: parsed.data.salesRecordId,
+            fallback: true,
+          },
+        });
+
+        return { success: true, newBalance: balanceAfter };
+      }
+
+      return { error: "Transaction failed: " + errorMessage };
+    }
   }
+  return { error: "Transaction failed: Maximum retries exceeded due to write conflicts" };
 }
 
 // Internal function that accepts an external session for transaction consistency
@@ -330,89 +421,43 @@ async function _markCommissionPaidWithSession(
   }
 
   const useOwnSession = !externalSession;
-  const dbSession = externalSession || await mongoose.startSession();
 
-  if (useOwnSession) dbSession.startTransaction();
+  if (useOwnSession) {
+    let retries = 5;
+    let delay = 50; // ms
+    while (retries > 0) {
+      const dbSession = await mongoose.startSession();
+      dbSession.startTransaction();
 
-  try {
-    const existingCredit = await Wallet.exists({
-      employeeId: empOid,
-      "transactions.salesRecordId": srOid,
-      "transactions.type": "credit",
-    }).session(dbSession);
-
-    if (existingCredit) {
-      if (useOwnSession) await dbSession.abortTransaction();
-      return { error: "Commission already paid for this sale" };
-    }
-
-    const wallet = await Wallet.findOneAndUpdate(
-      { employeeId: empOid },
-      {
-        $inc: { balance: amount, totalPaid: amount, pendingBalance: -amount },
-        $setOnInsert: { transactions: [] },
-      },
-      { upsert: true, returnDocument: "after", session: dbSession }
-    );
-
-    if (!wallet) {
-      if (useOwnSession) await dbSession.abortTransaction();
-      return { error: "Failed to create or update wallet" };
-    }
-
-    const balanceAfter = wallet.balance + amount;
-
-    await Wallet.findByIdAndUpdate(
-      wallet._id,
-      {
-        $push: {
-          transactions: {
-            type: "credit",
-            amount: amount,
-            salesRecordId: srOid,
-            description: "Commission paid for sale",
-            balanceAfter,
-            createdAt: new Date(),
-          },
-        },
-      },
-      { session: dbSession }
-    );
-
-    if (useOwnSession) await dbSession.commitTransaction();
-    return { success: true, newBalance: balanceAfter, usedSession: dbSession };
-  } catch (error) {
-    if (useOwnSession) {
-      await dbSession.abortTransaction();
-
-      // Check if it's a transaction error (local MongoDB doesn't support transactions)
-      const errorMessage = error instanceof Error ? error.message : "";
-      if (errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
-        // Fall back to non-transactional operation
+      try {
         const existingCredit = await Wallet.exists({
           employeeId: empOid,
           "transactions.salesRecordId": srOid,
           "transactions.type": "credit",
-        });
+        }).session(dbSession);
 
         if (existingCredit) {
+          await dbSession.abortTransaction();
+          dbSession.endSession();
           return { error: "Commission already paid for this sale" };
         }
 
         const wallet = await Wallet.findOneAndUpdate(
           { employeeId: empOid },
           {
-            $inc: { balance: amount, totalPaid: amount, pendingBalance: -amount },
+            $inc: { balance: amount, totalEarned: amount, pendingBalance: amount },
             $setOnInsert: { transactions: [] },
           },
-          { upsert: true, returnDocument: "after" }
+          { upsert: true, returnDocument: "after", session: dbSession }
         );
 
         if (!wallet) {
+          await dbSession.abortTransaction();
+          dbSession.endSession();
           return { error: "Failed to create or update wallet" };
         }
 
-        const balanceAfter = wallet.balance + amount;
+        const balanceAfter = wallet.balance;
 
         await Wallet.findByIdAndUpdate(
           wallet._id,
@@ -428,16 +473,131 @@ async function _markCommissionPaidWithSession(
               },
             },
           },
+          { session: dbSession }
         );
 
+        await dbSession.commitTransaction();
+        dbSession.endSession();
         return { success: true, newBalance: balanceAfter };
+      } catch (error) {
+        await dbSession.abortTransaction();
+        dbSession.endSession();
+
+        const errorMessage = error instanceof Error ? error.message : "";
+        const isTransient = errorMessage.includes("TransientTransactionError") || 
+                            errorMessage.includes("WriteConflict") || 
+                            errorMessage.includes("Please retry your operation") ||
+                            (error as any).code === 112 ||
+                            (error as any).errorLabels?.includes("TransientTransactionError");
+
+        if (isTransient && retries > 1) {
+          retries--;
+          await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 50));
+          delay *= 2;
+          continue;
+        }
+
+        // Check if it's a transaction error (local MongoDB doesn't support transactions) or if retries were exhausted
+        if (isTransient || errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
+          // Fall back to non-transactional operation
+          const existingCredit = await Wallet.exists({
+            employeeId: empOid,
+            "transactions.salesRecordId": srOid,
+            "transactions.type": "credit",
+          });
+
+          if (existingCredit) {
+            return { error: "Commission already paid for this sale" };
+          }
+
+          const wallet = await Wallet.findOneAndUpdate(
+            { employeeId: empOid },
+            {
+              $inc: { balance: amount, totalEarned: amount, pendingBalance: amount },
+              $setOnInsert: { transactions: [] },
+            },
+            { upsert: true, returnDocument: "after" }
+          );
+
+          if (!wallet) {
+            return { error: "Failed to create or update wallet" };
+          }
+
+          const balanceAfter = wallet.balance;
+
+          await Wallet.findByIdAndUpdate(
+            wallet._id,
+            {
+              $push: {
+                transactions: {
+                  type: "credit",
+                  amount: amount,
+                  salesRecordId: srOid,
+                  description: "Commission paid for sale",
+                  balanceAfter,
+                  createdAt: new Date(),
+                },
+              },
+            },
+          );
+
+          return { success: true, newBalance: balanceAfter };
+        }
+
+        return { error: "Transaction failed: " + errorMessage };
+      }
+    }
+    return { error: "Transaction failed: Maximum retries exceeded due to write conflicts" };
+  } else {
+    // externalSession is provided, let transaction error propagate up so the caller can retry
+    const dbSession = externalSession;
+    try {
+      const existingCredit = await Wallet.exists({
+        employeeId: empOid,
+        "transactions.salesRecordId": srOid,
+        "transactions.type": "credit",
+      }).session(dbSession);
+
+      if (existingCredit) {
+        return { error: "Commission already paid for this sale" };
       }
 
-      return { error: "Transaction failed: " + errorMessage };
+      const wallet = await Wallet.findOneAndUpdate(
+        { employeeId: empOid },
+        {
+          $inc: { balance: amount, totalEarned: amount, pendingBalance: amount },
+          $setOnInsert: { transactions: [] },
+        },
+        { upsert: true, returnDocument: "after", session: dbSession }
+      );
+
+      if (!wallet) {
+        return { error: "Failed to create or update wallet" };
+      }
+
+      const balanceAfter = wallet.balance;
+
+      await Wallet.findByIdAndUpdate(
+        wallet._id,
+        {
+          $push: {
+            transactions: {
+              type: "credit",
+              amount: amount,
+              salesRecordId: srOid,
+              description: "Commission paid for sale",
+              balanceAfter,
+              createdAt: new Date(),
+            },
+          },
+        },
+        { session: dbSession }
+      );
+
+      return { success: true, newBalance: balanceAfter, usedSession: dbSession };
+    } catch (error) {
+      return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
     }
-    return { error: "Transaction failed: " + (error instanceof Error ? error.message : "Unknown error") };
-  } finally {
-    if (useOwnSession) dbSession.endSession();
   }
 }
 

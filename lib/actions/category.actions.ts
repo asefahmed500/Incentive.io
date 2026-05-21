@@ -25,9 +25,9 @@ const updateCategorySchema = z.object({
 
 const deleteCategorySchema = objectIdSchema;
 
-export async function getCategories(): Promise<ICategory[]> {
+export async function getCategories(): Promise<ICategory[] | { error: string }> {
   const session = await auth();
-  if (!session?.user?.id) return { error: "Unauthorized" } as unknown as ICategory[];
+  if (!session?.user?.id) return { error: "Unauthorized" };
   await connectToDatabase();
   const categories = await Category.find().lean();
   return categories.map((c) => ({
@@ -89,7 +89,7 @@ export async function updateCategory({
   }
   await connectToDatabase();
   const updateData: Record<string, unknown> = {};
-  if (parsed.data.name) updateData.name = parsed.data.name;
+  if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
   if (parsed.data.description !== undefined) updateData.description = parsed.data.description;
   if (parsed.data.autoApprove !== undefined) updateData.autoApprove = parsed.data.autoApprove;
   await Category.findByIdAndUpdate(parsed.data.id, updateData);
@@ -120,9 +120,9 @@ export async function deleteCategory(id: string) {
   return { success: true };
 }
 
-export async function getAutoApproveCategories(): Promise<ICategory[]> {
+export async function getAutoApproveCategories(): Promise<ICategory[] | { error: string }> {
   const session = await auth();
-  if (!session?.user?.id) return { error: "Unauthorized" } as unknown as ICategory[];
+  if (!session?.user?.id) return { error: "Unauthorized" };
   await connectToDatabase();
   const categories = await Category.find({ autoApprove: true }).lean();
   return categories.map((c) => ({

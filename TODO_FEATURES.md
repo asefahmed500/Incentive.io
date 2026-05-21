@@ -27,6 +27,7 @@ For each role, verify every feature works correctly. Mark `[x]` when verified, `
 - [ ] Edit user → changes persist
 - [ ] Delete user → soft delete works, user removed from lists
 - [ ] Reset password → new temp password works, email sent
+
 - [ ] Block/Unblock user → blocked user cannot login
 
 ---

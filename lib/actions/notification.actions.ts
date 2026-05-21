@@ -53,7 +53,7 @@ const notifyAccountantProcessedSchema = z.object({
 
 const notifyFinanceApprovedSchema = z.object({
   employeeId: z.string(),
-  managerId: z.string(),
+  managerId: z.string().optional(),
   companyName: z.string().min(1).max(500),
   commission: z.number().min(0),
 });
@@ -351,13 +351,15 @@ export async function notifyFinanceApproved(employeeId: string, managerId: strin
     message: `${parsed.data.companyName} - Approved! Commission: ৳${parsed.data.commission}`,
     link: "/sales-dashboard/records",
   });
-  await createNotification({
-    userId: parsed.data.managerId,
-    type: "FINANCE_APPROVED",
-    title: "Sale Final Approved",
-    message: `${parsed.data.companyName} - Approved`,
-    link: "/sales-manager/records",
-  });
+  if (parsed.data.managerId) {
+    await createNotification({
+      userId: parsed.data.managerId,
+      type: "FINANCE_APPROVED",
+      title: "Sale Final Approved",
+      message: `${parsed.data.companyName} - Approved`,
+      link: "/sales-manager/records",
+    });
+  }
   return { success: true };
 }
 
@@ -430,19 +432,30 @@ export async function notifyUserCreated(employeeId: string, userName: string, ro
     link: "/profile",
   });
 }
+const notifySaleResubmittedSchema = z.object({
+  employeeId: z.string(),
+  companyName: z.string().min(1).max(500),
+  managerIds: z.array(z.string()).optional(),
+});
+
 export async function notifySaleResubmitted(employeeId: string, companyName: string, managerIds?: string[]) {
+  const parsed = notifySaleResubmittedSchema.safeParse({ employeeId, companyName, managerIds });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
 
-  const managers = managerIds && managerIds.length > 0
-    ? await User.find({ _id: { $in: managerIds }, role: "salesManager", isActive: true }).lean()
+  const managers = parsed.data.managerIds && parsed.data.managerIds.length > 0
+    ? await User.find({ _id: { $in: parsed.data.managerIds }, role: "salesManager", isActive: true }).lean()
     : await User.find({ role: "salesManager", isActive: true }).lean();
 
   const notifications = managers.map((manager) =>
     createNotification({
       userId: manager._id.toString(),
       title: "Sale Resubmitted",
-      message: `${companyName} has been resubmitted and is pending your review.`,
+      message: `${parsed.data.companyName} has been resubmitted and is pending your review.`,
       type: "SALE_RESUBMITTED",
     })
   );

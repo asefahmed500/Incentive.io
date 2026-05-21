@@ -1,125 +1,189 @@
 # Incentive.io — Agent Guide
 
-Next.js 16 app router, MongoDB/Mongoose, NextAuth v5, Tailwind CSS 4.
+Next.js 16 app router, MongoDB/Mongoose, NextAuth v5, Tailwind CSS 4, shadcn/ui (radix-nova style).
 
 ## Commands
 
 | Task | Command |
 |------|---------|
-| Dev | `npm run dev` |
+| Dev | `npm run dev` (uses `--webpack` flag) |
 | Build | `npm run build:webpack` |
+| Start | `npm run start` |
 | Typecheck | `npm run typecheck` |
-| Seed | `npm run seed` |
+| Lint | `npm run lint` |
+| Format | `npm run format` |
+| Full audit | `npm run audit` (typecheck + lint + test) |
+| Seed DB | `npm run seed` |
+| Vitest tests | `npm test` |
+| Single Vitest test | `npm test -- -t "test name"` |
+| Vitest coverage | `npm run test:coverage` |
+| E2E (Playwright) | `npm run test:e2e` |
+| E2E UI mode | `npm run test:e2e:ui` |
+| E2E debug | `npm run test:e2e:debug` |
+| E2E report | `npm run test:e2e:report` |
+| Dev tunnel | `npm run share` |
 
-**Must use `npm run build:webpack`** — Mongoose native bindings fail with Turbopack.
+**Must use `npm run build:webpack`** — Mongoose native bindings fail with Turbopack. `vercel.json` enforces this via `buildCommand` + `NEXT_PRIVATE_BUILD_WORKER=webpack`. GitHub Actions also runs `npm run build:webpack` in CI.
 
 ## Setup
 
 1. `cp .env.example .env.local`
-2. MongoDB at `mongodb://localhost:27017/incentiveio`
-3. `NEXTAUTH_SECRET` ≥32 chars
-4. Run `npm run seed` for demo data (13 users, teams, products, sales records)
+2. MongoDB at `mongodb://localhost:27017/incentiveio` (`retryWrites=false` auto-added for localhost in `lib/mongodb.ts`)
+3. `NEXTAUTH_SECRET` >= 32 chars
+4. `npm run seed` for demo data (13 users, teams, products, sales records)
+
+## Architecture
+
+### Directory Layout
+
+```
+app/                     # Next.js App Router pages
+  admin/                 # Admin dashboard
+  administrator/         # SuperAdmin (full access)
+  sales-dashboard/       # Sales executive
+  sales-manager/         # Sales manager
+  accountant/            # Accountant
+  finance/               # Finance
+  api/                   # REST route handlers
+lib/
+  actions/               # Server actions ("use server"), Zod validation
+  models/                # Mongoose models (soft delete via deletedAt)
+  auth/                  # NextAuth config split for Edge compat
+  validations/           # API-level Zod schemas (14 files)
+  utils/money.ts         # Precise monetary math (cents-based)
+  mongodb.ts             # DB singleton + toObjectId() helper
+  api-error.ts           # Standardized error handling
+  rate-limit.ts          # In-memory rate limiter
+  sse.ts                 # Server-Sent Events manager
+components/
+  ui/                    # shadcn/ui components
+  home/                  # Homepage (Framer Motion animations)
+hooks/                   # useNotifications (sonner), use-sse
+types/                   # UserRole, SaleStatus, AuthUser, etc.
+stores/                  # Zustand stores
+scripts/seed.ts          # Demo data seeder
+```
+
+### Auth Config Split (Edge Runtime)
+
+- `lib/auth/auth.config.ts` — Pure NextAuth config, no DB. Used by middleware (Edge Runtime).
+- `lib/auth/auth.ts` — Full NextAuth with DB recheck. Used by server components/actions.
+- **Never import `auth()` from `auth.ts` in middleware** — Mongoose is incompatible with Edge Runtime.
+
+### Data Layer
+
+- **Server actions** (`lib/actions/*.ts`): `"use server"`, Zod validation, return `{ success, data?, error? }`. Includes audit logging (`lib/actions/audit.actions.ts`) on all state changes.
+- **API routes** (`app/api/*/route.ts`): Auth check via `requireAuth()`, then call server actions. Try-catch with `handleError()` from `lib/api-error.ts`.
+- **Models** (`lib/models/*.ts`): Soft delete hooks auto-filter `deletedAt: null`. Never use `findByIdAndDelete`.
+- **DB singleton**: `lib/mongodb.ts` — `connectToDatabase()`, `toObjectId()`, `checkDatabaseConnection()`
+- **Models barrel**: `lib/models/index.ts` exports all models for convenient imports
+- **Logout**: always use `logoutAction()` from `lib/actions/auth.actions.ts` — never call `signOut()` directly
+
+### Approval Workflow
+
+```
+Draft -> Pending_Manager -> Pending_Accountant -> Pending_Finance -> Approved
+         (Manager)          (Accountant)          (Finance)
+```
+
+**Auto-approve:** When ALL products are from `autoApprove: true` categories, sale skips straight to `Approved` with immediate commission + wallet credit.
+
+Rejection -> `Draft` + `rejectionReason` + `rejectedBy` (one of `"manager"`, `"accountant"`, `"finance"`).
+
+### Real-Time Updates
+
+- SSE via `lib/sse.ts` + `hooks/use-sse.ts` (not Socket.IO — socket deps exist but unused)
+- Events: `SALE_CREATED`, `SALE_APPROVED`, `SALE_REJECTED`, `WALLET_UPDATED`, `DASHBOARD_REFRESH`
+- Dashboards poll every 30s as fallback
+
+## Role-Based Access
+
+| Role | Route Prefix | Notes |
+|------|-------------|-------|
+| `administrator` | `/administrator/*` + all routes | Full system access |
+| `admin` | `/admin/*` + most routes | Cannot access `/administrator` |
+| `salesManager` | `/sales-manager/*`, `/sales-dashboard/*` | Team data only |
+| `salesExecutive` | `/sales-dashboard/*` | Own data only |
+| `accountant` | `/accountant/*`, `/sales-dashboard/*` | Tax/VAT processing |
+| `finance` | `/finance/*`, `/sales-dashboard/*` | Final approval + payments |
+
+Role names are camelCase: `salesManager`, `salesExecutive`, etc. (not snake_case).
+
+Enforced in `middleware.ts` via JWT inspection using `authConfig` (not full `auth()`).
 
 ## Critical Gotchas
 
-| # | Gotcha | Why it matters |
-|---|-------|---------------|
-| 1 | Use `products.reduce((sum, p) => sum + p.unitPrice * p.quantity, 0)` | No `saleAmount` field exists |
-| 2 | Schema uses `categoryId`, not `category` | ObjectId ref to Category |
-| 3 | `status` = workflow stage; `approvalStatus`/`accountantStatus`/`financeStatus` = per-role flags | Both exist in schema |
-| 4 | Only `Draft` records can be submitted/deleted | Server guards enforce this |
-| 5 | `rejectedBy` field = `"manager"` \| `"accountant"` \| `"finance"` | Stored in schema since 2025 |
-| 6 | Commission recalculated on **net** (not gross) after accountant processing | Net = gross - tax - VAT - EO/BP |
-| 7 | Eligibility is **boolean** on User model (`isEligible`), not string status | `getCommissions()` returns `isEligible` |
-| 8 | All deletes use soft delete (`deletedAt` + hooks) | Never use `findByIdAndDelete` |
-| 9 | Server actions return `{ error: "Unauthorized" }` on auth failure | All actions check `auth()` now |
-| 10 | `updateSalesRecord` allows ONLY: `companyName`, `companyEmail`, `products`, `taxEnabled`, `vatEnabled`, `date` | Strict schema |
-| 11 | rejectSale has stage guards: manager→`Pending_Manager` only, accountant→`Pending_Accountant` only | Can't reject wrong stage |
-| 12 | Resubmit resets ALL workflow fields | accountantStatus, financeStatus, netSales, tax, commission, rejectionReason, rejectedBy |
-| 13 | Ownership required for sales record operations | Must own `employeeId`; managers can only approve their `managerId` |
-| 14 | `changePassword` derives userId from session | Never trust client input for userId |
-| 15 | Wallet uses atomic `$inc` | Prevents race conditions from read-then-write |
-| 16 | Tax/VAT rate checks use `!== undefined && !== null` | `0` is falsy, breaks truthy checks |
-| 17 | Net sales < 0 rejected | Accountant processing validates this |
-| 18 | Eligibility uses **cumulative** sales, not per-record | 50% threshold = (totalApproved / target) × 100 |
-| 19 | Role names: `salesManager`, `salesExecutive`, `accountant`, `finance`, `admin`, `administrator` | camelCase, not snake_case |
+1. **No `saleAmount` field** — calculate from products: use `calculateProductTotal()` from `lib/utils/money.ts`, never raw `p.unitPrice * p.quantity`
+2. **Monetary math** — always use `lib/utils/money.ts` functions (`calculatePercentage`, `calculateProductTotal`, `roundMoney`, `subtractAmounts`). Avoid float arithmetic.
+3. **Schema uses `categoryId`**, not `category` — it's an ObjectId ref
+4. **Dual status fields** — `status` = workflow stage; `approvalStatus`/`accountantStatus`/`financeStatus` = per-role flags. Both exist.
+5. **Draft-only ops** — only `Draft` records can be submitted or deleted. Server guards enforce.
+6. **Reject stage guards** — manager rejects `Pending_Manager` only, accountant rejects `Pending_Accountant` only
+7. **Resubmit resets ALL workflow fields** — accountantStatus, financeStatus, netSales, tax, commission, rejectionReason, rejectedBy
+8. **Commission on net, not gross** — Net = gross - tax - VAT - EO/BP (both tax and VAT calculated on gross)
+9. **Eligibility is boolean** — `isEligible` on User model, based on cumulative approved sales vs target (50% threshold)
+10. **Soft delete everywhere** — `deletedAt` field + pre-find hooks. Never `findByIdAndDelete`. AuditLog is the exception (no soft delete).
+11. **Wallet uses atomic `$inc`** — prevents race conditions. Local MongoDB lacks transactions, code auto-falls back.
+12. **Tax/VAT rate checks** — use `!== undefined && !== null` because `0` is valid but falsy
+13. **Ownership required** — sales record ops check `employeeId`; managers approve only their `managerId` team
+14. **ObjectId serialization** — MongoDB `ObjectId` cannot be passed to client components. Always `.toString()` before returning from server actions
+15. **`changePassword`** derives userId from session — never trust client input for userId
+16. **Server action return types** — may return data, `{ error: string }`, or `undefined`. Always check `result?.error` with optional chaining, use `Array.isArray()` before mapping
+17. **Client vs server auth** — `signIn` from `next-auth/react` in client components only. Server-side: `auth()` from `@/lib/auth/auth`
+18. **NoSQL injection** — reject strings starting with `$` in validation schemas; escape regex special chars in search
+19. **API-level validation required** — all new API endpoints need Zod schemas in `lib/validations/*.ts`
+20. **Net sales < 0** — accountant processing rejects this
+21. **`npm run build` == `npm run build:webpack`** — both use `--webpack`; `build:webpack` is the canonical name
+22. **`npm run share`** — opens dev tunnel via `scripts/dev-tunnel.js`; useful for remote testing
+23. **`audit` runs sequentially** — `typecheck && lint && test`; a failure in any step stops the chain
 
-## Approval Workflow
+## Code Style
 
-```
-Draft → Pending_Manager → Pending_Accountant → Pending_Finance → Approved
-   (Manager)       (Accountant)        (Finance)
-```
+- Prettier: no semicolons, double quotes, trailing comma es5, printWidth 80
+- `@/*` maps to `./*` (no `src/` prefix)
+- Icons: Lucide React only
+- Currency: `(amount || 0).toLocaleString()` or `formatCurrency()` from `lib/utils/money.ts`
+- `no-explicit-any` is `warn`, not error
+- Unused vars with `_` prefix are allowed (`argsIgnorePattern: "^_"`)
 
-Rejection → `Draft` + `rejectionReason` + `rejectedBy`
+## Testing
 
-## Auth & RBAC
+**Vitest** (`npm test`): Unit/integration tests. 10s timeout, jsdom env. Coverage via v8.
+- `jest.config.js` is a leftover — `npm test` uses vitest.
+- Setup: `tests/setup.ts` auto-creates commission rules. Test users need `targetAmount` for commission calc.
+- Server actions with `"use server"` cannot be imported directly — test business logic or via API routes.
+- ObjectIds must be exactly 24 hex chars.
+- Exclude patterns: `tests/e2e/specs/**`, `.next/**`, `.claude/**`, `.agents/**`.
 
-- NextAuth v5 JWT, 24h maxAge
-- `export const { handlers, auth } = NextAuth(config)` in `lib/auth/auth.ts`
-
-| Path | Role |
-|------|------|
-| `/admin/*` | admin |
-| `/administrator/*` | administrator (super — accesses all) |
-| `/sales-dashboard/*` | salesExecutive |
-| `/sales-manager/*` | salesManager (+ sales-dashboard) |
-| `/accountant/*` | accountant (+ sales-dashboard) |
-| `/finance/*` | finance (+ sales-dashboard) |
-
-## Data Layer
-
-- **Server actions**: `lib/actions/*.ts` — `"use server"`, Zod validation, returns `{ success, data?, error? }`
-- **Models**: `lib/models/*.ts` — soft delete hooks auto-filter `deletedAt: null`
-- **DB singleton**: `lib/mongodb.ts`
+**Playwright** (`npm run test:e2e`): E2E tests in `tests/e2e/specs/` organized by feature. Single worker, 60s timeout, Chromium only.
+- **webServer is disabled** — dev server must be running before e2e tests.
+- Global setup/teardown in `tests/e2e/global-setup.ts` / `global-teardown.ts`.
+- Prerequisites: MongoDB running, `npm run seed`, dev server on port 3000.
+- Run specific suite: `npx playwright test specs/auth/`
+- Trace + screenshot on failure, video retained on failure.
 
 ## Key Files
 
 | File | Purpose |
 |------|---------|
-| `lib/actions/sales.actions.ts` | CRUD, submit, delete with ownership checks |
-| `lib/actions/approval.actions.ts` | Approve/reject/process by role with status guards |
-| `lib/actions/wallet.actions.ts` | atomic `$inc` with MongoDB sessions (prevents race conditions) |
-| `scripts/seed.ts` | Demo data: users, teams, products, sales, commission rules |
-| `middleware.ts` | Role-based route protection with jose JWT verification |
-| `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()` helpers |
-| `lib/monitoring.ts` | Metric logging: logMetric, logPerformance, logError |
-| `types/index.ts` | UserRole, SaleStatus, AuthUser, SaleRecord types |
+| `lib/actions/sales.actions.ts` | Sales CRUD, submit, delete, ownership checks, auto-approve check |
+| `lib/actions/approval.actions.ts` | Multi-stage approve/reject with atomic transactions + auto-approve |
+| `lib/actions/wallet.actions.ts` | Atomic credit/debit with MongoDB sessions, local fallback |
+| `lib/actions/audit.actions.ts` | Audit logging on all state changes |
+| `lib/actions/notification.actions.ts` | In-app notification creation + SSE integration |
+| `lib/actions/auth.actions.ts` | `logoutAction()` — always use this, never `signOut()` directly |
+| `lib/actions/commission.actions.ts` | Commission calculation, eligibility checks |
+| `lib/utils/money.ts` | Precise monetary calculations (cents-based integer math) |
+| `lib/mongodb.ts` | DB singleton, `toObjectId()`, `checkDatabaseConnection()` |
+| `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()`, `requireAdminOrAbove()` |
+| `lib/rate-limit.ts` | In-memory rate limiter for public API endpoints |
+| `lib/sse.ts` | Server-Sent Events manager |
+| `lib/api-error.ts` | `ApiError` class + `handleError()` |
+| `lib/validations/*.ts` | 14 Zod validation schemas for API boundary |
+| `middleware.ts` | Route-level RBAC via `authConfig` (Edge Runtime) |
+| `types/index.ts` | `UserRole`, `SaleStatus`, `AuthUser`, `SaleRecord` types |
 | `hooks/useNotifications.ts` | Unified sonner toast notifications |
-| `components/error-boundary.tsx` | Graceful error handling for dashboards |
-
-## Recent Improvements
-
-### Security (Phase 1 - Complete)
-- JWT token verification with jose library — prevents token tampering
-- Atomic wallet transactions with MongoDB sessions — prevents race conditions
-- Status field synchronization — fixes rejection/resubmission workflow
-- Next.js 16.2.6 update — fixes DoS vulnerability (CVE-2025-xxxxx)
-
-### Type Safety (Phase 2 - Complete)
-- Comprehensive types in `types/index.ts` — replaced 56+ `as any` usages
-- Custom error classes in `types/errors.ts`
-- Zero TypeScript errors
-
-### Developer Experience (Phase 3 - Complete)
-- Unified notification hook (`hooks/useNotifications.ts`) using sonner toast
-- Loading skeleton components (`components/loading/dashboard-skeleton.tsx`)
-- Error boundary components (`components/error-boundary.tsx`)
-
-### Performance (Phase 4 - Complete)
-- MongoDB aggregation pipeline for commission calculations — eliminates N+1 queries
-- Compound indexes on SalesRecord, Wallet, User models
-- Target change detection with automatic eligibility recalculation
-
-### Testing (Phase 5 - Complete)
-- Integration tests (`tests/integration/workflow.test.ts`)
-- E2E scenarios (`tests/e2e/role-workflows.spec.ts`)
-- Performance tests (`tests/performance/load-test.ts`)
-- Security tests (`tests/security/auth-security.test.ts`)
-
-### Deployment (Phase 6 - Complete)
-- Pre-deployment GitHub Actions workflow (`.github/workflows/pre-deploy.yml`)
-- Monitoring system (`lib/monitoring.ts`)
+| `hooks/use-sse.ts` | SSE hook for real-time dashboard updates |
 
 ## Test Accounts
 
@@ -127,14 +191,9 @@ Rejection → `Draft` + `rejectionReason` + `rejectedBy`
 |-------|----------|------|
 | admin@incentive.io | Admin123! | admin |
 | superadmin@incentive.io | Superadmin123! | administrator |
-| jamal@incentive.io | Jamal123! | salesExecutive |
-| manager@incentive.io | Manager123! | salesManager |
+| jamal@incentive.io | Manager123! | salesManager |
+| karim@incentive.io | Executive123! | salesExecutive |
 | accountant@incentive.io | Accountant123! | accountant |
 | finance@incentive.io | Finance123! | finance |
 
-## Code Style
-
-- Prettier: no semicolons, double quotes, trailing comma es5
-- `@/*` maps to `./*` (no `src/` prefix needed)
-- Icon components: Lucide React only
-- Currency: `(amount || 0).toLocaleString()`
+Additional executives (nasrin, rahim, sabina, mizanur, anika@incentive.io) and a second manager (fatima@incentive.io) also share `Executive123!` / `Manager123!` passwords respectively. An `inactive@incentive.io` / `Inactive123!` user exists for disabled-account testing.

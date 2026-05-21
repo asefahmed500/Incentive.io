@@ -15,7 +15,11 @@ export const authConfig = {
       },
     }),
   ],
-  session: { strategy: "jwt", maxAge: 60 * 60 * 24 },
+  session: {
+	  strategy: "jwt",
+	  maxAge: 60 * 60 * 24, // 24 hours
+	  updateAge: 60 * 30, // Refresh session every 30 minutes
+	},
   callbacks: {
     async jwt({ token, user }) {
       if (user) {
@@ -23,7 +27,7 @@ export const authConfig = {
         token.id = (user as { id: string }).id;
         token.role = userRole;
         token.employeeId = (user as { employeeId?: string }).employeeId;
-        token.isActive = true;
+        token.isActive = (user as { isActive?: boolean }).isActive ?? true;
       }
       return token;
     },
@@ -38,4 +42,33 @@ export const authConfig = {
     },
   },
   pages: { signIn: "/login" },
+	cookies: {
+	  sessionToken: {
+		name: `${process.env.NODE_ENV === "production" ? "__Secure-" : ""}next-auth.session-token`,
+		options: {
+		  httpOnly: true,
+		  sameSite: "lax",
+		  path: "/",
+		  secure: process.env.NODE_ENV === "production",
+		},
+	  },
+	  callbackUrl: {
+		name: `${process.env.NODE_ENV === "production" ? "__Secure-" : ""}next-auth.callback-url`,
+		options: {
+		  httpOnly: true,
+		  sameSite: "lax",
+		  path: "/",
+		  secure: process.env.NODE_ENV === "production",
+		},
+	  },
+	  csrfToken: {
+		name: `${process.env.NODE_ENV === "production" ? "__Secure-" : ""}next-auth.csrf-token`,
+		options: {
+		  httpOnly: true,
+		  sameSite: "lax",
+		  path: "/",
+		  secure: process.env.NODE_ENV === "production",
+		},
+	  },
+	},
 } satisfies NextAuthConfig;

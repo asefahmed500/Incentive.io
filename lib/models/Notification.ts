@@ -68,6 +68,9 @@ NotificationSchema.pre("find", function () {
 NotificationSchema.pre("findOne", function () {
   this.where({ deletedAt: null });
 });
+NotificationSchema.pre("countDocuments", function () {
+  this.where({ deletedAt: null });
+});
 
 const Notification = mongoose.models.Notification || mongoose.model<INotification>("Notification", NotificationSchema);
 

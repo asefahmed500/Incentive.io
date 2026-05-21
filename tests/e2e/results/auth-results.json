@@ -1,0 +1,50 @@
+{
+  "passed": [],
+  "failed": [],
+  "errors": [
+    {
+      "role": "salesExecutive",
+      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
+    },
+    {
+      "role": "salesExecutive",
+      "error": "Timeout after 15 seconds"
+    },
+    {
+      "role": "salesManager",
+      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
+    },
+    {
+      "role": "salesManager",
+      "error": "Timeout after 15 seconds"
+    },
+    {
+      "role": "accountant",
+      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
+    },
+    {
+      "role": "accountant",
+      "error": "Timeout after 15 seconds"
+    },
+    {
+      "role": "finance",
+      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
+    },
+    {
+      "role": "finance",
+      "error": "Timeout after 15 seconds"
+    },
+    {
+      "role": "admin",
+      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
+    },
+    {
+      "role": "admin",
+      "error": "Timeout after 15 seconds"
+    },
+    {
+      "role": "administrator",
+      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
+    }
+  ]
+}

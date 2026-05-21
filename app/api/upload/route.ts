@@ -1,104 +1,92 @@
-import { NextResponse } from "next/server";
-import { auth } from "@/lib/auth/auth";
-import { writeFile, mkdir } from "fs/promises";
-import { join } from "path";
-import { existsSync } from "fs";
-import { handleError } from "@/lib/api-error";
+import { NextResponse } from "next/server"
+import { auth } from "@/lib/auth/auth"
+import { connectToDatabase } from "@/lib/mongodb"
+import { FileAttachment } from "@/lib/models/FileAttachment"
+import { handleError } from "@/lib/api-error"
 
-const ALLOWED_TYPES = ["image/jpeg", "image/png", "application/pdf"];
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
+const ALLOWED_TYPES = ["image/jpeg", "image/png", "application/pdf"]
+const MAX_FILE_SIZE = 10 * 1024 * 1024
 
 export async function POST(request: Request) {
   try {
-    const session = await auth();
+    const session = await auth()
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const formData = await request.formData();
-    const file = formData.get("file") as File;
+    const formData = await request.formData()
+    const file = formData.get("file") as File
 
     if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+      return NextResponse.json({ error: "No file provided" }, { status: 400 })
     }
 
     if (!ALLOWED_TYPES.includes(file.type)) {
       return NextResponse.json(
         { error: "Invalid file type. Only JPG, PNG, and PDF are allowed." },
         { status: 400 }
-      );
+      )
     }
 
     if (file.size > MAX_FILE_SIZE) {
       return NextResponse.json(
         { error: "File size exceeds 10MB limit." },
         { status: 400 }
-      );
+      )
     }
 
-    const bytes = await file.arrayBuffer();
-    const buffer = Buffer.from(bytes);
+    const bytes = await file.arrayBuffer()
+    const buffer = Buffer.from(bytes)
 
-    const uploadDir = join(process.cwd(), "public", "uploads", "sales-records");
-    if (!existsSync(uploadDir)) {
-      await mkdir(uploadDir, { recursive: true });
-    }
+    await connectToDatabase()
 
-    const timestamp = Date.now();
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
-    const uniqueFileName = `${timestamp}-${sanitizedFileName}`;
-    const filePath = join(uploadDir, uniqueFileName);
+    const attachment = await FileAttachment.create({
+      filename: file.name,
+      mimeType: file.type,
+      size: file.size,
+      data: buffer,
+      uploadedBy: session.user.id,
+    })
 
-    await writeFile(filePath, buffer);
-
-    const fileUrl = `/uploads/sales-records/${uniqueFileName}`;
+    const fileUrl = `/api/files/${attachment._id}`
 
     return NextResponse.json({
       success: true,
       url: fileUrl,
+      id: attachment._id.toString(),
       fileName: file.name,
       size: file.size,
-    });
+    })
   } catch (error) {
-    return handleError(error);
+    return handleError(error)
   }
 }
 
 export async function DELETE(request: Request) {
   try {
-    const session = await auth();
+    const session = await auth()
     if (!session?.user?.id) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+      return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
     }
 
-    const { searchParams } = new URL(request.url);
-    const filePath = searchParams.get("path");
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
 
-    // Security: Prevent path traversal attacks on both Unix and Windows
-    if (!filePath ||
-        filePath.includes("..") ||
-        filePath.includes("/") ||
-        filePath.includes("\\") ||
-        filePath.startsWith("/")) {
-      return NextResponse.json({ error: "Invalid file path" }, { status: 400 });
-    }
-    
-    const fullPath = join(process.cwd(), "public", filePath);
-    const uploadsDir = join(process.cwd(), "public", "uploads");
-    
-    if (!fullPath.startsWith(uploadsDir)) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
+    if (!id) {
+      return NextResponse.json({ error: "File ID required" }, { status: 400 })
     }
 
-    if (!existsSync(fullPath)) {
-      return NextResponse.json({ error: "File not found" }, { status: 404 });
+    await connectToDatabase()
+
+    const attachment = await FileAttachment.findById(id)
+    if (!attachment) {
+      return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    const { unlink } = await import("fs/promises");
-    await unlink(fullPath);
+    await FileAttachment.findByIdAndDelete(id)
 
-    return NextResponse.json({ success: true });
+    return NextResponse.json({ success: true })
   } catch (error) {
-    return handleError(error);
+    return handleError(error)
   }
 }

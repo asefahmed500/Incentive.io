@@ -14,6 +14,11 @@ export interface IUser extends Document {
   targetAmount: number;
   targetPeriod?: string;
   previousTargetAmount?: number;
+  resetPasswordToken?: string;
+  resetPasswordExpires?: Date;
+  emailVerified?: boolean;
+  emailVerificationToken?: string;
+  emailVerificationExpires?: Date;
   deletedAt?: Date;
   createdAt: Date;
   updatedAt: Date;
@@ -38,6 +43,11 @@ const UserSchema = new Schema<IUser>(
     targetAmount: { type: Number, default: 0 },
     targetPeriod: { type: String },
     previousTargetAmount: { type: Number },
+    resetPasswordToken: { type: String },
+    resetPasswordExpires: { type: Date },
+    emailVerified: { type: Boolean, default: false },
+    emailVerificationToken: { type: String },
+    emailVerificationExpires: { type: Date },
     deletedAt: { type: Date },
   },
   { timestamps: true }
@@ -59,6 +69,9 @@ UserSchema.pre("find", function () {
   this.where({ deletedAt: null });
 });
 UserSchema.pre("findOne", function () {
+  this.where({ deletedAt: null });
+});
+UserSchema.pre("countDocuments", function () {
   this.where({ deletedAt: null });
 });
 

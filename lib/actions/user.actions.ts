@@ -2,7 +2,6 @@
 
 import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
-import bcrypt from "bcryptjs";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
 import { SalesRecord } from "@/lib/models/SalesRecord";
@@ -11,6 +10,7 @@ import { Team } from "@/lib/models/Team";
 import { sendWelcomeEmail, sendNotificationEmail } from "@/lib/email";
 import { notifyUserCreated } from "@/lib/actions/notification.actions";
 import { logAudit } from "@/lib/actions/audit.actions";
+import { hashPassword, verifyPassword, generateSecureToken } from "@/lib/utils/password";
 import type { AuthUser, UserRole } from "@/types";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
@@ -145,7 +145,7 @@ export async function createUser({
     return { error: "Email already registered" };
   }
 
-  const hashedPassword = await bcrypt.hash(parsed.data.password, 10);
+  const hashedPassword = await hashPassword(parsed.data.password);
   const employeeId = Math.floor(10000 + Math.random() * 90000).toString();
 
   await User.create({
@@ -222,9 +222,9 @@ export async function updateUser({
   await connectToDatabase();
 
   const updateData: Record<string, unknown> = {};
-  if (parsed.data.name) updateData.name = parsed.data.name;
-  if (parsed.data.email) updateData.email = parsed.data.email.toLowerCase();
-  if (parsed.data.role) updateData.role = parsed.data.role;
+  if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
+  if (parsed.data.email !== undefined) updateData.email = parsed.data.email.toLowerCase();
+  if (parsed.data.role !== undefined) updateData.role = parsed.data.role;
   if (parsed.data.phone !== undefined) updateData.phone = parsed.data.phone;
   if (parsed.data.isActive !== undefined) updateData.isActive = parsed.data.isActive;
   if (parsed.data.managerId !== undefined) updateData.managerId = parsed.data.managerId || null;
@@ -320,6 +320,7 @@ export async function toggleUserStatus(id: string) {
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (id === session.user.id) return { error: "Cannot deactivate your own account" };
   const parsed = toggleUserStatusSchema.safeParse(id);
   if (!parsed.success) {
     return { error: "Invalid user ID" };
@@ -352,12 +353,12 @@ export async function changePassword({
     return { error: "User not found" };
   }
 
-  const isValid = await bcrypt.compare(parsed.data.currentPassword, user.password);
+  const isValid = await verifyPassword(parsed.data.currentPassword, user.password);
   if (!isValid) {
     return { error: "Current password is incorrect" };
   }
 
-  const hashedPassword = await bcrypt.hash(parsed.data.newPassword, 10);
+  const hashedPassword = await hashPassword(parsed.data.newPassword);
   await User.findByIdAndUpdate(userId, { password: hashedPassword });
   return { success: true };
 }
@@ -379,7 +380,7 @@ export async function resetPassword({
   }
   await connectToDatabase();
 
-  const hashedPassword = await bcrypt.hash(parsed.data.newPassword, 10);
+  const hashedPassword = await hashPassword(parsed.data.newPassword);
 
   const user = await User.findById(parsed.data.userId);
   if (!user) return { error: "User not found" };
@@ -394,6 +395,148 @@ export async function resetPassword({
     );
   } catch (emailError) {
     console.error("Failed to send password reset email:", emailError);
+  }
+
+  return { success: true };
+}
+
+// Schema for password reset request
+const requestPasswordResetSchema = z.object({
+  email: z.string().email("Invalid email address"),
+});
+
+// Schema for password reset with token
+const resetPasswordWithTokenSchema = z.object({
+  token: z.string().min(1, "Token is required"),
+  newPassword: z.string()
+    .min(12, "Password must be at least 12 characters")
+    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+    .regex(/[0-9]/, "Password must contain at least one number")
+    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+});
+
+/**
+ * Request a password reset for a user
+ * Generates a secure token and sends it via email
+ */
+export async function requestPasswordReset(email: string) {
+  const parsed = requestPasswordResetSchema.safeParse({ email });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
+  await connectToDatabase();
+
+  // Find user by email (case insensitive)
+  const user = await User.findOne({
+    email: parsed.data.email.toLowerCase(),
+    deletedAt: null,
+  });
+
+  // Always return success to prevent email enumeration
+  if (!user) {
+    return { success: true };
+  }
+
+  // Generate secure token
+  const resetToken = generateSecureToken();
+  const resetExpires = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+
+  // Store token in database
+  await User.findByIdAndUpdate(user._id, {
+    resetPasswordToken: resetToken,
+    resetPasswordExpires: resetExpires,
+  });
+
+  // Send password reset email
+  try {
+    const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
+    await sendNotificationEmail(
+      user.email,
+      "Password Reset Request",
+      `Hi ${user.name},<br><br>You requested a password reset. Click the link below to reset your password:<br><br>
+       <a href="${resetUrl}" style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Reset Password</a><br><br>
+       This link will expire in 1 hour.<br><br>If you didn't request this, please ignore this email.`
+    );
+  } catch (emailError) {
+    console.error("Failed to send password reset email:", emailError);
+  }
+
+  // Audit log
+  try {
+    await logAudit({
+      userId: user._id.toString(),
+      userEmail: user.email,
+      userRole: user.role,
+      action: "password.reset.requested",
+      entity: "User",
+      details: { email: user.email },
+    });
+  } catch (auditError) {
+    console.error("Failed to log audit:", auditError);
+  }
+
+  return { success: true };
+}
+
+/**
+ * Reset password using token
+ * Validates token and updates password
+ */
+export async function resetPasswordWithToken(token: string, newPassword: string) {
+  const parsed = resetPasswordWithTokenSchema.safeParse({ token, newPassword });
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0].message };
+  }
+
+  await connectToDatabase();
+
+  // Find user with valid reset token
+  const user = await User.findOne({
+    resetPasswordToken: parsed.data.token,
+    resetPasswordExpires: { $gt: new Date() },
+    deletedAt: null,
+  });
+
+  if (!user) {
+    return { error: "Invalid or expired reset token" };
+  }
+
+  // Hash new password
+  const hashedPassword = await hashPassword(parsed.data.newPassword);
+
+  // Update password and clear reset token
+  await User.findByIdAndUpdate(user._id, {
+    password: hashedPassword,
+    resetPasswordToken: undefined,
+    resetPasswordExpires: undefined,
+  });
+
+  // Send confirmation email
+  try {
+    await sendNotificationEmail(
+      user.email,
+      "Password Reset Successful",
+      `Hi ${user.name},<br><br>Your password has been successfully reset. You can now log in with your new password.<br><br>
+       If you didn't make this change, please contact support immediately.`
+    );
+  } catch (emailError) {
+    console.error("Failed to send password reset confirmation email:", emailError);
+  }
+
+  // Audit log
+  try {
+    await logAudit({
+      userId: user._id.toString(),
+      userEmail: user.email,
+      userRole: user.role,
+      action: "password.reset.completed",
+      entity: "User",
+      details: { email: user.email },
+    });
+  } catch (auditError) {
+    console.error("Failed to log audit:", auditError);
   }
 
   return { success: true };

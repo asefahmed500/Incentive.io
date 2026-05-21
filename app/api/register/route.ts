@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";
-import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { handleError, ErrorCodes } from "@/lib/api-error";
+import { hashPassword } from "@/lib/utils/password";
 
 // Rate limiter: 5 registration attempts per hour per IP
 const registerLimiter = rateLimit({
@@ -65,7 +65,7 @@ export async function POST(request: NextRequest) {
 
     // Hash password and create user
     // Note: Email has unique constraint in schema, so duplicate emails will be rejected by database
-    const hashedPassword = await bcrypt.hash(parsed.data.password, 12);
+    const hashedPassword = await hashPassword(parsed.data.password);
 
     try {
       await User.create({

@@ -1,9 +1,10 @@
 /**
- * Test setup file
+ * Test setup file for Vitest
  * Configures test environment, loads environment variables, sets up mocks
  */
 
 import { config } from "dotenv";
+import { vi, beforeEach, beforeAll, expect } from "vitest";
 
 // Load environment variables
 config({ path: ".env.local" });
@@ -13,12 +14,12 @@ if (!process.env.MONGODB_URI) {
   config({ path: ".env.example" });
 }
 
-// Extend Jest timeout for database operations
-jest.setTimeout(30000);
+// Extend Vitest timeout for database operations
+vi.setConfig({ testTimeout: 30000, hookTimeout: 30000 });
 
 // Mock NextAuth for server action tests
-jest.mock("@/lib/auth/auth", () => ({
-  auth: jest.fn(() => Promise.resolve({
+vi.mock("@/lib/auth/auth", () => ({
+  auth: vi.fn(() => Promise.resolve({
     user: {
       id: "000000000000000000000001",
       name: "Test Admin",
@@ -28,8 +29,8 @@ jest.mock("@/lib/auth/auth", () => ({
     expires: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
   })),
   handlers: {},
-  signIn: jest.fn(),
-  signOut: jest.fn(),
+  signIn: vi.fn(),
+  signOut: vi.fn(),
 }));
 
 // Setup test data before all tests
@@ -53,6 +54,6 @@ beforeAll(async () => {
 });
 
 // Console log test environment start
-console.log("✓ Test environment configured");
+console.log("✓ Vitest test environment configured");
 console.log(`  MongoDB: ${process.env.MONGODB_URI || "mongodb://localhost:27017/incentiveio"}`);
 console.log(`  Node Env: ${process.env.NODE_ENV}`);

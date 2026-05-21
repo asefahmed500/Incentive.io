@@ -177,15 +177,21 @@ export async function rejectSale(id: string, reason: string, rejectedBy?: "manag
   const rejectionReason = parsed.data.reason;
   const rejectorRole = parsed.data.rejectedBy;
 
-  // Reset all status fields using helper function
-  await resetSaleStatuses(parsed.data.id);
-
-  // Update with rejection information and set approval status
+  // Single atomic update: reset statuses and set rejection info
   await SalesRecord.findByIdAndUpdate(parsed.data.id, {
     status: "Draft",
     approvalStatus: "Rejected",
+    accountantStatus: "Pending",
+    financeStatus: "Pending",
     rejectionReason,
     rejectedBy: rejectorRole,
+    eligibilityStatus: "Pending",
+    $unset: {
+      approvedBy: "",
+      approvedAt: "",
+      processedAt: "",
+      finalApprovedAt: "",
+    },
   });
 
   {
@@ -752,14 +758,16 @@ export async function processAutoApproval(saleId: string) {
             accountantStatus: "Pending",
             financeStatus: "Pending",
             autoApproved: false,
-            autoApprovedAt: undefined,
-            autoApprovedCategories: undefined,
-            approvedAt: undefined,
-            processedAt: undefined,
-            finalApprovedAt: undefined,
             paymentStatus: "Pending",
             isPaid: false,
-            paymentDate: undefined,
+            $unset: {
+              autoApprovedAt: "",
+              autoApprovedCategories: "",
+              approvedAt: "",
+              processedAt: "",
+              finalApprovedAt: "",
+              paymentDate: "",
+            },
           });
           return { error: walletResult.error };
         }

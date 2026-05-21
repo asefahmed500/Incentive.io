@@ -1,6 +1,7 @@
 "use server";
 
 import { z } from "zod";
+import { cache } from "react";
 import { connectToDatabase, toObjectId } from "@/lib/mongodb";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { Product } from "@/lib/models/Product";
@@ -27,13 +28,15 @@ export async function resetSaleStatuses(saleId: string) {
     approvalStatus: "Pending",
     accountantStatus: "Pending",
     financeStatus: "Pending",
-    rejectionReason: undefined,
-    rejectedBy: undefined,
     eligibilityStatus: "Pending",
-    approvedBy: undefined,
-    approvedAt: undefined,
-    processedAt: undefined,
-    finalApprovedAt: undefined,
+    $unset: {
+      rejectionReason: "",
+      rejectedBy: "",
+      approvedBy: "",
+      approvedAt: "",
+      processedAt: "",
+      finalApprovedAt: "",
+    },
   });
 }
 
@@ -53,6 +56,8 @@ export async function checkAutoApproveEligibility(products: Array<{ categoryId: 
 
   // Fetch all categories
   const categories = await Category.find({ _id: { $in: categoryIds } }).lean();
+
+  if (categories.length !== categoryIds.length) return false;
 
   // Check if ALL categories have autoApprove = true
   return categories.every(c => c.autoApprove === true);
@@ -111,7 +116,7 @@ const updateSalesRecordSchema = z.object({
   data: updateSalesRecordDataSchema,
 });
 
-export async function getSalesRecords({
+async function getSalesRecordsImpl({
   employeeId,
   status,
   search,
@@ -122,12 +127,29 @@ export async function getSalesRecords({
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
+  const userRole = (session.user as AuthUser).role;
+  const userId = session.user.id as string;
   const parsed = getSalesRecordsSchema.safeParse({ employeeId, status, search });
   if (!parsed.success) return [];
   await connectToDatabase();
 
   const query: Record<string, unknown> = {};
-  if (parsed.data.employeeId) query.employeeId = toObjectId(parsed.data.employeeId);
+  if (userRole === "salesExecutive") {
+    query.employeeId = userId;
+  } else if (userRole === "salesManager") {
+    if (parsed.data.employeeId) {
+      query.employeeId = parsed.data.employeeId;
+    } else {
+      const employees = await User.find({ managerId: userId }).select("_id").lean();
+      const employeeIds = employees.map(e => e._id.toString());
+      query.$or = [
+        { employeeId: { $in: employeeIds } },
+        { managerId: userId },
+      ];
+    }
+  } else if (parsed.data.employeeId) {
+    query.employeeId = parsed.data.employeeId;
+  }
   if (parsed.data.status) query.status = parsed.data.status;
   if (parsed.data.search) {
     const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -150,6 +172,9 @@ export async function getSalesRecords({
     autoApproved: r.autoApproved || false,
   }));
 }
+
+// Export cached version for per-request deduplication (server-cache-react)
+export const getSalesRecords = cache(getSalesRecordsImpl);
 
 export async function getSalesRecord(id: string) {
   const session = await auth();
@@ -227,7 +252,7 @@ export async function getSalesStats() {
   return stats;
 }
 
-export async function getSalesRecordsByManagerId(managerId: string) {
+async function getSalesRecordsByManagerIdImpl(managerId: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const parsed = objectIdSchema.safeParse(managerId);
@@ -259,6 +284,9 @@ export async function getSalesRecordsByManagerId(managerId: string) {
   }));
 }
 
+// Export cached version for per-request deduplication (server-cache-react)
+export const getSalesRecordsByManagerId = cache(getSalesRecordsByManagerIdImpl);
+
 export async function getAllSalesRecords({
   status,
   search,
@@ -275,7 +303,7 @@ export async function getAllSalesRecords({
   await connectToDatabase();
 
   const query: Record<string, unknown> = {};
-  if (parsed.data.status && parsed.data.status !== "all") query.approvalStatus = parsed.data.status;
+  if (parsed.data.status && parsed.data.status !== "all") query.status = parsed.data.status;
   if (parsed.data.search) {
     const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     query.$or = [
@@ -291,7 +319,7 @@ export async function getAllSalesRecords({
 
   return records.map((r) => ({
     id: r._id.toString(),
-    date: r.date,
+    date: r.createdAt,
     companyName: r.companyName,
     companyEmail: r.companyEmail,
     employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,

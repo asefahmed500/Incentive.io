@@ -381,10 +381,14 @@ useEffect(() => {
 27. **Commission rules in tests:** Tests require commission rules to exist. `tests/setup.ts` automatically creates them if missing. Users need `targetAmount` set for commission calculation (see `tests/helpers/test-actions.ts`).
 28. **Auto-approve eligibility:** ALL products must be from auto-approve categories. Mixed categories (auto-approve + regular) follow standard workflow.
 29. **CommissionRule validation:** Pre-save hook validates `targetPercentageFrom <= targetPercentageTo` and `0 <= commissionRate <= 100`.
-28. **Health check pattern:** Use `checkDatabaseConnection()` from `lib/mongodb` for health endpoints. Returns `{ connected, message, latency }` and triggers connection if needed.
-29. **API-level validation required:** All new API endpoints must have validation schemas in `lib/validations/*.ts` (defense-in-depth). Never trust client input at the API boundary alone.
-30. **Error type safety:** In lib/ files, avoid `catch (error: any)` — use `error instanceof Error ? error.message : "Unknown error"` pattern for type safety.
-31. **NoSQL injection prevention:** When creating validation schemas for string query parameters, add refinement to reject strings starting with `$` to prevent MongoDB operator injection. Pattern: `z.string().refine(val => !val.startsWith('$'), { message: "Invalid characters" })`
+30. **Health check pattern:** Use `checkDatabaseConnection()` from `lib/mongodb` for health endpoints. Returns `{ connected, message, latency }` and triggers connection if needed.
+31. **API-level validation required:** All new API endpoints must have validation schemas in `lib/validations/*.ts` (defense-in-depth). Never trust client input at the API boundary alone.
+32. **Error type safety:** In lib/ files, avoid `catch (error: any)` — use `error instanceof Error ? error.message : "Unknown error"` pattern for type safety.
+33. **NoSQL injection prevention:** When creating validation schemas for string query parameters, add refinement to reject strings starting with `$` to prevent MongoDB operator injection. Pattern: `z.string().refine(val => !val.startsWith('$'), { message: "Invalid characters" })`
+34. **Resubmit resets workflow fields:** When a rejected sale is resubmitted, ALL workflow fields are reset: `accountantStatus`, `financeStatus`, `netSales`, `tax`, `vat`, `eoBP`, `commission`, `rejectionReason`, `rejectedBy`.
+35. **Ownership required:** Sales record operations check `employeeId` ownership. Managers can only approve records from their `managerId` team members. Server actions enforce this.
+36. **Password change security:** The `changePassword` function derives userId from the session, never from client input. Never trust userId from request body for sensitive operations.
+37. **Net sales validation:** Accountant processing rejects sales where net sales would be < 0 (gross - tax - VAT - EO/BP < 0).
 
 ## Key Files
 
@@ -439,10 +443,11 @@ The application is named **Incentive.io** (not "incentiveio" or "IncentiveIO").
 
 ## Code Style
 
-- Prettier: no semicolons, double quotes, trailing comma es5
+- Prettier: no semicolons, double quotes, trailing comma es5, printWidth 80
 - `@/*` path alias maps to `./*` (no `src/` prefix)
 - Icon components: Lucide React only
 - Currency formatting: `(amount || 0).toLocaleString()`
+- ESLint: `no-explicit-any` is `warn` (not error), unused vars with `_` prefix allowed (`argsIgnorePattern: "^_"`)
 
 ## Code Quality Status
 

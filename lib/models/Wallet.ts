@@ -55,5 +55,8 @@ WalletSchema.pre("find", function() {
 WalletSchema.pre("findOne", function() {
   this.where({ deletedAt: null });
 });
+WalletSchema.pre("countDocuments", function() {
+  this.where({ deletedAt: null });
+});
 
 export const Wallet = mongoose.models.Wallet || mongoose.model<IWallet>("Wallet", WalletSchema);

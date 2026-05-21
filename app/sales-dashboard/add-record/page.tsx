@@ -74,13 +74,14 @@ function AddSalesRecord() {
   useEffect(() => {
     const loadCategories = async () => {
       const data = await getCategories();
-      setCategories(data);
+      if (Array.isArray(data)) {
+        setCategories(data);
 
-      // Identify auto-approve categories
-      const autoApproveIds = new Set(
-        data.filter((cat) => cat.autoApprove && cat.id).map((cat) => cat.id as string)
-      );
-      setAutoApproveCategories(autoApproveIds);
+        const autoApproveIds = new Set(
+          data.filter((cat: any) => cat.autoApprove && cat.id).map((cat: any) => cat.id as string)
+        );
+        setAutoApproveCategories(autoApproveIds);
+      }
     };
     loadCategories();
   }, []);

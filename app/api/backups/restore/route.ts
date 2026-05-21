@@ -1,139 +1,118 @@
-import { NextRequest, NextResponse } from "next/server";
-import fs from "fs";
-import path from "path";
-import { requireAdminOrAbove } from "@/lib/auth/role-guard";
-
-const BACKUP_DIR = path.join(process.cwd(), "backups");
+import { NextRequest, NextResponse } from "next/server"
+import { requireAdminOrAbove } from "@/lib/auth/role-guard"
+import { connectToDatabase } from "@/lib/mongodb"
+import { Backup } from "@/lib/models/Backup"
 
 export async function POST(request: NextRequest) {
-  const authResult = await requireAdminOrAbove();
-  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  const authResult = await requireAdminOrAbove()
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status })
+
   try {
-    const { searchParams } = new URL(request.url);
-    const filename = searchParams.get("filename");
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
 
-    if (!filename) {
-      return NextResponse.json({ error: "Filename required" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Backup ID required" }, { status: 400 })
     }
 
-    // Security: Prevent path traversal attacks
-    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
-      return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
+    await connectToDatabase()
+
+    const backup = await Backup.findById(id)
+    if (!backup) {
+      return NextResponse.json({ error: "Backup not found" }, { status: 404 })
     }
 
-    // Security: Only allow .json files in backup directory
-    if (!filename.endsWith(".json")) {
-      return NextResponse.json({ error: "Invalid file type. Only JSON backup files are allowed." }, { status: 400 });
-    }
-
-    const filepath = path.join(BACKUP_DIR, filename);
-
-    if (!fs.existsSync(filepath)) {
-      return NextResponse.json({ error: "Backup not found" }, { status: 404 });
-    }
-
-    let backupData;
-    try {
-      backupData = JSON.parse(fs.readFileSync(filepath, "utf-8"));
-    } catch (parseError) {
-      return NextResponse.json({ error: "Invalid backup file format" }, { status: 400 });
-    }
-    
+    const backupData = backup.data as Record<string, unknown>
     if (!backupData._meta) {
-      return NextResponse.json({ error: "Invalid backup file format" }, { status: 400 });
+      return NextResponse.json({ error: "Invalid backup data" }, { status: 400 })
     }
-    
-    const { connectToDatabase } = await import("@/lib/mongodb");
-    const { default: mongoose } = await import("mongoose");
-    await connectToDatabase();
-    
-    const collections = ["users", "salesrecords", "teams", "categories", "products", "commissionrules", "notifications", "wallets"];
-    
+
+    const mongoose = (await import("mongoose")).default
+    const collections = [
+      "users",
+      "salesrecords",
+      "teams",
+      "categories",
+      "products",
+      "commissionrules",
+      "notifications",
+      "wallets",
+    ]
+
     for (const collName of collections) {
-      if (backupData[collName] && Array.isArray(backupData[collName])) {
+      const docs = backupData[collName]
+      if (docs && Array.isArray(docs)) {
         try {
-          const conn = mongoose.connection.db;
+          const conn = mongoose.connection.db
           if (conn) {
-            const coll = conn.collection(collName);
-            if (backupData[collName].length > 0) {
-              await coll.deleteMany({});
+            const coll = conn.collection(collName)
+            if (docs.length > 0) {
+              await coll.deleteMany({})
               if (collName === "users" || collName === "commissionrules" || collName === "categories" || collName === "products") {
-                for (const doc of backupData[collName]) {
-                  const docWithoutId = { ...doc };
-                  delete docWithoutId._id;
-                  await coll.insertOne(docWithoutId);
+                for (const doc of docs) {
+                  const docWithoutId = { ...doc as Record<string, unknown> }
+                  delete docWithoutId._id
+                  await coll.insertOne(docWithoutId)
                 }
               } else {
-                await coll.insertMany(backupData[collName]);
+                await coll.insertMany(docs)
               }
             }
           }
         } catch (e) {
-          console.error(`Failed to restore ${collName}:`, e);
+          console.error(`Failed to restore ${collName}:`, e)
         }
       }
     }
-    
+
     return NextResponse.json({
       success: true,
       message: "Restore completed successfully",
-      collectionsRestored: collections.filter(c => backupData[c]?.length > 0).length,
-    });
+      collectionsRestored: collections.filter((c) => {
+        const docs = backupData[c]
+        return docs && Array.isArray(docs) && docs.length > 0
+      }).length,
+    })
   } catch (error: any) {
-    console.error("Restore failed:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("Restore failed:", error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }
 
 export async function GET(request: NextRequest) {
-  const authResult = await requireAdminOrAbove();
-  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
+  const authResult = await requireAdminOrAbove()
+  if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status })
+
   try {
-    const { searchParams } = new URL(request.url);
-    const filename = searchParams.get("filename");
+    const { searchParams } = new URL(request.url)
+    const id = searchParams.get("id")
 
-    if (!filename) {
-      return NextResponse.json({ error: "Filename required" }, { status: 400 });
+    if (!id) {
+      return NextResponse.json({ error: "Backup ID required" }, { status: 400 })
     }
 
-    // Security: Prevent path traversal attacks
-    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
-      return NextResponse.json({ error: "Invalid filename" }, { status: 400 });
+    await connectToDatabase()
+
+    const backup = await Backup.findById(id).lean()
+    if (!backup) {
+      return NextResponse.json({ error: "Backup not found" }, { status: 404 })
     }
 
-    // Security: Only allow .json files in backup directory
-    if (!filename.endsWith(".json")) {
-      return NextResponse.json({ error: "Invalid file type. Only JSON backup files are allowed." }, { status: 400 });
-    }
-
-    const filepath = path.join(BACKUP_DIR, filename);
-
-    if (!fs.existsSync(filepath)) {
-      return NextResponse.json({ error: "Backup not found" }, { status: 404 });
-    }
-
-    const stat = fs.statSync(filepath);
-
-    let backupData;
-    try {
-      backupData = JSON.parse(fs.readFileSync(filepath, "utf-8"));
-    } catch (parseError) {
-      return NextResponse.json({ error: "Invalid backup file format" }, { status: 400 });
-    }
+    const data = backup.data as Record<string, unknown>
 
     return NextResponse.json({
-      filename,
-      size: stat.size,
-      createdAt: stat.mtime.toISOString(),
-      collections: Object.keys(backupData).filter(k => k !== "_meta" && Array.isArray(backupData[k])),
+      filename: backup.filename,
+      size: backup.size,
+      createdAt: backup.createdAt.toISOString(),
+      collections: Object.keys(data).filter((k) => k !== "_meta" && Array.isArray(data[k])),
       recordCounts: Object.fromEntries(
-        Object.entries(backupData)
+        Object.entries(data)
           .filter(([k, v]) => k !== "_meta" && Array.isArray(v))
           .map(([k, v]) => [k, (v as unknown[]).length])
       ),
-    });
+    })
   } catch (error: any) {
-    console.error("Backup info failed:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    console.error("Backup info failed:", error)
+    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
   }
 }

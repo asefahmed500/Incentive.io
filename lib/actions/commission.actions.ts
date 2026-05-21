@@ -2,6 +2,7 @@
 
 import { auth } from "@/lib/auth/auth";
 import { z } from "zod";
+import { cache } from "react";
 import { connectToDatabase, toObjectId } from "@/lib/mongodb";
 import { CommissionRule } from "@/lib/models/CommissionRule";
 import { SalesRecord } from "@/lib/models/SalesRecord";
@@ -147,14 +148,13 @@ export async function getCommissions() {
 
   // Build query based on role
   let query: Record<string, unknown> = {
-    approvalStatus: "Approved",
-    accountantStatus: "Approved",
-    financeStatus: "Approved",
+    status: "Approved",
+    deletedAt: null,
   };
 
   // Role-based filtering
   if (userRole === "salesExecutive") {
-    query.employeeId = toObjectId(userId);
+    query.employeeId = userId;
   } else if (userRole === "salesManager") {
     const teamMembers = await User.find({ managerId: toObjectId(userId) }).select("_id").lean();
     const teamMemberIds = teamMembers.map((u) => u._id.toString());
@@ -162,18 +162,19 @@ export async function getCommissions() {
   }
   // Admin, administrator, accountant, finance can see all commissions
 
-  const records = await SalesRecord.find(query).populate("employeeId", "name isEligible").lean();
+  const records = await SalesRecord.find(query).lean();
 
-  const employeeIds = [...new Set(records.map((r) => (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString()).filter(Boolean))];
-  const users = await User.find({ _id: { $in: employeeIds } }, { isEligible: 1 }).lean();
+  const employeeIds = [...new Set(records.map((r) => r.employeeId).filter(Boolean))];
+  const userObjectIds = employeeIds.filter((id): id is string => !!id).map((id) => toObjectId(id));
+  const users = await User.find({ _id: { $in: userObjectIds } }, { isEligible: 1 }).lean();
   const eligibilityMap = new Map(users.map((u) => [u._id.toString(), u.isEligible || false]));
 
   return records.map((r) => {
-    const empId = (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString();
+    const empId = r.employeeId;
     return {
       id: r._id.toString(),
       employeeId: empId,
-      employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
+      employeeName: r.employeeName,
       commission: r.commission,
       calculatedCommission: r.calculatedCommission,
       status: r.status,
@@ -185,7 +186,8 @@ export async function getCommissions() {
   });
 }
 
-export async function getCommissionsByEmployee(employeeId: string) {
+// Internal implementation
+async function getCommissionsByEmployeeImpl(employeeId: string) {
   const session = await auth();
   if (!session?.user?.id) return { records: [], totalCommission: 0, paidCommission: 0, pendingCommission: 0 };
   const userRole = (session.user as AuthUser).role;
@@ -201,6 +203,8 @@ export async function getCommissionsByEmployee(employeeId: string) {
     return { error: "Forbidden: You can only view your own commissions" };
   }
 
+  await connectToDatabase();
+
   if (userRole === "salesManager") {
     const teamMember = await User.findOne({ _id: parsed.data, managerId: userId }).lean();
     if (!teamMember) {
@@ -208,7 +212,6 @@ export async function getCommissionsByEmployee(employeeId: string) {
     }
   }
 
-  await connectToDatabase();
   const records = await SalesRecord.find({
     employeeId: parsed.data,
     financeStatus: "Approved",
@@ -233,7 +236,10 @@ export async function getCommissionsByEmployee(employeeId: string) {
   };
 }
 
-export async function checkEligibility(employeeId: string) {
+// Export cached version for per-request deduplication (server-cache-react)
+export const getCommissionsByEmployee = cache(getCommissionsByEmployeeImpl);
+
+async function checkEligibilityImpl(employeeId: string) {
   const session = await auth();
   if (!session?.user?.id) return { eligible: false, achievement: 0, message: "Unauthorized" };
   const parsed = checkEligibilitySchema.safeParse(employeeId);
@@ -314,6 +320,9 @@ export async function checkEligibility(employeeId: string) {
     message: nowEligible ? "Eligible for commission" : `Need ${(50 - achievement).toFixed(1)}% more achievement`,
   };
 }
+
+// Export cached version for per-request deduplication (server-cache-react)
+export const checkEligibility = cache(checkEligibilityImpl);
 
 export async function reevaluateIneligibleRecords(employeeId: string) {
   const session = await auth();

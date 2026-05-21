@@ -5,6 +5,8 @@
  * This allows netSales = 0 (a valid value when deductions equal gross amount) to be used correctly.
  */
 
+import { describe, it, expect } from "vitest";
+
 describe("Commission Calculation Bug Fix - netSales = 0", () => {
   describe("Fixed condition logic", () => {
     it("correctly uses netSales = 0 instead of falling back to grossAmount", () => {

@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth/auth.config";
 import { NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/login", "/register", "/api/auth", "/api/health", "/api/socket"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/api/auth", "/api/health", "/api/socket", "/api/register"];
 
 const { auth } = NextAuth(authConfig);
 
@@ -13,7 +13,12 @@ export default auth((req) => {
   const userRole = req.auth?.user?.role as string;
 
   // Handle HTTPS redirect in production
-  if (process.env.NODE_ENV === "production" && req.headers.get("x-forwarded-proto") !== "https") {
+  if (
+    process.env.NODE_ENV === "production" &&
+    nextUrl.hostname !== "localhost" &&
+    nextUrl.hostname !== "127.0.0.1" &&
+    req.headers.get("x-forwarded-proto") !== "https"
+  ) {
     const httpsUrl = new URL(req.url);
     httpsUrl.protocol = "https:";
     return NextResponse.redirect(httpsUrl);

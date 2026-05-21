@@ -81,6 +81,9 @@ export interface SaleRecord {
   isPaid: boolean;
   paymentStatus: "Pending" | "Paid";
   paymentDate?: Date;
+  autoApproved?: boolean;
+  autoApprovedAt?: Date;
+  autoApprovedCategories?: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -154,6 +157,7 @@ export interface Category {
   id: string;
   name: string;
   description: string;
+  autoApprove?: boolean;
 }
 
 export interface Product {

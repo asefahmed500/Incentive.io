@@ -1,7 +1,7 @@
 "use client"
 
-import { signIn } from "next-auth/react"
-import { useState } from "react"
+import { getSession, signIn } from "next-auth/react"
+import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,8 +10,13 @@ import { useNotifications } from "@/hooks/useNotifications"
 
 export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
   const router = useRouter()
   const { showError } = useNotifications()
+
+  useEffect(() => {
+    setIsHydrated(true)
+  }, [])
 
   async function login(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -40,12 +45,26 @@ export function LoginForm() {
       redirect: false,
     })
 
-    setIsLoading(false)
-
     if (result?.error) {
-      showError(new Error(result.error))
+      showError(new Error(result.error === "CredentialsSignin" ? "Invalid email or password" : result.error))
+      setIsLoading(false)
     } else if (result?.ok) {
-      router.push("/")
+      let path = "/"
+      try {
+        const session = await getSession()
+        const role = session?.user?.role
+        path = role === "administrator" ? "/administrator"
+          : role === "admin" ? "/admin"
+          : role === "salesManager" ? "/sales-manager"
+          : role === "accountant" ? "/accountant"
+          : role === "finance" ? "/finance"
+          : role === "salesExecutive" ? "/sales-dashboard"
+          : "/"
+      } catch (error) {
+        console.error("Failed to fetch session after login:", error)
+      }
+
+      window.location.href = path
     }
   }
 
@@ -61,7 +80,6 @@ export function LoginForm() {
             placeholder="you@example.com"
             required
             disabled={isLoading}
-            pattern="[a-z0-9._%+-]+@[a-z0-9.-]+\.[a-z]{2,}$"
             title="Please enter a valid email address"
           />
         </div>
@@ -79,7 +97,7 @@ export function LoginForm() {
         </div>
       </div>
 
-      <Button type="submit" className="w-full" disabled={isLoading}>
+      <Button type="submit" className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white" disabled={isLoading || !isHydrated}>
         {isLoading ? "Signing in..." : "Sign in"}
       </Button>
     </form>

@@ -129,5 +129,8 @@ SalesRecordSchema.pre("find", function () {
 SalesRecordSchema.pre("findOne", function () {
   this.where({ deletedAt: null });
 });
+SalesRecordSchema.pre("countDocuments", function () {
+  this.where({ deletedAt: null });
+});
 
 export const SalesRecord = mongoose.models.SalesRecord || mongoose.model<ISalesRecord>("SalesRecord", SalesRecordSchema);

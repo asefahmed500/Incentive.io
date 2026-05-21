@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Target, Wallet, TrendingUp, DollarSign, Users, Building2, CheckCircle, XCircle, Clock, RefreshCw, ArrowRight } from "lucide-react";
@@ -16,8 +16,13 @@ import { ErrorBoundary } from "@/components/error-boundary";
 
 const COLORS = ["#10b981", "#f59e0b", "#3b82f6"];
 
+// Empty state constant
+const EMPTY_TREND = { month: "No Data", sales: 0, commission: 0 };
+const EMPTY_PROGRESS = { month: "No Data", earned: 0, target: 0 };
+
 export default function SalesDashboard() {
   const { data: session } = useSession();
+  const userId = session?.user?.id;
   const router = useRouter();
   const [stats, setStats] = useState({
     totalRecords: 0,
@@ -30,16 +35,18 @@ export default function SalesDashboard() {
   const [commissionProgress, setCommissionProgress] = useState<Array<{ month: string; earned: number; target: number }>>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
-    if (!session?.user?.id) return;
+  // Memoize fetchData to prevent unnecessary re-renders (rerender-defer-reads)
+  const fetchData = useCallback(async () => {
+    if (!userId) return;
 
-    const records = await getSalesRecords({ employeeId: session.user.id });
-    const commissions = await getCommissionsByEmployee(session.user.id);
-    const elig = await checkEligibility(session.user.id);
-
-    // Fetch real analytics data
-    const trendsResult = await getSalesTrends(session.user.id, 6);
-    const progressResult = await getCommissionProgress(session.user.id, 6);
+    // Parallelize independent fetches (async-parallel)
+    const [records, commissions, elig, trendsResult, progressResult] = await Promise.all([
+      getSalesRecords({ employeeId: userId }),
+      getCommissionsByEmployee(userId),
+      checkEligibility(userId),
+      getSalesTrends(userId, 6),
+      getCommissionProgress(userId, 6),
+    ]);
 
     const safeRecords = Array.isArray(records) ? records : [];
     if (!Array.isArray(records)) console.error((records as any)?.error || "Failed to fetch records");
@@ -52,47 +59,43 @@ export default function SalesDashboard() {
       .filter((r: any) => r.status === "Approved")
       .reduce((sum: number, r: any) => sum + (r.totalAmount || 0), 0);
 
-    setStats({
+    setStats((prev) => ({
+      ...prev,
       totalRecords: safeRecords.length,
       pending,
       approvedAmount,
       commission: commissions.pendingCommission || 0,
-    });
+    }));
     setEligibility(elig);
 
     // Set chart data from real analytics or use empty arrays if error
     if (Array.isArray(trendsResult)) {
-      setSalesTrends(trendsResult.length > 0 ? trendsResult : [
-        { month: "No Data", sales: 0, commission: 0 }
-      ]);
+      setSalesTrends(trendsResult.length > 0 ? trendsResult : [EMPTY_TREND]);
     } else if (trendsResult?.error) {
       console.error("Sales trends error:", trendsResult.error);
-      setSalesTrends([{ month: "No Data", sales: 0, commission: 0 }]);
+      setSalesTrends([EMPTY_TREND]);
     }
 
     if (Array.isArray(progressResult)) {
-      setCommissionProgress(progressResult.length > 0 ? progressResult : [
-        { month: "No Data", earned: 0, target: 0 }
-      ]);
+      setCommissionProgress(progressResult.length > 0 ? progressResult : [EMPTY_PROGRESS]);
     } else if (progressResult?.error) {
       console.error("Commission progress error:", progressResult.error);
-      setCommissionProgress([{ month: "No Data", earned: 0, target: 0 }]);
+      setCommissionProgress([EMPTY_PROGRESS]);
     }
 
     setLoading(false);
-  };
+  }, [userId]);
+
+  // Stable SSE callbacks
+  const handleSaleUpdate = useCallback(() => { fetchData(); }, [fetchData]);
+  const handleCommissionUpdate = useCallback(() => { fetchData(); }, [fetchData]);
+  const handleDashboardRefresh = useCallback(() => { fetchData(); }, [fetchData]);
 
   // Use SSE for real-time updates
   useSSE({
-    onSaleUpdate: () => {
-      fetchData();
-    },
-    onCommissionUpdate: () => {
-      fetchData();
-    },
-    onDashboardRefresh: () => {
-      fetchData();
-    },
+    onSaleUpdate: handleSaleUpdate,
+    onCommissionUpdate: handleCommissionUpdate,
+    onDashboardRefresh: handleDashboardRefresh,
   });
 
   useEffect(() => {
@@ -101,50 +104,16 @@ export default function SalesDashboard() {
     // Fallback polling every 60 seconds in case SSE fails
     const interval = setInterval(fetchData, 60000);
     return () => clearInterval(interval);
-  }, [session?.user?.id]);
+  }, [fetchData]);
 
-  if (loading) {
-    return (
-      <div className="space-y-6 p-8">
-        <div className="flex items-center justify-between">
-          <div>
-            <Skeleton className="h-8 w-48" />
-            <Skeleton className="h-4 w-64 mt-2" />
-          </div>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <Skeleton className="h-4 w-24" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-16" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {[1, 2].map((i) => (
-            <Card key={i}>
-              <CardHeader>
-                <Skeleton className="h-6 w-32" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-48 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  // Prepare chart data
-  const recordsByStatus = [
-    { name: "Approved", value: stats.totalRecords - stats.pending, color: "#10b981" },
-    { name: "Pending", value: stats.pending, color: "#f59e0b" }
-  ];
+  // Memoize chart data to prevent recalculation on every render
+  const recordsByStatus = useMemo(
+    () => [
+      { name: "Approved", value: stats.totalRecords - stats.pending, color: "#10b981" },
+      { name: "Pending", value: stats.pending, color: "#f59e0b" },
+    ],
+    [stats.totalRecords, stats.pending]
+  );
 
   return (
     <ErrorBoundary>

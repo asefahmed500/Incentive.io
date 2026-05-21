@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(vercel link *)",
+      "Bash(git commit -m ' *)",
+      "Bash(xargs grep -l \"use client\")",
+      "Bash(node D:/incentiveio/scripts/test-auth.js)",
+      "Bash(node D:/incentiveio/scripts/verify-auth.js)",
+      "Bash(node -e ' *)",
+      "Bash(vercel --version)",
+      "Bash(vercel --prod --yes)",
+      "Skill(agent-browser)",
+      "Skill(agent-browser:*)",
+      "Bash(pkill -f \"next dev\" 2>/dev/null; sleep 2 && npm run dev > dev-server.log 2>&1 &)",
+      "Bash(taskkill //PID 18808 //F)"
+    ],
+    "additionalDirectories": [
+      "D:\\incentiveio"
+    ]
+  }
+}

@@ -17,6 +17,7 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { NotificationBell } from "@/components/notification-bell";
+import { SSEConnectionIndicator } from "@/components/sse-connection-indicator";
 import { Separator } from "@/components/ui/separator";
 import { logoutAction } from "@/lib/actions/auth.actions";
 
@@ -82,7 +83,8 @@ export default function SalesDashboardLayout({
         <header className="flex h-16 shrink-0 items-center gap-2 px-4 border-b">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="mr-2 h-4" />
-          <div className="flex flex-1 items-center justify-end">
+          <div className="flex flex-1 items-center justify-end gap-4">
+            <SSEConnectionIndicator />
             <NotificationBell />
           </div>
         </header>

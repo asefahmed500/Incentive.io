@@ -3,7 +3,7 @@
  * Tests database models, wallet operations, and business calculations directly
  */
 
-import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "@jest/globals";
+import { describe, it, expect, beforeAll, afterAll, beforeEach, afterEach } from "vitest";
 import mongoose from "mongoose";
 import { connectToDatabase } from "@/lib/mongodb";
 import { User } from "@/lib/models/User";

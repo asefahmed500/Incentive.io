@@ -3,18 +3,23 @@
  * Tests JWT tampering, role escalation, injection attempts, CSRF, rate limiting
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
+import { describe, it, expect, beforeAll, afterAll, vi, beforeEach } from "vitest";
+import { jwtVerify } from "jose";
 import { User } from "@/lib/models/User";
 import { createTestUser, cleanupTestUser, ensureMongoConnection } from "../helpers/test-actions";
 
 // Mock jose library since it's ESM-only
-jest.mock("jose", () => ({
-  jwtVerify: jest.fn(),
-  SignJWT: jest.fn(),
+vi.mock("jose", () => ({
+  jwtVerify: vi.fn(),
+  SignJWT: vi.fn(),
 }));
 
-const mockJwtVerify = jest.requireMock("jose").jwtVerify as jest.Mock;
-const mockSignJWT = jest.requireMock("jose").SignJWT as jest.Mock;
+type JwtVerifyMock = {
+  mockRejectedValueOnce: (error: Error) => void;
+  (token: string, secret: Uint8Array): Promise<unknown>;
+};
+
+const mockJwtVerify = vi.mocked(jwtVerify) as unknown as JwtVerifyMock;
 
 describe("Security: JWT Token Verification", () => {
   let validUserId: string;
@@ -30,7 +35,7 @@ describe("Security: JWT Token Verification", () => {
 
   it("should reject tampered JWT tokens", async () => {
     // Mock jwtVerify to throw error for tampered tokens
-    mockJwtVerify.mockRejectedValue(new Error("JWT verification failed"));
+    mockJwtVerify.mockRejectedValueOnce(new Error("JWT verification failed"));
 
     const secret = new TextEncoder().encode("test-secret-min-32-chars-long!!");
     const tamperedToken = "tampered.token.value";
@@ -46,7 +51,7 @@ describe("Security: JWT Token Verification", () => {
 
   it("should reject expired tokens", async () => {
     // Mock jwtVerify to throw error for expired tokens
-    mockJwtVerify.mockRejectedValue(new Error("JWT expired"));
+    mockJwtVerify.mockRejectedValueOnce(new Error("JWT expired"));
 
     const secret = new TextEncoder().encode("test-secret-min-32-chars-long!!");
     const expiredToken = "expired.token.value";
@@ -62,7 +67,7 @@ describe("Security: JWT Token Verification", () => {
 
   it("should reject tokens with invalid signature", async () => {
     // Mock jwtVerify to throw error for invalid signature
-    mockJwtVerify.mockRejectedValue(new Error("Invalid signature"));
+    mockJwtVerify.mockRejectedValueOnce(new Error("Invalid signature"));
 
     const wrongSecret = new TextEncoder().encode("different-secret-key-32-chars-long!!!!");
     const token = "valid.token.value";
@@ -347,7 +352,11 @@ describe("Security: Atomic Operations", () => {
       paidBy: userId,
     });
 
-    expect(result1?.success).toBe(true);
+    expect(result1).toBeDefined();
+    if (!result1 || "error" in result1) {
+      throw new Error(`Expected success but got ${result1?.error ?? "no result"}`);
+    }
+    expect(result1.success).toBe(true);
 
     // Second payment should fail
     const result2 = await markCommissionPaid({

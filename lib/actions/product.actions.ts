@@ -131,9 +131,9 @@ export async function updateProduct({
   }
   await connectToDatabase();
   const updateData: Record<string, unknown> = {};
-  if (parsed.data.name) updateData.name = parsed.data.name;
-  if (parsed.data.sku) updateData.sku = parsed.data.sku;
-  if (parsed.data.categoryId) updateData.categoryId = parsed.data.categoryId;
+  if (parsed.data.name !== undefined) updateData.name = parsed.data.name;
+  if (parsed.data.sku !== undefined) updateData.sku = parsed.data.sku;
+  if (parsed.data.categoryId !== undefined) updateData.categoryId = parsed.data.categoryId;
   if (parsed.data.price !== undefined) updateData.price = parsed.data.price;
   if (parsed.data.stock !== undefined) updateData.stock = parsed.data.stock;
   if (parsed.data.image !== undefined) updateData.image = parsed.data.image;

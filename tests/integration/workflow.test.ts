@@ -3,7 +3,7 @@
  * Tests complete workflows across all 6 roles
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { User, SalesRecord } from "@/lib/models";
 import { createTestUser, cleanupTestUser, createTestSale, ensureMongoConnection } from "../helpers/test-actions";
 

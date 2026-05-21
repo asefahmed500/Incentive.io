@@ -30,5 +30,8 @@ SystemSettingsSchema.pre("find", function() {
 SystemSettingsSchema.pre("findOne", function() {
   this.where({ deletedAt: null });
 });
+SystemSettingsSchema.pre("countDocuments", function() {
+  this.where({ deletedAt: null });
+});
 
 export const SystemSettings = mongoose.models.SystemSettings || mongoose.model<ISystemSettings>("SystemSettings", SystemSettingsSchema);

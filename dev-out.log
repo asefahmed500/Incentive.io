@@ -1,0 +1,19 @@
+
+> incentiveio@0.0.1 dev
+> next dev --webpack
+
+▲ Next.js 16.2.6 (webpack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.0.100:3000
+- Environments: .env.local
+✓ Ready in 6.7s
+
+○ Compiling /login ...
+ GET /login 200 in 15.4s (next.js: 5.9s, proxy.ts: 13ms, application-code: 9.6s)
+○ Compiling /api/auth/[...nextauth] ...
+ GET /login 200 in 314ms (next.js: 92ms, proxy.ts: 49ms, application-code: 173ms)
+ GET /api/auth/session 200 in 14.9s (next.js: 14.9s, application-code: 37ms)
+ GET /api/auth/session 200 in 34ms (next.js: 16ms, application-code: 18ms)
+ GET /login 200 in 913ms (next.js: 64ms, proxy.ts: 53ms, application-code: 795ms)
+ GET /api/auth/session 200 in 75ms (next.js: 46ms, application-code: 29ms)
+ GET /api/auth/session 200 in 48ms (next.js: 9ms, application-code: 39ms)

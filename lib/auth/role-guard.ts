@@ -8,6 +8,10 @@ export async function requireAuth() {
   if (!session?.user?.id) {
     return { error: "Unauthorized", status: 401 } as const;
   }
+  const isActive = (session.user as AuthUser).isActive;
+  if (isActive === false) {
+    return { error: "Account deactivated", status: 403 } as const;
+  }
   return { session } as const;
 }
 

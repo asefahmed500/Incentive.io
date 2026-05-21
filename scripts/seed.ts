@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-import bcrypt from "bcryptjs";
 import { connectToDatabase } from "../lib/mongodb";
 import { User } from "../lib/models/User";
 import { Team } from "../lib/models/Team";
@@ -8,12 +7,8 @@ import { Product } from "../lib/models/Product";
 import { CommissionRule } from "../lib/models/CommissionRule";
 import { SalesRecord } from "../lib/models/SalesRecord";
 import { Wallet } from "../lib/models/Wallet";
-
-const SALT_ROUNDS = 10;
-
-async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, SALT_ROUNDS);
-}
+import { AuditLog } from "../lib/models/AuditLog";
+import { hashPassword } from "../lib/utils/password";
 
 async function seed() {
   console.log("Connecting to database...");
@@ -28,6 +23,7 @@ async function seed() {
     CommissionRule.deleteMany({}),
     SalesRecord.deleteMany({}),
     Wallet.deleteMany({}),
+    AuditLog.deleteMany({}),
   ]);
 
   console.log("Creating users...");
@@ -324,8 +320,8 @@ async function seed() {
         { productName: "Laptop Bundle", categoryId: categories[1]._id, unitPrice: 80000, quantity: 2 },
         { productName: "Antivirus Suite", categoryId: categories[4]._id, unitPrice: 8000, quantity: 10 },
       ],
-      taxEnabled: true,
-      vatEnabled: true,
+      taxEnabled: false,
+      vatEnabled: false,
       taxRate: 0,
       taxAmount: 0,
       vatRate: 0,
@@ -375,14 +371,28 @@ async function seed() {
   ]);
 
   console.log("Creating wallets...");
+  const approvedWallets: Record<string, number> = {};
+  for (const rec of await SalesRecord.find({ status: "Approved" }).lean()) {
+    const empId = rec.employeeId;
+    approvedWallets[empId] = (approvedWallets[empId] || 0) + (rec.calculatedCommission || 0);
+  }
+
   for (const execId of executives) {
+    const execIdStr = execId.toString();
+    const earned = approvedWallets[execIdStr] || 0;
     await Wallet.create({
       employeeId: execId,
-      balance: 0,
-      pendingBalance: 0,
-      totalEarned: 0,
+      balance: earned,
+      pendingBalance: earned,
+      totalEarned: earned,
       totalPaid: 0,
-      transactions: [],
+      transactions: earned > 0 ? [{
+        type: "credit",
+        amount: earned,
+        description: "Commission paid for approved sales",
+        balanceAfter: earned,
+        createdAt: new Date(),
+      }] : [],
     });
   }
 

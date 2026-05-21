@@ -34,5 +34,8 @@ ProductSchema.pre("find", function () {
 ProductSchema.pre("findOne", function () {
   this.where({ deletedAt: null });
 });
+ProductSchema.pre("countDocuments", function () {
+  this.where({ deletedAt: null });
+});
 
 export const Product = mongoose.models.Product || mongoose.model<IProduct>("Product", ProductSchema);

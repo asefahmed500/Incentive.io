@@ -48,7 +48,9 @@ export default function AdminCategories() {
     startTransition(async () => {
       setLoading(true);
       const data = await getCategories();
-      setCategories(data);
+      if (Array.isArray(data)) {
+        setCategories(data);
+      }
       setLoading(false);
     });
   };

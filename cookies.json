@@ -1,0 +1,5 @@
+[
+  {"name":"authjs.session-token","value":"eyJhbGciOiJkaXIiLCJlbmMiOiJBMjU2Q0JDLUhTNTEyIiwia2lkIjoibURKMG1IM1JJb19XaGQwaU1KQ2R1WEU1b3o4U2RlcXdhbk1kdTVmWFI2T0lnOGVxQ3hDemlNcTFqTUtKNUc1RHZtMlYtWS0zUTF3WGx4M3R0bVdKTVEifQ..YHGKnnky5vBJMqWszMsCiA.h-1XcYkt_0fSBh4FOrwDZUMfvfnoLbAH2qwgslXJeCq5rADt5ubxiyYU7Zr_JfsJ2y85UUt8v_a8fSgEicRKaqmg98qG6ZZvdb_vXzIlWvaE6yfiPT8q9iVUfEuHEWZAqiTayn0RzsPJ3B64masnEYUTwfbI3t43LV_201I1mveIt379-k_f3xU1jGDwE8PIqTs0San-KuR8dT7_cZgKVas9E1Z-4ymDc-T-7i9jVEw7IeghMOwhPuBuCpS7W7kfHojwxdJGmcE-ub_AUYr8in87Es-nYREV8-XLj1lN1b7NGwewOTmgaztixOjUtDKHfqHSV0FjLIHnOkSc1pEr3g.ga5rItW55TrlJmDB0WaSejeb-XCiaH6zTxI0JsROGQI","domain":"localhost","path":"/"},
+  {"name":"authjs.csrf-token","value":"9ff22a7466ece5a3004d3818d414ae5841c17a5999996640ab8b6f05b751f0c8%7C26a29b2ab49c3e9ef501769a9a7de3db69a707a8b0a7384904ea917f951a0862","domain":"localhost","path":"/"},
+  {"name":"authjs.callback-url","value":"http://localhost:3000","domain":"localhost","path":"/"}
+]

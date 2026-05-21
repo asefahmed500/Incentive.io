@@ -3,7 +3,7 @@
  * Tests wallet concurrency, dashboard performance, and query optimization
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "@jest/globals";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { User, Wallet, SalesRecord } from "@/lib/models";
 import { createTestUser, cleanupTestUser, ensureMongoConnection } from "../helpers/test-actions";
 

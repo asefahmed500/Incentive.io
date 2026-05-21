@@ -1,7 +1,10 @@
 import { getSalesRecord, updateSalesRecord, deleteSalesRecord } from "@/lib/actions/sales.actions";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
-import { getStatusCodeForError } from "@/lib/api-error";
+import { getStatusCodeForError, handleError } from "@/lib/api-error";
+import { z } from "zod";
+
+const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
 export async function GET(
   request: Request,
@@ -9,14 +12,24 @@ export async function GET(
 ) {
   const authResult = await requireAuth();
   if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
-  const { id } = await params;
-  const record = await getSalesRecord(id);
-  
-  if (!record) {
-    return NextResponse.json({ error: "Record not found" }, { status: 404 });
+
+  try {
+    const { id } = await params;
+    const parsed = objectIdSchema.safeParse(id);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid record ID format" }, { status: 400 });
+    }
+
+    const record = await getSalesRecord(parsed.data);
+
+    if (!record || ("error" in (record as object))) {
+      return NextResponse.json({ error: "Record not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(record);
+  } catch (error) {
+    return handleError(error);
   }
-  
-  return NextResponse.json(record);
 }
 
 export async function PUT(
@@ -25,16 +38,26 @@ export async function PUT(
 ) {
   const authResult = await requireAuth();
   if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
-  const { id } = await params;
-  const body = await request.json();
-  
-  const result = await updateSalesRecord(id, body) as { success?: boolean; error?: string };
 
-  if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
+  try {
+    const { id } = await params;
+    const parsed = objectIdSchema.safeParse(id);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid record ID format" }, { status: 400 });
+    }
+
+    const body = await request.json();
+
+    const result = await updateSalesRecord(parsed.data, body) as { success?: boolean; error?: string } | undefined;
+
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleError(error);
   }
-
-  return NextResponse.json({ success: true });
 }
 
 export async function DELETE(
@@ -43,13 +66,22 @@ export async function DELETE(
 ) {
   const authResult = await requireAdminOrAbove();
   if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
-  const { id } = await params;
-  
-  const result = await deleteSalesRecord(id) as { success?: boolean; error?: string };
 
-  if (result.error) {
-    return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
+  try {
+    const { id } = await params;
+    const parsed = objectIdSchema.safeParse(id);
+    if (!parsed.success) {
+      return NextResponse.json({ error: "Invalid record ID format" }, { status: 400 });
+    }
+
+    const result = await deleteSalesRecord(parsed.data) as { success?: boolean; error?: string } | undefined;
+
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    return handleError(error);
   }
-
-  return NextResponse.json({ success: true });
 }

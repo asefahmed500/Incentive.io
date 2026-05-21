@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { FileText, Wallet, TrendingUp, DollarSign, Clock, AlertCircle, CheckCircle, RefreshCw } from "lucide-react";
@@ -14,7 +14,14 @@ import { useSession } from "next-auth/react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSkeleton } from "@/components/loading/dashboard-skeleton";
 
-const COLORS = ["#10b981", "#f59e0b", "#3b82f6", "#ef4444"];
+// Hoist static data outside component (rendering-hoist-jsx)
+const PROCESSING_TRENDS = [
+  { month: "Jan", processed: 45, deductions: 67500, pending: 8 },
+  { month: "Feb", processed: 52, deductions: 78000, pending: 12 },
+  { month: "Mar", processed: 48, deductions: 72000, pending: 10 },
+  { month: "Apr", processed: 65, deductions: 97500, pending: 15 },
+  { month: "May", processed: 58, deductions: 87000, pending: 11 },
+];
 
 export default function AccountantDashboard() {
   const { data: session } = useSession();
@@ -29,7 +36,8 @@ export default function AccountantDashboard() {
   const [deductionBreakdown, setDeductionBreakdown] = useState<Array<{ type: string; amount: number; count: number }>>([]);
   const [loading, setLoading] = useState(true);
 
-  const fetchData = async () => {
+  // Memoize fetchData to prevent unnecessary re-renders (rerender-defer-reads)
+  const fetchData = useCallback(async () => {
     const [pending, salesStats, commissions, deductionData] = await Promise.all([
       getPendingAccountantApprovals(),
       getSalesStats(),
@@ -42,13 +50,14 @@ export default function AccountantDashboard() {
     if (!Array.isArray(pending)) console.error((pending as any)?.error || "Failed to fetch pending approvals");
     if ("error" in salesStats) console.error((salesStats as any).error || "Failed to fetch sales stats");
 
-    setStats({
+    setStats((prev) => ({
+      ...prev,
       pending: safePending.length,
       processedToday: safeStats.processedToday,
       totalProcessed: safeStats.approved + safeStats.pendingFinance,
       totalDeductions: safeStats.totalDeductions,
       pendingFinance: safeStats.pendingFinance,
-    });
+    }));
 
     // Set deduction breakdown from real data or use empty array if error
     if (Array.isArray(deductionData) && deductionData.length > 0) {
@@ -70,7 +79,7 @@ export default function AccountantDashboard() {
     }
 
     setLoading(false);
-  };
+  }, []);
 
   useEffect(() => {
     fetchData();
@@ -78,23 +87,18 @@ export default function AccountantDashboard() {
     // Poll every 30 seconds for real-time updates
     const interval = setInterval(fetchData, 30000);
     return () => clearInterval(interval);
-  }, [session?.user?.id]);
+  }, [fetchData]);
+
+  // Memoize chart data to prevent recalculation on every render
+  const processingStatus = useMemo(
+    () => [
+      { name: "Processed", value: stats.totalProcessed, color: "#10b981" },
+      { name: "Pending", value: stats.pending, color: "#f59e0b" },
+    ],
+    [stats.totalProcessed, stats.pending]
+  );
 
   if (loading) return <DashboardSkeleton />;
-
-  // Prepare chart data
-  const processingStatus = [
-    { name: "Processed", value: stats.totalProcessed, color: "#10b981" },
-    { name: "Pending", value: stats.pending, color: "#f59e0b" }
-  ];
-
-  const processingTrends = [
-    { month: "Jan", processed: 45, deductions: 67500, pending: 8 },
-    { month: "Feb", processed: 52, deductions: 78000, pending: 12 },
-    { month: "Mar", processed: 48, deductions: 72000, pending: 10 },
-    { month: "Apr", processed: 65, deductions: 97500, pending: 15 },
-    { month: "May", processed: 58, deductions: 87000, pending: 11 },
-  ];
 
   return (
     <ErrorBoundary>
@@ -104,7 +108,7 @@ export default function AccountantDashboard() {
             <h1 className="text-3xl font-bold">Dashboard</h1>
             <p className="text-muted-foreground">Welcome back, {session?.user?.name}</p>
           </div>
-        <Button variant="outline" size="sm" onClick={fetchData}>
+        <Button variant="outline" size="sm" onClick={fetchData} aria-label="Refresh dashboard data">
           <RefreshCw className="h-4 w-4 mr-2" />
           Refresh
         </Button>
@@ -210,7 +214,7 @@ export default function AccountantDashboard() {
         </CardHeader>
         <CardContent>
           <ResponsiveContainer width="100%" height={250}>
-            <AreaChart data={processingTrends}>
+            <AreaChart data={PROCESSING_TRENDS}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="month" />
               <YAxis />

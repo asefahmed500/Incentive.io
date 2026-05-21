@@ -13,3 +13,6 @@ export { AuditLog } from "./AuditLog";
 export { SystemSettings } from "./SystemSettings";
 
 export { CommissionRule } from "./CommissionRule";
+export { Notification } from "./Notification";
+export { FileAttachment } from "./FileAttachment";
+export { Backup } from "./Backup";

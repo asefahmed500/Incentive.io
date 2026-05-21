@@ -29,5 +29,8 @@ TeamSchema.pre("find", function () {
 TeamSchema.pre("findOne", function () {
   this.where({ deletedAt: null });
 });
+TeamSchema.pre("countDocuments", function () {
+  this.where({ deletedAt: null });
+});
 
 export const Team = mongoose.models.Team || mongoose.model<ITeam>("Team", TeamSchema);
