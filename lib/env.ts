@@ -1,7 +1,12 @@
 import { z } from "zod";
 
 const envSchema = z.object({
-  MONGODB_URI: z.string().url("Invalid MongoDB URI"),
+  MONGODB_URI: z.string()
+    .min(1, "MONGODB_URI is required")
+    .refine(
+      (value) => value.startsWith("mongodb://") || value.startsWith("mongodb+srv://"),
+      "Invalid MongoDB connection string. Must start with 'mongodb://' or 'mongodb+srv://'"
+    ),
   NEXTAUTH_SECRET: z.string().min(32, "NEXTAUTH_SECRET must be at least 32 characters"),
   NEXTAUTH_URL: z.string().url("Invalid NEXTAUTH_URL"),
   EMAIL_HOST: z.string().min(1),
