@@ -1,5 +1,4 @@
 import { approveSale, rejectSale } from "@/lib/actions/approval.actions";
-import { notifyManagerApproved, notifyManagerRejected } from "@/lib/actions/notification.actions";
 import { handleError } from "@/lib/api-error";
 import { managerActionSchema } from "@/lib/validations/approval.validation";
 import { NextResponse } from "next/server";
@@ -26,24 +25,14 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: result.error }, { status: 400 });
       }
 
-      // Notify executive
-      if (employeeId && companyName) {
-        await notifyManagerApproved(employeeId, companyName);
-      }
-
       return NextResponse.json({ success: true });
     }
 
     if (action === "reject") {
-      const result = await rejectSale(id, reason || "") as { success?: boolean; error?: string };
+      const result = await rejectSale(id, reason || "", "manager") as { success?: boolean; error?: string };
 
       if (result.error) {
         return NextResponse.json({ error: result.error }, { status: 400 });
-      }
-
-      // Notify executive
-      if (employeeId && companyName) {
-        await notifyManagerRejected(employeeId, companyName, reason || "");
       }
 
       return NextResponse.json({ success: true });

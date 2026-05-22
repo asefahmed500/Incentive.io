@@ -7,17 +7,22 @@ export async function GET() {
   const authResult = await requireAdminOrAbove()
   if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status })
 
-  await connectToDatabase()
-  const backups = await Backup.find({}).sort({ createdAt: -1 }).lean()
+  try {
+    await connectToDatabase()
+    const backups = await Backup.find({ deletedAt: null }).sort({ createdAt: -1 }).lean()
 
-  return NextResponse.json({
-    backups: backups.map((b) => ({
-      name: b.filename,
-      size: b.size,
-      createdAt: b.createdAt.toISOString(),
-      id: b._id.toString(),
-    })),
-  })
+    return NextResponse.json({
+      backups: backups.map((b) => ({
+        name: b.filename,
+        size: b.size,
+        createdAt: b.createdAt.toISOString(),
+        id: b._id.toString(),
+      })),
+    })
+  } catch (error) {
+    console.error("Failed to fetch backups:", error)
+    return NextResponse.json({ success: false, error: "Failed to fetch backups" }, { status: 500 })
+  }
 }
 
 export async function POST() {
@@ -75,9 +80,9 @@ export async function POST() {
       size: backup.size,
       message: "Backup created successfully",
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("Backup failed:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Failed to create backup" }, { status: 500 })
   }
 }
 
@@ -100,11 +105,11 @@ export async function DELETE(request: NextRequest) {
       return NextResponse.json({ error: "Backup not found" }, { status: 404 })
     }
 
-    await Backup.findByIdAndDelete(id)
+    await Backup.findByIdAndUpdate(id, { deletedAt: new Date() })
 
     return NextResponse.json({ success: true, message: "Backup deleted" })
-  } catch (error: any) {
+  } catch (error) {
     console.error("Delete backup failed:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Failed to delete backup" }, { status: 500 })
   }
 }

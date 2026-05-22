@@ -1,5 +1,4 @@
 import { finalApproveByFinance } from "@/lib/actions/approval.actions";
-import { notifyFinanceApproved } from "@/lib/actions/notification.actions";
 import { handleError } from "@/lib/api-error";
 import { financeApprovalSchema } from "@/lib/validations/approval.validation";
 import { NextResponse } from "next/server";

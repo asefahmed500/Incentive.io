@@ -30,7 +30,7 @@ export const paginationSchema = z.object({
 });
 
 export const searchQuerySchema = z.object({
-  search: z.string().max(100, "Search term is too long").optional(),
+  search: z.string().max(100, "Search term is too long").refine(val => !val || !val.startsWith('$'), "Invalid search term").optional(),
 });
 
 export const idParamSchema = z.object({

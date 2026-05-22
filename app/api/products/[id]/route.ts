@@ -31,7 +31,7 @@ export async function GET(
       id: product._id.toString(),
       name: product.name,
       sku: product.sku,
-      categoryId: product.categoryId?.toString() || "",
+      categoryId: (product.categoryId as unknown as { _id?: { toString: () => string } })?._id?.toString() || product.categoryId?.toString() || "",
       categoryName: (product.categoryId as unknown as { name?: string })?.name || "",
       price: product.price,
       stock: product.stock,

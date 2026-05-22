@@ -2,13 +2,33 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth/auth.config";
 import { NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/login", "/register", "/api/auth", "/api/health", "/api/socket", "/api/register"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/api/auth", "/api/health", "/api/register", "/api/reset-password"];
 
 const { auth } = NextAuth(authConfig);
 
 export default auth((req) => {
   const { nextUrl } = req;
-  const path = nextUrl.pathname;
+  const path = nextUrl.pathname.replace(/\/+$/, "") || "/";
+
+  // Handle CORS for API routes
+  if (path.startsWith("/api/")) {
+    const response = NextResponse.next();
+    const origin = req.headers.get("origin") || "";
+    const allowedOrigins = process.env.ALLOWED_ORIGINS
+      ? process.env.ALLOWED_ORIGINS.split(",")
+      : ["http://localhost:3000", "http://127.0.0.1:3000"];
+
+    if (allowedOrigins.includes("*") || allowedOrigins.includes(origin)) {
+      response.headers.set("Access-Control-Allow-Origin", allowedOrigins.includes("*") ? "*" : origin);
+    }
+
+    if (req.method === "OPTIONS") {
+      return new NextResponse(null, { status: 204, headers: response.headers });
+    }
+
+    return response;
+  }
+
   const isLoggedIn = !!req.auth;
   const userRole = req.auth?.user?.role as string;
 

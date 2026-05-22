@@ -10,7 +10,7 @@
 - **Styling:** Tailwind CSS 4, shadcn/ui, Lucide React icons
 - **State/Data:** Server Actions (Zod validated), React Hook Form, Zustand (auth)
 - **Real-time:** Server-Sent Events (SSE) via `/api/events`
-- **Testing:** Jest (Integration/Unit), Playwright (E2E)
+- **Testing:** Vitest (Integration/Unit), Playwright (E2E)
 
 ---
 
@@ -23,7 +23,7 @@
 | **Linting** | `npm run lint` |
 | **Type Checking** | `npm run typecheck` |
 | **Format** | `npm run format` |
-| **Test (Jest)** | `npm test` |
+| **Test (Vitest)** | `npm test` |
 | **Test (E2E)** | `npm run test:e2e` |
 | **Seed Data** | `npm run seed` |
 

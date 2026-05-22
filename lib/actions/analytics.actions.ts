@@ -46,11 +46,13 @@ export async function getSalesTrends(employeeId: string, months: number = 6) {
           },
           totalSales: {
             $sum: {
-              $map: {
-                input: "$products",
-                as: "product",
-                in: { $multiply: ["$$product.unitPrice", "$$product.quantity"] }
-              }
+              $round: [{
+                $reduce: {
+                  input: "$products",
+                  initialValue: 0,
+                  in: { $add: ["$$value", { $round: [{ $multiply: ["$$this.unitPrice", "$$this.quantity"] }, 2] }] }
+                }
+              }, 2]
             }
           },
           totalCommission: { $sum: { $ifNull: ["$calculatedCommission", 0] } },
@@ -165,11 +167,13 @@ export async function getTeamSalesTrends(managerId: string, months: number = 6) 
           },
           totalSales: {
             $sum: {
-              $map: {
-                input: "$products",
-                as: "product",
-                in: { $multiply: ["$$product.unitPrice", "$$product.quantity"] }
-              }
+              $round: [{
+                $reduce: {
+                  input: "$products",
+                  initialValue: 0,
+                  in: { $add: ["$$value", { $round: [{ $multiply: ["$$this.unitPrice", "$$this.quantity"] }, 2] }] }
+                }
+              }, 2]
             }
           },
           totalCommission: { $sum: { $ifNull: ["$calculatedCommission", 0] } },
@@ -208,35 +212,34 @@ export async function getDeductionBreakdown(months: number = 6) {
     startDate.setMonth(startDate.getMonth() - months);
     startDate.setHours(0, 0, 0, 0);
 
-    const breakdown = await SalesRecord.aggregate([
-      {
-        $match: {
-          createdAt: { $gte: startDate },
-          status: "Approved",
-          deletedAt: null,
-          "accountantDeductions.type": { $exists: true, $ne: null },
-        },
-      },
-      {
-        $unwind: "$accountantDeductions",
-      },
-      {
-        $group: {
-          _id: "$accountantDeductions.type",
-          amount: { $sum: { $ifNull: ["$accountantDeductions.amount", 0] } },
-          count: { $sum: 1 },
-        },
-      },
-      {
-        $sort: { amount: -1 },
-      },
-    ]);
+    const approvedRecords = await SalesRecord.find({
+      status: "Approved",
+      deletedAt: null,
+      createdAt: { $gte: startDate },
+    }).lean();
 
-    return breakdown.map((b: { _id: string; amount: number; count: number }) => ({
-      type: b._id,
-      amount: b.amount || 0,
-      count: b.count || 0,
-    }));
+    const deductions = [
+      { type: "Tax", amount: 0, count: 0 },
+      { type: "VAT", amount: 0, count: 0 },
+      { type: "EO/BP", amount: 0, count: 0 },
+    ];
+
+    for (const record of approvedRecords) {
+      if (record.taxAmount > 0) {
+        deductions[0].amount += record.taxAmount;
+        deductions[0].count++;
+      }
+      if (record.vatAmount > 0) {
+        deductions[1].amount += record.vatAmount;
+        deductions[1].count++;
+      }
+      if (record.eoBpAmount > 0) {
+        deductions[2].amount += record.eoBpAmount;
+        deductions[2].count++;
+      }
+    }
+
+    return deductions.filter((d) => d.count > 0);
   } catch (error) {
     console.error("Error fetching deduction breakdown:", error);
     return { error: "Failed to fetch deduction breakdown" };
@@ -275,11 +278,13 @@ export async function getFinanceApprovalTrends(months: number = 6) {
           },
           approvedAmount: {
             $sum: {
-              $map: {
-                input: "$products",
-                as: "product",
-                in: { $multiply: ["$$product.unitPrice", "$$product.quantity"] }
-              }
+              $round: [{
+                $reduce: {
+                  input: "$products",
+                  initialValue: 0,
+                  in: { $add: ["$$value", { $round: [{ $multiply: ["$$this.unitPrice", "$$this.quantity"] }, 2] }] }
+                }
+              }, 2]
             }
           },
           commissionPaid: { $sum: { $ifNull: ["$calculatedCommission", 0] } },

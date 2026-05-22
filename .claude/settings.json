@@ -12,7 +12,20 @@
       "Skill(agent-browser)",
       "Skill(agent-browser:*)",
       "Bash(pkill -f \"next dev\" 2>/dev/null; sleep 2 && npm run dev > dev-server.log 2>&1 &)",
-      "Bash(taskkill //PID 18808 //F)"
+      "Bash(taskkill //PID 18808 //F)",
+      "Bash(MONGODB_URI=\"mongodb+srv://asef:asef270505@cluster0.jc.mongodb.net/incentiveio?retryWrites=true&w=majority\" node scripts/seed-production.js)",
+      "Bash(node scripts/seed-prod-users.js)",
+      "Bash(agent-browser --session prod-admin open https://incentiveio.vercel.app/login)",
+      "Bash(agent-browser --session prod-admin snapshot -i)",
+      "Bash(agent-browser --session prod-admin fill @e3 \"admin@incentive.io\")",
+      "Bash(agent-browser --session prod-register open https://incentiveio.vercel.app/register)",
+      "Bash(node scripts/verify-passwords.js)",
+      "Bash(node scripts/check-prod-data.js)",
+      "Bash(node scripts/check-sales-detail.js)",
+      "Bash(node scripts/check-products.js)",
+      "Bash([ -f \"D:/incentiveio/app/sales-dashboard/$dir/page.tsx\" ])",
+      "Bash(node scripts/test-production-api.js)",
+      "Bash(node scripts/check-categories.js)"
     ],
     "additionalDirectories": [
       "D:\\incentiveio"

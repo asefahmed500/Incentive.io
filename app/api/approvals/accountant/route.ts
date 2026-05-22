@@ -1,5 +1,4 @@
 import { processByAccountant } from "@/lib/actions/approval.actions";
-import { notifyAccountantProcessed } from "@/lib/actions/notification.actions";
 import { handleError } from "@/lib/api-error";
 import { accountantProcessSchema } from "@/lib/validations/approval.validation";
 import { NextResponse } from "next/server";
@@ -31,10 +30,6 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: result.error }, { status: 400 });
     }
 
-    // Notify manager
-    if (managerId && companyName) {
-      await notifyAccountantProcessed(managerId, companyName);
-    }
 
     return NextResponse.json({
       success: true,

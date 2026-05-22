@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Button } from "@/components/ui/button";
 
 interface PaginationProps {
@@ -76,5 +77,3 @@ export function usePagination(items: any[], itemsPerPage = 20) {
   );
   return { currentPage, totalPages, paginatedItems, setCurrentPage, totalItems: items.length };
 }
-
-import { useState } from "react";

@@ -34,7 +34,9 @@ export async function GET(
     const response = {
       id: team._id.toString(),
       name: team.name,
-      managerId: team.managerId?.toString() || "",
+      managerId: typeof team.managerId === "object" && team.managerId && "_id" in team.managerId
+        ? (team.managerId as any)._id?.toString() || ""
+        : team.managerId?.toString() || "",
       managerName: (team.managerId as unknown as { name?: string })?.name || "",
       members,
     };

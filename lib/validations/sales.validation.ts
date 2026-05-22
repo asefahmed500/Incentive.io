@@ -38,5 +38,5 @@ export const deleteSalesRecordSchema = z.object({
 export const salesQuerySchema = z.object({
   employeeId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid employee ID format").optional(),
   status: z.enum(["Draft", "Pending_Manager", "Pending_Accountant", "Pending_Finance", "Approved", "Rejected"]).optional(),
-  search: z.string().max(100, "Search term is too long").optional(),
+  search: z.string().max(100, "Search term is too long").refine(val => !val.startsWith('$'), "Invalid search term").optional(),
 });

@@ -157,7 +157,7 @@ export default function ManagerApprovals() {
         </CardContent>
       </Card>
 
-      <Dialog open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
+      <Dialog key={selectedRecord?.id || "reject"} open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Reject Sale</DialogTitle>

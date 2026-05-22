@@ -17,11 +17,20 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 **Critical:** Always use `npm run build:webpack` — Mongoose native bindings fail with Turbopack.
 
 **Testing:**
-- Jest tests: `npm test` for all tests. Run single test: `npm test -- --testNamePattern="test name"`
+- Vitest tests: `npm test` for all tests. Run single test: `npm test -- --testNamePattern="test name"`
 - E2E tests: `npm run test:e2e` for Playwright E2E tests
 - E2E UI mode: `npm run test:e2e:ui`
 - E2E debug: `npm run test:e2e:debug`
 - E2E report: `npm run test:e2e:report`
+
+**Production Debugging Scripts** (in `scripts/`):
+- `node scripts/check-prod-users.js` - Verify production database users
+- `node scripts/verify-passwords.js` - Test password hashes for all accounts
+- `node scripts/check-prod-data.js` - Check sales records, products, wallets
+- `node scripts/check-categories.js` - Verify category auto-approve configuration
+- `node scripts/test-production-api.js` - Test all API endpoints (13 tests)
+- `node scripts/check-sales-detail.js` - Detailed sales record analysis
+- `node scripts/check-products.js` - Verify product data structure
 
 ## Setup
 
@@ -352,8 +361,9 @@ useEffect(() => {
 
 ## Critical Gotchas
 
-1. **Sales amount calculation:** Use `calculateProductTotal()` from `lib/utils/money.ts` — NEVER use direct multiplication `p.unitPrice * p.quantity` due to floating-point precision errors. No `saleAmount` field exists in the schema.
-2. **Category reference:** Schema uses `categoryId`, not `category`
+1. **MONGODB_URI scheme validation:** Environment variable must use `mongodb://` or `mongodb+srv://` scheme. The `lib/env.ts` validation rejects standard URLs (http/https) to prevent misconfiguration. Production Atlas connections use `mongodb+srv://`.
+2. **Sales amount calculation:** Use `calculateProductTotal()` from `lib/utils/money.ts` — NEVER use direct multiplication `p.unitPrice * p.quantity` due to floating-point precision errors. No `saleAmount` field exists in the schema.
+3. **Category reference:** Schema uses `categoryId`, not `category`
 3. **Dual status fields:** `status` = workflow stage, but `approvalStatus`/`accountantStatus`/`financeStatus` also exist
 4. **Draft-only operations:** Only `Draft` records can be submitted/deleted
 5. **Reject stage guards:** `rejectSale` can only reject at specific stages (manager→Pending_Manager, etc.)
@@ -389,6 +399,7 @@ useEffect(() => {
 35. **Ownership required:** Sales record operations check `employeeId` ownership. Managers can only approve records from their `managerId` team members. Server actions enforce this.
 36. **Password change security:** The `changePassword` function derives userId from the session, never from client input. Never trust userId from request body for sensitive operations.
 37. **Net sales validation:** Accountant processing rejects sales where net sales would be < 0 (gross - tax - VAT - EO/BP < 0).
+38. **Registration form pattern:** Client-side forms that call API routes via fetch should use `onSubmit` handler with manual FormData creation, not the `action` prop. The `action` prop is only for Server Actions. Pattern: `<form onSubmit={(e) => { e.preventDefault(); const formData = new FormData(e.currentTarget); handleSubmit(formData); }}>`.
 
 ## Key Files
 
@@ -429,8 +440,8 @@ useEffect(() => {
 |-------|----------|------|
 | admin@incentive.io | Admin123! | admin |
 | superadmin@incentive.io | Superadmin123! | administrator |
-| jamal@incentive.io | Jamal123! | salesExecutive |
-| manager@incentive.io | Manager123! | salesManager |
+| jamal@incentive.io | Manager123! | salesManager |
+| karim@incentive.io | Executive123! | salesExecutive |
 | accountant@incentive.io | Accountant123! | accountant |
 | finance@incentive.io | Finance123! | finance |
 
@@ -721,7 +732,7 @@ EMAIL_FROM="Incentive.io <your-email@gmail.com>"
 ### Vercel Configuration
 
 **Production URLs:**
-- Production: https://incentio.vercel.app
+- Production: https://incentiveio.vercel.app
 - Repository: https://github.com/asefahmed500/Incentive.io.git
 
 **vercel.json** (required for Mongoose compatibility):
@@ -745,7 +756,7 @@ Required environment variables in Vercel:
 ```
 MONGODB_URI=mongodb+srv://<username>:<password>@cluster.mongodb.net/incentiveio?retryWrites=true&w=majority
 NEXTAUTH_SECRET=<32+ character secret>
-NEXTAUTH_URL=https://incentio.vercel.app
+NEXTAUTH_URL=https://incentiveio.vercel.app
 EMAIL_HOST=smtp.gmail.com
 EMAIL_PORT=587
 EMAIL_SECURE=false

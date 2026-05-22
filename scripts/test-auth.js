@@ -15,8 +15,8 @@ const __dirname = path.dirname(__filename);
 
 // Test credentials for all 6 roles
 const testUsers = [
-  { email: 'karim@incentive.io', password: 'Jamal123!', role: 'salesExecutive', expectedPath: '/sales-dashboard' },
-  { email: 'manager@incentive.io', password: 'Manager123!', role: 'salesManager', expectedPath: '/sales-manager' },
+  { email: 'karim@incentive.io', password: 'Executive123!', role: 'salesExecutive', expectedPath: '/sales-dashboard' },
+  { email: 'jamal@incentive.io', password: 'Manager123!', role: 'salesManager', expectedPath: '/sales-manager' },
   { email: 'accountant@incentive.io', password: 'Accountant123!', role: 'accountant', expectedPath: '/accountant' },
   { email: 'finance@incentive.io', password: 'Finance123!', role: 'finance', expectedPath: '/finance' },
   { email: 'admin@incentive.io', password: 'Admin123!', role: 'admin', expectedPath: '/admin' },

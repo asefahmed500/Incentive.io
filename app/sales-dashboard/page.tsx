@@ -11,7 +11,7 @@ import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, BarChart, Bar, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart } from "recharts";
 import { useSSE } from "@/hooks/use-sse";
-import { Skeleton } from "@/components/ui/skeleton";
+import { DashboardSkeleton } from "@/components/loading/dashboard-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
 
 const COLORS = ["#10b981", "#f59e0b", "#3b82f6"];
@@ -64,7 +64,7 @@ export default function SalesDashboard() {
       totalRecords: safeRecords.length,
       pending,
       approvedAmount,
-      commission: commissions.pendingCommission || 0,
+      commission: (commissions && typeof commissions === "object" && !("error" in commissions)) ? (commissions.pendingCommission || 0) : 0,
     }));
     setEligibility(elig);
 
@@ -115,19 +115,21 @@ export default function SalesDashboard() {
     [stats.totalRecords, stats.pending]
   );
 
-  return (
-    <ErrorBoundary>
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Dashboard</h1>
-            <p className="text-muted-foreground">Welcome back, {session?.user?.name}</p>
-          </div>
-          <Button variant="outline" size="sm" onClick={fetchData} aria-label="Refresh dashboard data">
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
+   if (loading) return <DashboardSkeleton />;
+
+   return (
+     <ErrorBoundary>
+       <div className="space-y-6">
+         <div className="flex items-center justify-between">
+           <div>
+             <h1 className="text-3xl font-bold">Dashboard</h1>
+             <p className="text-muted-foreground">Welcome back, {session?.user?.name}</p>
+           </div>
+           <Button variant="outline" size="sm" onClick={fetchData} aria-label="Refresh dashboard data">
+             <RefreshCw className="h-4 w-4 mr-2" />
+             Refresh
+           </Button>
+         </div>
 
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
           <Card className="hover:shadow-md transition-shadow">

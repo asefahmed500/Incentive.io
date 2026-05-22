@@ -83,7 +83,7 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "File not found" }, { status: 404 })
     }
 
-    await FileAttachment.findByIdAndDelete(id)
+    await FileAttachment.findByIdAndUpdate(id, { deletedAt: new Date() })
 
     return NextResponse.json({ success: true })
   } catch (error) {

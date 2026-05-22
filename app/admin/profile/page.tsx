@@ -25,8 +25,8 @@ export default function ProfilePage() {
       return;
     }
 
-    if (newPassword.length < 8) {
-      setMessage({ type: "error", text: "Password must be at least 8 characters" });
+    if (newPassword.length < 12) {
+      setMessage({ type: "error", text: "Password must be at least 12 characters" });
       return;
     }
 
@@ -34,9 +34,14 @@ export default function ProfilePage() {
     const result = await changePassword({
       currentPassword,
       newPassword,
-    }) as { success?: boolean; error?: string };
+    }) as { success?: boolean; error?: string } | undefined;
 
     setIsPending(false);
+
+    if (!result) {
+      setMessage({ type: "error", text: "Failed to change password" });
+      return;
+    }
 
     if (result.success) {
       setMessage({ type: "success", text: "Password changed successfully" });

@@ -91,7 +91,7 @@ function AddSalesRecord() {
     const loadRecord = async () => {
       setIsLoading(true);
       const record = await getSalesRecord(editId);
-      if (record) {
+      if (record && !("error" in (record as object))) {
         setCompanyName(record.companyName || "");
         setCompanyEmail(record.companyEmail || "");
         setTaxEnabled(record.taxEnabled || false);

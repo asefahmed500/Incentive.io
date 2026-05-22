@@ -4,10 +4,6 @@
   "errors": [
     {
       "role": "salesExecutive",
-      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
-    },
-    {
-      "role": "salesExecutive",
       "error": "Timeout after 15 seconds"
     },
     {
@@ -15,11 +11,15 @@
       "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
     },
     {
+      "role": "accountant",
+      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
+    },
+    {
       "role": "salesManager",
       "error": "Timeout after 15 seconds"
     },
     {
-      "role": "accountant",
+      "role": "finance",
       "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
     },
     {
@@ -27,19 +27,11 @@
       "error": "Timeout after 15 seconds"
     },
     {
-      "role": "finance",
-      "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
-    },
-    {
-      "role": "finance",
-      "error": "Timeout after 15 seconds"
-    },
-    {
       "role": "admin",
       "error": "✓ Incentive.io\n  http://localhost:3000/login\n"
     },
     {
-      "role": "admin",
+      "role": "finance",
       "error": "Timeout after 15 seconds"
     },
     {

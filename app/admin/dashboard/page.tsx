@@ -13,8 +13,6 @@ import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, BarChart, Ba
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSkeleton } from "@/components/loading/dashboard-skeleton";
 
-const COLORS = ["#10b981", "#f59e0b", "#3b82f6", "#ef4444"];
-
 export default function AdminDashboard() {
   const router = useRouter();
   const [stats, setStats] = useState({
@@ -42,7 +40,7 @@ export default function AdminDashboard() {
     ]);
 
     const safeCommissions = Array.isArray(commissions) ? commissions : [];
-    const safeSalesStats = salesStats && !("error" in salesStats) ? salesStats : { total: 0, pendingManager: 0, pendingAccountant: 0, pendingFinance: 0, approved: 0, rejected: 0 };
+    const safeSalesStats = salesStats && !("error" in salesStats) ? salesStats : { total: 0, totalAmount: 0, pendingManager: 0, pendingAccountant: 0, pendingFinance: 0, approved: 0, rejected: 0 };
     if (!Array.isArray(users)) console.error((users as any)?.error || "Failed to fetch users");
     if (!Array.isArray(teams)) console.error((teams as any)?.error || "Failed to fetch teams");
     if (!Array.isArray(commissions)) console.error((commissions as any)?.error || "Failed to fetch commissions");
@@ -50,15 +48,15 @@ export default function AdminDashboard() {
 
     const totalCommissions = safeCommissions.reduce((sum: number, c: any) => sum + (c.commission || 0), 0);
 
-    setStats({
-      totalUsers: Array.isArray(users) ? users.length : 0,
-      totalTeams: Array.isArray(teams) ? teams.length : 0,
-      totalSales: safeSalesStats.total,
-      pendingSales: safeSalesStats.pendingManager + safeSalesStats.pendingAccountant + safeSalesStats.pendingFinance,
-      approvedSales: safeSalesStats.approved,
-      rejectedSales: safeSalesStats.rejected,
-      totalCommissions,
-    });
+     setStats({
+       totalUsers: Array.isArray(users) ? users.length : 0,
+       totalTeams: Array.isArray(teams) ? teams.length : 0,
+       totalSales: safeSalesStats.totalAmount,
+       pendingSales: safeSalesStats.pendingManager + safeSalesStats.pendingAccountant + safeSalesStats.pendingFinance,
+       approvedSales: safeSalesStats.approved,
+       rejectedSales: safeSalesStats.rejected,
+       totalCommissions,
+     });
 
     try {
       const res = await fetch("/api/health");

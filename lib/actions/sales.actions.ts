@@ -424,6 +424,7 @@ export async function submitSalesRecord(id: string) {
 
   const record = await SalesRecord.findById(parsed.data.id);
   if (!record) return { error: "Record not found" };
+  if (record.deletedAt) return { error: "Record not found" };
   if (record.employeeId.toString() !== userId && !["admin", "administrator", "salesManager"].includes(userRole)) {
     return { error: "Forbidden: You can only submit your own records" };
   }

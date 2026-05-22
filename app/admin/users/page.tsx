@@ -39,18 +39,18 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import * as z from "zod";
 
 const userSchema = z.object({
-  name: z.string().min(2, "Name required"),
-  email: z.string().email("Invalid email"),
-  password: z.string()
-    .min(12, "Password must be at least 12 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number")
-    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character")
-    .optional(),
-  role: z.enum(["admin", "salesManager", "salesExecutive", "accountant", "finance"]),
-  phone: z.string().optional(),
-});
+   name: z.string().min(2, "Name required"),
+   email: z.string().email("Invalid email"),
+   password: z.string()
+     .min(12, "Password must be at least 12 characters")
+     .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
+     .regex(/[a-z]/, "Password must contain at least one lowercase letter")
+     .regex(/[0-9]/, "Password must contain at least one number")
+     .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character")
+     .optional(),
+   role: z.enum(["admin", "administrator", "salesManager", "salesExecutive", "accountant", "finance"]),
+   phone: z.string().optional(),
+ });
 
 export default function AdminUsers() {
   const [users, setUsers] = useState<any[]>([]);
@@ -367,18 +367,20 @@ export default function AdminUsers() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        onClick={async () => {
+                          onClick={async () => {
                           if (confirm("Reset this user's password? A temporary password will be generated.")) {
-                            const tempPassword = `Tmp${Math.random().toString(36).slice(2, 10)}!`;
-                            const result = await resetPassword({ userId: user.id, newPassword: tempPassword });
-                            if (result?.success) {
-                              alert(`Password reset. Temporary password: ${tempPassword}\n\nPlease share this securely with the user.`);
-                            } else {
-                              alert("Failed to reset password: " + (result?.error || "Unknown error"));
-                            }
-                            fetchUsers();
-                          }
-                        }}
+                             const array = new Uint8Array(12);
+                             crypto.getRandomValues(array);
+                             const tempPassword = `Tmp${Array.from(array, b => b.toString(36).padStart(2, "0")).join("").slice(0, 8)}!A1`;
+                             const result = await resetPassword({ userId: user.id, newPassword: tempPassword });
+                             if (result?.success) {
+                               alert(`Password was reset successfully. Please share the new temporary password securely with the user.`);
+                             } else {
+                               alert("Failed to reset password: " + (result?.error || "Unknown error"));
+                             }
+                             fetchUsers();
+                           }
+                         }}
                       >
                         <RotateCcw className="h-4 w-4" />
                       </Button>
@@ -466,13 +468,14 @@ function UserForm({ onSuccess }: { onSuccess: () => void }) {
               <SelectTrigger>
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="salesExecutive">Sales Executive</SelectItem>
-                <SelectItem value="salesManager">Sales Manager</SelectItem>
-                <SelectItem value="accountant">Accountant</SelectItem>
-                <SelectItem value="finance">Finance</SelectItem>
-                <SelectItem value="admin">Admin</SelectItem>
-              </SelectContent>
+               <SelectContent>
+                 <SelectItem value="salesExecutive">Sales Executive</SelectItem>
+                 <SelectItem value="salesManager">Sales Manager</SelectItem>
+                 <SelectItem value="accountant">Accountant</SelectItem>
+                 <SelectItem value="finance">Finance</SelectItem>
+                 <SelectItem value="admin">Admin</SelectItem>
+                 <SelectItem value="administrator">Administrator</SelectItem>
+               </SelectContent>
             </Select>
           )}
         />

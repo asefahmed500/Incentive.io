@@ -1,6 +1,6 @@
 # Incentive.io — Agent Guide
 
-Next.js 16 app router, MongoDB/Mongoose, NextAuth v5, Tailwind CSS 4, shadcn/ui (radix-nova style).
+Next.js 16 (App Router), MongoDB/Mongoose 9, NextAuth v5, Tailwind CSS 4, shadcn/ui.
 
 ## Commands
 
@@ -12,18 +12,14 @@ Next.js 16 app router, MongoDB/Mongoose, NextAuth v5, Tailwind CSS 4, shadcn/ui 
 | Typecheck | `npm run typecheck` |
 | Lint | `npm run lint` |
 | Format | `npm run format` |
-| Full audit | `npm run audit` (typecheck + lint + test) |
+| Full audit | `npm run audit` (typecheck + lint + test, sequential) |
 | Seed DB | `npm run seed` |
 | Vitest tests | `npm test` |
 | Single Vitest test | `npm test -- -t "test name"` |
 | Vitest coverage | `npm run test:coverage` |
-| E2E (Playwright) | `npm run test:e2e` |
-| E2E UI mode | `npm run test:e2e:ui` |
-| E2E debug | `npm run test:e2e:debug` |
-| E2E report | `npm run test:e2e:report` |
 | Dev tunnel | `npm run share` |
 
-**Must use `npm run build:webpack`** — Mongoose native bindings fail with Turbopack. `vercel.json` enforces this via `buildCommand` + `NEXT_PRIVATE_BUILD_WORKER=webpack`. GitHub Actions also runs `npm run build:webpack` in CI.
+**Must use `npm run build:webpack`** — Mongoose native bindings fail with Turbopack. `vercel.json` enforces this via `buildCommand` + `NEXT_PRIVATE_BUILD_WORKER=webpack`.
 
 ## Setup
 
@@ -34,36 +30,6 @@ Next.js 16 app router, MongoDB/Mongoose, NextAuth v5, Tailwind CSS 4, shadcn/ui 
 
 ## Architecture
 
-### Directory Layout
-
-```
-app/                     # Next.js App Router pages
-  admin/                 # Admin dashboard
-  administrator/         # SuperAdmin (full access)
-  sales-dashboard/       # Sales executive
-  sales-manager/         # Sales manager
-  accountant/            # Accountant
-  finance/               # Finance
-  api/                   # REST route handlers
-lib/
-  actions/               # Server actions ("use server"), Zod validation
-  models/                # Mongoose models (soft delete via deletedAt)
-  auth/                  # NextAuth config split for Edge compat
-  validations/           # API-level Zod schemas (14 files)
-  utils/money.ts         # Precise monetary math (cents-based)
-  mongodb.ts             # DB singleton + toObjectId() helper
-  api-error.ts           # Standardized error handling
-  rate-limit.ts          # In-memory rate limiter
-  sse.ts                 # Server-Sent Events manager
-components/
-  ui/                    # shadcn/ui components
-  home/                  # Homepage (Framer Motion animations)
-hooks/                   # useNotifications (sonner), use-sse
-types/                   # UserRole, SaleStatus, AuthUser, etc.
-stores/                  # Zustand stores
-scripts/seed.ts          # Demo data seeder
-```
-
 ### Auth Config Split (Edge Runtime)
 
 - `lib/auth/auth.config.ts` — Pure NextAuth config, no DB. Used by middleware (Edge Runtime).
@@ -72,12 +38,14 @@ scripts/seed.ts          # Demo data seeder
 
 ### Data Layer
 
-- **Server actions** (`lib/actions/*.ts`): `"use server"`, Zod validation, return `{ success, data?, error? }`. Includes audit logging (`lib/actions/audit.actions.ts`) on all state changes.
+- **Server actions** (`lib/actions/*.ts`): `"use server"`, Zod validation, return `{ success, data?, error? }`. Audit logging via `lib/actions/audit.actions.ts` on all state changes.
 - **API routes** (`app/api/*/route.ts`): Auth check via `requireAuth()`, then call server actions. Try-catch with `handleError()` from `lib/api-error.ts`.
-- **Models** (`lib/models/*.ts`): Soft delete hooks auto-filter `deletedAt: null`. Never use `findByIdAndDelete`.
-- **DB singleton**: `lib/mongodb.ts` — `connectToDatabase()`, `toObjectId()`, `checkDatabaseConnection()`
-- **Models barrel**: `lib/models/index.ts` exports all models for convenient imports
-- **Logout**: always use `logoutAction()` from `lib/actions/auth.actions.ts` — never call `signOut()` directly
+- **Role guards** (`lib/auth/role-guard.ts`): `requireAuth()`, `requireRole()`, `requireAdminOrAbove()`, `requireFinanceOrAbove()`.
+- **Models** (`lib/models/*.ts`): Soft delete hooks auto-filter `deletedAt: null`. Never use `findByIdAndDelete`. AuditLog is the exception (no soft delete).
+- **Models barrel**: `lib/models/index.ts` exports all models.
+- **Env validation** (`lib/env.ts`): Validates all env vars at import time. `MONGODB_URI` must start with `mongodb://` or `mongodb+srv://`.
+- **Logout**: always use `logoutAction()` from `lib/actions/auth.actions.ts` — never call `signOut()` directly.
+- **Local MongoDB**: No transaction support. Code in `approval.actions.ts` and `wallet.actions.ts` auto-falls back to non-transactional ops.
 
 ### Approval Workflow
 
@@ -122,7 +90,7 @@ Enforced in `middleware.ts` via JWT inspection using `authConfig` (not full `aut
 7. **Resubmit resets ALL workflow fields** — accountantStatus, financeStatus, netSales, tax, commission, rejectionReason, rejectedBy
 8. **Commission on net, not gross** — Net = gross - tax - VAT - EO/BP (both tax and VAT calculated on gross)
 9. **Eligibility is boolean** — `isEligible` on User model, based on cumulative approved sales vs target (50% threshold)
-10. **Soft delete everywhere** — `deletedAt` field + pre-find hooks. Never `findByIdAndDelete`. AuditLog is the exception (no soft delete).
+10. **Soft delete everywhere** — `deletedAt` field + pre-find hooks. Never `findByIdAndDelete`. AuditLog is the exception.
 11. **Wallet uses atomic `$inc`** — prevents race conditions. Local MongoDB lacks transactions, code auto-falls back.
 12. **Tax/VAT rate checks** — use `!== undefined && !== null` because `0` is valid but falsy
 13. **Ownership required** — sales record ops check `employeeId`; managers approve only their `managerId` team
@@ -134,12 +102,12 @@ Enforced in `middleware.ts` via JWT inspection using `authConfig` (not full `aut
 19. **API-level validation required** — all new API endpoints need Zod schemas in `lib/validations/*.ts`
 20. **Net sales < 0** — accountant processing rejects this
 21. **`npm run build` == `npm run build:webpack`** — both use `--webpack`; `build:webpack` is the canonical name
-22. **`npm run share`** — opens dev tunnel via `scripts/dev-tunnel.js`; useful for remote testing
-23. **`audit` runs sequentially** — `typecheck && lint && test`; a failure in any step stops the chain
+22. **`npm run share`** — opens dev tunnel via `scripts/dev-tunnel.js`
+23. **Zod v4** — this repo uses Zod v4 (`^4.4.2`), not v3. Some API differences (e.g., `.refine()` chaining, error shape).
 
 ## Code Style
 
-- Prettier: no semicolons, double quotes, trailing comma es5, printWidth 80
+- Prettier: no semicolons, double quotes, trailing comma es5, printWidth 80, `tailwind-plugin-tailwindcss` with `tailwindStylesheet: "app/globals.css"`
 - `@/*` maps to `./*` (no `src/` prefix)
 - Icons: Lucide React only
 - Currency: `(amount || 0).toLocaleString()` or `formatCurrency()` from `lib/utils/money.ts`
@@ -148,18 +116,17 @@ Enforced in `middleware.ts` via JWT inspection using `authConfig` (not full `aut
 
 ## Testing
 
-**Vitest** (`npm test`): Unit/integration tests. 10s timeout, jsdom env. Coverage via v8.
+**Vitest** (`npm test`): Unit/integration tests. 30s timeout (overridden in `tests/setup.ts`), jsdom env. Coverage via v8.
 - `jest.config.js` is a leftover — `npm test` uses vitest.
-- Setup: `tests/setup.ts` auto-creates commission rules. Test users need `targetAmount` for commission calc.
+- Setup: `tests/setup.ts` auto-creates commission rules and mocks NextAuth. Requires MongoDB running.
+- Test users need `targetAmount` for commission calc.
 - Server actions with `"use server"` cannot be imported directly — test business logic or via API routes.
 - ObjectIds must be exactly 24 hex chars.
 - Exclude patterns: `tests/e2e/specs/**`, `.next/**`, `.claude/**`, `.agents/**`.
 
-**Playwright** (`npm run test:e2e`): E2E tests in `tests/e2e/specs/` organized by feature. Single worker, 60s timeout, Chromium only.
-- **webServer is disabled** — dev server must be running before e2e tests.
-- Global setup/teardown in `tests/e2e/global-setup.ts` / `global-teardown.ts`.
+**E2E (Playwright):** Tests in `tests/e2e/specs/`.
+- `playwright.config.ts` does not exist at repo root — E2E setup may be incomplete/stale.
 - Prerequisites: MongoDB running, `npm run seed`, dev server on port 3000.
-- Run specific suite: `npx playwright test specs/auth/`
 - Trace + screenshot on failure, video retained on failure.
 
 ## Key Files
@@ -170,20 +137,17 @@ Enforced in `middleware.ts` via JWT inspection using `authConfig` (not full `aut
 | `lib/actions/approval.actions.ts` | Multi-stage approve/reject with atomic transactions + auto-approve |
 | `lib/actions/wallet.actions.ts` | Atomic credit/debit with MongoDB sessions, local fallback |
 | `lib/actions/audit.actions.ts` | Audit logging on all state changes |
-| `lib/actions/notification.actions.ts` | In-app notification creation + SSE integration |
 | `lib/actions/auth.actions.ts` | `logoutAction()` — always use this, never `signOut()` directly |
 | `lib/actions/commission.actions.ts` | Commission calculation, eligibility checks |
 | `lib/utils/money.ts` | Precise monetary calculations (cents-based integer math) |
 | `lib/mongodb.ts` | DB singleton, `toObjectId()`, `checkDatabaseConnection()` |
+| `lib/env.ts` | Env validation at import time |
 | `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()`, `requireAdminOrAbove()` |
-| `lib/rate-limit.ts` | In-memory rate limiter for public API endpoints |
 | `lib/sse.ts` | Server-Sent Events manager |
 | `lib/api-error.ts` | `ApiError` class + `handleError()` |
-| `lib/validations/*.ts` | 14 Zod validation schemas for API boundary |
+| `lib/validations/*.ts` | 14 Zod v4 validation schemas for API boundary |
 | `middleware.ts` | Route-level RBAC via `authConfig` (Edge Runtime) |
 | `types/index.ts` | `UserRole`, `SaleStatus`, `AuthUser`, `SaleRecord` types |
-| `hooks/useNotifications.ts` | Unified sonner toast notifications |
-| `hooks/use-sse.ts` | SSE hook for real-time dashboard updates |
 
 ## Test Accounts
 
@@ -192,8 +156,10 @@ Enforced in `middleware.ts` via JWT inspection using `authConfig` (not full `aut
 | admin@incentive.io | Admin123! | admin |
 | superadmin@incentive.io | Superadmin123! | administrator |
 | jamal@incentive.io | Manager123! | salesManager |
+| fatima@incentive.io | Manager123! | salesManager |
 | karim@incentive.io | Executive123! | salesExecutive |
 | accountant@incentive.io | Accountant123! | accountant |
 | finance@incentive.io | Finance123! | finance |
+| inactive@incentive.io | Inactive123! | salesExecutive (disabled) |
 
-Additional executives (nasrin, rahim, sabina, mizanur, anika@incentive.io) and a second manager (fatima@incentive.io) also share `Executive123!` / `Manager123!` passwords respectively. An `inactive@incentive.io` / `Inactive123!` user exists for disabled-account testing.
+Additional executives: nasrin, rahim, sabina, mizanur, anika@incentive.io — all use `Executive123!`.

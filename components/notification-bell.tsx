@@ -61,8 +61,10 @@ export function NotificationBell() {
 
   const handleClick = async (notif: any) => {
     if (!notif.isRead) {
-      await markAsRead(notif.id);
-      setUnreadCount((c) => Math.max(0, c - 1));
+      const result = await markAsRead(notif.id);
+      if (!result?.error) {
+        setUnreadCount((c) => Math.max(0, c - 1));
+      }
     }
     if (notif.link) {
       router.push(notif.link);
@@ -72,10 +74,12 @@ export function NotificationBell() {
 
   const handleMarkAllRead = async () => {
     if (session?.user?.id) {
-      await markAllAsRead(session.user.id);
-      setUnreadCount(0);
-      const notifs = await getNotifications(session.user.id, 10);
-      setNotifications(Array.isArray(notifs) ? notifs : []);
+      const result = await markAllAsRead(session.user.id);
+      if (!result?.error) {
+        setUnreadCount(0);
+        const notifs = await getNotifications(session.user.id, 10);
+        setNotifications(Array.isArray(notifs) ? notifs : []);
+      }
     }
   };
 

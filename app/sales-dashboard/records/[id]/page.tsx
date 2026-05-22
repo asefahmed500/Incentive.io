@@ -17,7 +17,7 @@ export default function SalesRecordDetail() {
   useEffect(() => {
     const fetchRecord = async () => {
       const data = await getSalesRecord(params.id as string);
-      setRecord(data);
+      setRecord(data && !("error" in (data as object)) ? data : null);
       setLoading(false);
     };
     if (params.id) fetchRecord();
@@ -45,7 +45,7 @@ export default function SalesRecordDetail() {
   if (loading) return <div className="p-6">Loading...</div>;
   if (!record) return <div className="p-6">Record not found</div>;
 
-  const totalAmount = record.products?.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0) || 0;
+  const totalAmount = record.products?.reduce((sum: number, p: any) => sum + (p.unitPrice || 0) * (p.quantity || 0), 0) || 0;
 
   return (
     <div className="space-y-6">
@@ -111,7 +111,7 @@ export default function SalesRecordDetail() {
                   <div><span className="text-sm text-muted-foreground">Name</span><p className="font-medium">{product.productName}</p></div>
                   <div><span className="text-sm text-muted-foreground">Unit Price</span><p className="font-medium">৳{product.unitPrice?.toLocaleString()}</p></div>
                   <div><span className="text-sm text-muted-foreground">Quantity</span><p className="font-medium">{product.quantity}</p></div>
-                  <div><span className="text-sm text-muted-foreground">Total</span><p className="font-bold">৳{(product.unitPrice * product.quantity).toLocaleString()}</p></div>
+                  <div><span className="text-sm text-muted-foreground">Total</span><p className="font-bold">৳{((product.unitPrice || 0) * (product.quantity || 0)).toLocaleString()}</p></div>
                 </div>
                 {product.originalPrice && <p className="text-sm text-muted-foreground mt-1">Original Price: ৳{product.originalPrice.toLocaleString()}</p>}
                 {product.dealNotes && <p className="text-sm text-muted-foreground mt-1">Notes: {product.dealNotes}</p>}

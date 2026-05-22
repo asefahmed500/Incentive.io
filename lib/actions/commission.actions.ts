@@ -148,7 +148,7 @@ export async function getCommissions() {
 
   // Build query based on role
   let query: Record<string, unknown> = {
-    status: "Approved",
+    financeStatus: "Approved",
     deletedAt: null,
   };
 
@@ -263,7 +263,8 @@ async function checkEligibilityImpl(employeeId: string) {
   });
 
   const totalSales = approvedSales.reduce((sum, r) => {
-    return sum + r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
+    const amount = r.netSales !== undefined && r.netSales !== null ? r.netSales : r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) => s + calculateProductTotal(p.unitPrice, p.quantity), 0);
+    return sum + amount;
   }, 0);
 
   // Prevent division by zero or negative target amounts

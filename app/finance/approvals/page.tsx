@@ -38,10 +38,11 @@ export default function FinanceApprovals() {
     fetchRecords();
   }, []);
 
-  const handleApprove = async (recordId: string) => {
+  const handleApprove = async () => {
+    if (!selectedRecord) return;
     try {
       const paidBy = (session?.user as any)?.id || "";
-      const approveResult = await finalApproveByFinance(recordId, paidBy);
+      const approveResult = await finalApproveByFinance(selectedRecord.id, paidBy);
       if (approveResult?.error) {
         toast.error(approveResult.error);
         return;
@@ -73,16 +74,8 @@ export default function FinanceApprovals() {
     }
   };
 
-  const totalAmount = records.reduce((sum: number, r: any) => sum + (r.amount || 0), 0);
-  const totalCommission = records.reduce((sum: number, r: any) => sum + (r.calculatedCommission || 0), 0);
-
-  const calculateNet = (record: any) => {
-    const gross = record.amount || 0;
-    const tax = record.taxAmount || 0;
-    const vat = record.vatAmount || 0;
-    const eoBp = record.eoBpAmount || 0;
-    return gross - tax - vat - eoBp;
-  };
+  const totalAmount = records.reduce((sum: number, r: any) => sum + (r.netSales || r.totalAmount || r.amount || 0), 0);
+  const totalCommission = records.reduce((sum: number, r: any) => sum + (r.calculatedCommission || r.commission || 0), 0);
 
   return (
     <div className="space-y-6">
@@ -160,8 +153,8 @@ export default function FinanceApprovals() {
                   <TableRow key={record.id}>
                     <TableCell className="font-medium">{record.companyName}</TableCell>
                     <TableCell>{record.employeeName}</TableCell>
-                    <TableCell>৳{record.amount?.toLocaleString() || 0}</TableCell>
-                    <TableCell>৳{calculateNet(record).toLocaleString()}</TableCell>
+                    <TableCell>৳{(record.totalAmount || record.amount || 0)?.toLocaleString() || 0}</TableCell>
+                    <TableCell>৳{(record.netSales || 0)?.toLocaleString() || 0}</TableCell>
                     <TableCell className="text-green-600">
                       ৳{record.calculatedCommission?.toLocaleString() || 0}
                     </TableCell>
@@ -209,7 +202,7 @@ export default function FinanceApprovals() {
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Gross Amount</Label>
-                  <p className="font-medium">৳{selectedRecord.amount?.toLocaleString() || 0}</p>
+                    <p className="font-medium">৳{(selectedRecord.netSales || selectedRecord.totalAmount || selectedRecord.amount || 0)?.toLocaleString() || 0}</p>
                 </div>
                 <div>
                   <Label className="text-muted-foreground">Tax Amount</Label>
@@ -231,7 +224,7 @@ export default function FinanceApprovals() {
                   <div className="flex justify-between text-lg">
                     <span className="font-semibold">Net Sales</span>
                     <span className="font-semibold text-green-600">
-                      ৳{calculateNet(selectedRecord).toLocaleString()}
+                      ৳{(selectedRecord.netSales || 0).toLocaleString()}
                     </span>
                   </div>
                 </div>
@@ -275,7 +268,7 @@ export default function FinanceApprovals() {
             <Button variant="outline" onClick={() => setShowApproveDialog(false)}>
               Cancel
             </Button>
-            <Button onClick={() => selectedRecord && handleApprove(selectedRecord.id)}>
+            <Button onClick={handleApprove}>
               <Check className="h-4 w-4 mr-2" />
               Approve
             </Button>

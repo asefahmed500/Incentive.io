@@ -52,7 +52,7 @@ export default function ManagerWallet() {
             totalPaid: walletData.totalPaid ?? 0,
           });
           const txs = await getWalletTransactions(session.user.id, 50);
-          setTransactions(txs);
+          setTransactions(Array.isArray(txs) ? txs : []);
         }
       } catch (error) {
         console.error("Failed to fetch wallet:", error);

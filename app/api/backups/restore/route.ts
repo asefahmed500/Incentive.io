@@ -73,9 +73,9 @@ export async function POST(request: NextRequest) {
         return docs && Array.isArray(docs) && docs.length > 0
       }).length,
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("Restore failed:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Failed to restore backup" }, { status: 500 })
   }
 }
 
@@ -111,8 +111,8 @@ export async function GET(request: NextRequest) {
           .map(([k, v]) => [k, (v as unknown[]).length])
       ),
     })
-  } catch (error: any) {
+  } catch (error) {
     console.error("Backup info failed:", error)
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 })
+    return NextResponse.json({ success: false, error: "Failed to get backup info" }, { status: 500 })
   }
 }

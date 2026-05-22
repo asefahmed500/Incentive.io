@@ -8,21 +8,13 @@ import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, BarChart, Ba
 import { getPendingManagerApprovals } from "@/lib/actions/approval.actions";
 import { getUsers } from "@/lib/actions/user.actions";
 import { getSalesRecordsByManagerId } from "@/lib/actions/sales.actions";
+import { getSalesTrends } from "@/lib/actions/analytics.actions";
 import { getCommissionsByEmployee } from "@/lib/actions/commission.actions";
 import { checkEligibility } from "@/lib/actions/commission.actions";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { DashboardSkeleton } from "@/components/loading/dashboard-skeleton";
-
-// Hoist static data outside component (rendering-hoist-jsx)
-const MONTHLY_TRENDS = [
-  { month: "Jan", sales: 450000, commission: 13500, approvals: 42 },
-  { month: "Feb", sales: 520000, commission: 15600, approvals: 48 },
-  { month: "Mar", sales: 380000, commission: 11400, approvals: 35 },
-  { month: "Apr", sales: 650000, commission: 19500, approvals: 62 },
-  { month: "May", sales: 580000, commission: 17400, approvals: 55 },
-];
 
 export default function SalesManagerDashboard() {
   const { data: session } = useSession();
@@ -43,15 +35,18 @@ export default function SalesManagerDashboard() {
     commission: number;
     achievement: number;
   }>>([]);
+  const [monthlyTrends, setMonthlyTrends] = useState<Array<{ month: string; sales: number; commission: number }>>([]);
+  const [salesTrendsError, setSalesTrendsError] = useState<string | null>(null);
 
   // Memoize fetchData to prevent unnecessary re-renders (rerender-defer-reads)
   const fetchData = useCallback(async () => {
     if (!userId) return;
 
-    const [pending, users, sales] = await Promise.all([
+    const [pending, users, sales, trends] = await Promise.all([
       getPendingManagerApprovals(),
       getUsers({ role: "salesExecutive", search: "" }),
       getSalesRecordsByManagerId(userId),
+      getSalesTrends(userId, 6),
     ]);
 
     const safePending = Array.isArray(pending) ? pending : [];
@@ -60,6 +55,7 @@ export default function SalesManagerDashboard() {
     if (!Array.isArray(pending)) console.error((pending as any)?.error || "Failed to fetch pending approvals");
     if (!Array.isArray(users)) console.error((users as any)?.error || "Failed to fetch users");
     if (!Array.isArray(sales)) console.error((sales as any)?.error || "Failed to fetch sales");
+    if (!Array.isArray(trends)) console.error((trends as any)?.error || "Failed to fetch sales trends");
 
     // Filter users to only those managed by this manager
     const teamMembers = safeUsers.filter((u: any) => u.managerId === userId);
@@ -98,6 +94,13 @@ export default function SalesManagerDashboard() {
       teamEligible: eligibleCount,
     }));
     setTeamMembersData(memberResults);
+    if (Array.isArray(trends)) {
+      setMonthlyTrends(trends);
+      setSalesTrendsError(null);
+    } else {
+      setMonthlyTrends([]);
+      setSalesTrendsError(trends?.error || "Failed to load trends");
+    }
     setLoading(false);
   }, [userId]);
 
@@ -204,26 +207,33 @@ export default function SalesManagerDashboard() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Monthly Sales & Commissions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <LineChart data={MONTHLY_TRENDS}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value) => `৳${(value || 0).toLocaleString()}`}
-                />
-                <Legend />
-                <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={2} name="Sales" />
-                <Line type="monotone" dataKey="commission" stroke="#10b981" strokeWidth={2} name="Commission" />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+         <Card>
+           <CardHeader>
+             <CardTitle>Monthly Sales & Commissions</CardTitle>
+           </CardHeader>
+           <CardContent>
+             {salesTrendsError ? (
+               <div className="text-center text-red-500 p-4">
+                 <p>Failed to load chart data</p>
+                 <p className="text-xs">{salesTrendsError}</p>
+               </div>
+             ) : (
+               <ResponsiveContainer width="100%" height={200}>
+                 <LineChart data={monthlyTrends}>
+                   <CartesianGrid strokeDasharray="3 3" />
+                   <XAxis dataKey="month" />
+                   <YAxis />
+                   <Tooltip
+                     formatter={(value) => `৳${(value || 0).toLocaleString()}`}
+                   />
+                   <Legend />
+                   <Line type="monotone" dataKey="sales" stroke="#3b82f6" strokeWidth={2} name="Sales" />
+                   <Line type="monotone" dataKey="commission" stroke="#10b981" strokeWidth={2} name="Commission" />
+                 </LineChart>
+               </ResponsiveContainer>
+             )}
+           </CardContent>
+         </Card>
       </div>
 
       <Card>

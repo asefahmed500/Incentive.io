@@ -33,6 +33,15 @@ vi.mock("@/lib/auth/auth", () => ({
   signOut: vi.fn(),
 }));
 
+// Mock email utilities to prevent SMTP connection hangs/timeouts during tests
+vi.mock("@/lib/email", () => ({
+  sendEmail: vi.fn(() => Promise.resolve({ success: true, messageId: "mock-message-id" })),
+  sendNotificationEmail: vi.fn(() => Promise.resolve({ success: true, messageId: "mock-message-id" })),
+  sendWelcomeEmail: vi.fn(() => Promise.resolve({ success: true, messageId: "mock-message-id" })),
+  sendPasswordResetEmail: vi.fn(() => Promise.resolve({ success: true, messageId: "mock-message-id" })),
+  testEmailConnection: vi.fn(() => Promise.resolve({ success: true, error: "SMTP connected successfully" })),
+}));
+
 // Setup test data before all tests
 beforeAll(async () => {
   const { connectToDatabase } = await import("@/lib/mongodb");

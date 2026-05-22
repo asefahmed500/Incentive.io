@@ -3,8 +3,11 @@ import { NextResponse } from "next/server";
 import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
 import { getStatusCodeForError, handleError } from "@/lib/api-error";
 import { z } from "zod";
+import { createSalesRecordApiSchema } from "@/lib/validations/sales.validation";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
+
+const updateSalesRecordApiSchema = createSalesRecordApiSchema.partial().omit({});
 
 export async function GET(
   request: Request,
@@ -48,7 +51,12 @@ export async function PUT(
 
     const body = await request.json();
 
-    const result = await updateSalesRecord(parsed.data, body) as { success?: boolean; error?: string } | undefined;
+    const bodyParsed = updateSalesRecordApiSchema.safeParse(body);
+    if (!bodyParsed.success) {
+      return NextResponse.json({ error: "Invalid request body", details: bodyParsed.error.issues }, { status: 400 });
+    }
+
+    const result = await updateSalesRecord(parsed.data, bodyParsed.data) as { success?: boolean; error?: string } | undefined;
 
     if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
