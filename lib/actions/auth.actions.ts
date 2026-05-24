@@ -1,9 +1,8 @@
 "use server"
 
-import { signOut } from "@/lib/auth/auth"
 import { redirect } from "next/navigation"
 
 export async function logoutAction() {
-  await signOut({ redirect: false })
-  redirect("/")
+  // Redirect to NextAuth signout endpoint which properly clears the JWT cookie
+  redirect("/api/auth/signout?callbackUrl=/")
 }

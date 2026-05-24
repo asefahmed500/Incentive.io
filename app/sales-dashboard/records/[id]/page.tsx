@@ -105,10 +105,11 @@ export default function SalesRecordDetail() {
         <CardHeader><CardTitle>Products ({record.products?.length || 0})</CardTitle></CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {record.products?.map((product: any, index: number) => (
+              {record.products?.map((product: any, index: number) => (
               <div key={index} className="rounded-lg border p-4">
-                <div className="grid gap-2 md:grid-cols-4">
+                <div className="grid gap-2 md:grid-cols-5">
                   <div><span className="text-sm text-muted-foreground">Name</span><p className="font-medium">{product.productName}</p></div>
+                  <div><span className="text-sm text-muted-foreground">Category</span><p className="font-medium">{product.categoryName || "-"}</p></div>
                   <div><span className="text-sm text-muted-foreground">Unit Price</span><p className="font-medium">৳{product.unitPrice?.toLocaleString()}</p></div>
                   <div><span className="text-sm text-muted-foreground">Quantity</span><p className="font-medium">{product.quantity}</p></div>
                   <div><span className="text-sm text-muted-foreground">Total</span><p className="font-bold">৳{((product.unitPrice || 0) * (product.quantity || 0)).toLocaleString()}</p></div>

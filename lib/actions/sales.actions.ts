@@ -134,29 +134,36 @@ async function getSalesRecordsImpl({
   await connectToDatabase();
 
   const query: Record<string, unknown> = {};
+  const roleFilter: Record<string, unknown> = {};
   if (userRole === "salesExecutive") {
-    query.employeeId = userId;
+    roleFilter.employeeId = userId;
   } else if (userRole === "salesManager") {
     if (parsed.data.employeeId) {
-      query.employeeId = parsed.data.employeeId;
+      roleFilter.employeeId = parsed.data.employeeId;
     } else {
       const employees = await User.find({ managerId: userId }).select("_id").lean();
       const employeeIds = employees.map(e => e._id.toString());
-      query.$or = [
+      roleFilter.$or = [
         { employeeId: { $in: employeeIds } },
         { managerId: userId },
       ];
     }
   } else if (parsed.data.employeeId) {
-    query.employeeId = parsed.data.employeeId;
+    roleFilter.employeeId = parsed.data.employeeId;
   }
-  if (parsed.data.status) query.status = parsed.data.status;
+  if (parsed.data.status) roleFilter.status = parsed.data.status;
+
   if (parsed.data.search) {
     const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    query.$or = [
-      { companyName: { $regex: escapedSearch, $options: "i" } },
-      { employeeName: { $regex: escapedSearch, $options: "i" } },
-    ];
+    const searchFilter = {
+      $or: [
+        { companyName: { $regex: escapedSearch, $options: "i" } },
+        { employeeName: { $regex: escapedSearch, $options: "i" } },
+      ],
+    };
+    Object.assign(query, roleFilter, searchFilter);
+  } else {
+    Object.assign(query, roleFilter);
   }
 
   const records = await SalesRecord.find(query).sort({ createdAt: -1 }).lean();
@@ -185,10 +192,20 @@ export async function getSalesRecord(id: string) {
   const record = await SalesRecord.findById(parsed.data).lean();
   if (!record) return null;
 
-  // Convert products to plain objects with string IDs for client serialization
+  // Fetch all category names for the products in this record
+  const catIds = Array.isArray(record.products)
+    ? record.products.map((p: any) => p.categoryId?.toString()).filter(Boolean)
+    : []
+  const categories = catIds.length > 0
+    ? await Category.find({ _id: { $in: catIds } }).select("name").lean()
+    : []
+  const categoryMap = new Map(categories.map((c: any) => [c._id.toString(), c.name]))
+
+  // Convert products to plain objects with string IDs and category names
   const products = Array.isArray(record.products) ? record.products.map((p: any) => ({
     productName: p.productName,
     categoryId: p.categoryId?.toString() || "",
+    categoryName: categoryMap.get(p.categoryId?.toString()) || "",
     unitPrice: p.unitPrice,
     originalPrice: p.originalPrice,
     quantity: p.quantity,
@@ -218,7 +235,20 @@ export async function getSalesRecord(id: string) {
     commission: record.commission,
     calculatedCommission: record.calculatedCommission,
     rejectionReason: record.rejectionReason,
+    rejectedBy: record.rejectedBy,
+    eligibilityStatus: record.eligibilityStatus,
     proofOfSale: record.proofOfSale,
+    managerId: record.managerId?.toString(),
+    approvedBy: record.approvedBy?.toString(),
+    approvedAt: record.approvedAt,
+    processedAt: record.processedAt,
+    finalApprovedAt: record.finalApprovedAt,
+    paidBy: record.paidBy?.toString(),
+    isPaid: record.isPaid,
+    paymentStatus: record.paymentStatus,
+    paymentDate: record.paymentDate,
+    autoApproved: record.autoApproved,
+    autoApprovedAt: record.autoApprovedAt,
     createdAt: record.createdAt,
     updatedAt: record.updatedAt,
   };
@@ -369,6 +399,12 @@ export async function createSalesRecord({
   });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
+  }
+
+  if (userRole === "salesExecutive") {
+    if (!parsed.data.employeeId || parsed.data.employeeId !== session.user.id) {
+      return { error: "Forbidden: You can only create sales records for yourself" };
+    }
   }
 
   await connectToDatabase();
