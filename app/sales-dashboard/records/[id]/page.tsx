@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { ArrowLeft, Pencil, Trash2 } from "lucide-react";
 import { getSalesRecord, deleteSalesRecord } from "@/lib/actions/sales.actions";
+import { FilePreview } from "@/components/file-preview";
 
 export default function SalesRecordDetail() {
   const params = useParams();
@@ -131,11 +132,11 @@ export default function SalesRecordDetail() {
 
       {record.proofOfSale?.length > 0 && (
         <Card>
-          <CardHeader><CardTitle>Proof of Sale</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Proof of Sale ({record.proofOfSale.length})</CardTitle></CardHeader>
           <CardContent>
-            <div className="flex gap-4 flex-wrap">
+            <div className="grid gap-4 md:grid-cols-2">
               {record.proofOfSale.map((url: string, i: number) => (
-                <a key={i} href={url} target="_blank" rel="noopener noreferrer" className="text-sm text-primary hover:underline">Document {i + 1}</a>
+                <FilePreview key={i} url={url} index={i} />
               ))}
             </div>
           </CardContent>

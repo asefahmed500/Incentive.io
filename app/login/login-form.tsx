@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useNotifications } from "@/hooks/useNotifications"
+import Link from "next/link"
 
 export function LoginForm() {
   const [isLoading, setIsLoading] = useState(false)
@@ -94,6 +95,12 @@ export function LoginForm() {
             minLength={1}
             title="Please enter your password"
           />
+        </div>
+        <div className="flex items-center justify-between">
+          <div />
+          <Link href="/reset-password" className="text-sm text-sky-600 hover:text-sky-700 dark:text-sky-400 dark:hover:text-sky-300 font-medium hover:underline">
+            Forgot password?
+          </Link>
         </div>
       </div>
 

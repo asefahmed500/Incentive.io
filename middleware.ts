@@ -2,7 +2,7 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth/auth.config";
 import { NextResponse } from "next/server";
 
-const PUBLIC_PATHS = ["/", "/login", "/register", "/api/auth", "/api/health", "/api/register", "/api/reset-password"];
+const PUBLIC_PATHS = ["/", "/login", "/register", "/reset-password", "/api/auth", "/api/health", "/api/register", "/api/reset-password"];
 
 const { auth } = NextAuth(authConfig);
 

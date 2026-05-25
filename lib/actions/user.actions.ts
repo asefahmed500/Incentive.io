@@ -7,7 +7,7 @@ import { User } from "@/lib/models/User";
 import { SalesRecord } from "@/lib/models/SalesRecord";
 import { Wallet } from "@/lib/models/Wallet";
 import { Team } from "@/lib/models/Team";
-import { sendWelcomeEmail, sendNotificationEmail } from "@/lib/email";
+import { sendWelcomeEmail, sendNotificationEmail, sendPasswordResetEmail } from "@/lib/email";
 import { notifyUserCreated } from "@/lib/actions/notification.actions";
 import { logAudit } from "@/lib/actions/audit.actions";
 import { hashPassword, verifyPassword, generateSecureToken } from "@/lib/utils/password";
@@ -449,16 +449,10 @@ export async function requestPasswordReset(email: string) {
     resetPasswordExpires: resetExpires,
   });
 
-  // Send password reset email
+  // Send password reset email using the dedicated styled template
   try {
     const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
-    await sendNotificationEmail(
-      user.email,
-      "Password Reset Request",
-      `Hi ${user.name},<br><br>You requested a password reset. Click the link below to reset your password:<br><br>
-       <a href="${resetUrl}" style="background: #007bff; color: white; padding: 12px 24px; text-decoration: none; border-radius: 4px; display: inline-block;">Reset Password</a><br><br>
-       This link will expire in 1 hour.<br><br>If you didn't request this, please ignore this email.`
-    );
+    await sendPasswordResetEmail(user.email, user.name, resetUrl);
   } catch (emailError) {
     console.error("Failed to send password reset email:", emailError);
   }
