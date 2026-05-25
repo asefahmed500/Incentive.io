@@ -39,7 +39,7 @@ export interface AuthSession {
 
 export interface SaleProduct {
   productName: string;
-  categoryId: string;
+  categoryId: string; // Client-facing: ObjectId serialized to string via .toString()
   unitPrice: number;
   quantity: number;
   originalPrice?: number;
@@ -81,9 +81,9 @@ export interface SaleRecord {
   isPaid: boolean;
   paymentStatus: "Pending" | "Paid";
   paymentDate?: Date;
-  autoApproved?: boolean;
+  autoApproved: boolean;
   autoApprovedAt?: Date;
-  autoApprovedCategories?: string[];
+  autoApprovedCategories: string[];
   createdAt: Date;
   updatedAt: Date;
 }
@@ -144,6 +144,7 @@ export interface User {
   managerId?: string;
   targetAmount: number;
   targetPeriod?: string;
+  previousTargetAmount?: number;
 }
 
 export interface Team {
@@ -157,7 +158,7 @@ export interface Category {
   id: string;
   name: string;
   description: string;
-  autoApprove?: boolean;
+  autoApprove: boolean;
 }
 
 export interface Product {
@@ -174,6 +175,7 @@ export interface Product {
 export interface Notification {
   id: string;
   userId: string;
+  recipientRole: UserRole;
   type: string;
   title: string;
   message: string;
@@ -182,16 +184,79 @@ export interface Notification {
   createdAt: Date;
 }
 
+/**
+ * Standardized server action result types
+ * These provide consistent return types across all server actions
+ */
+
+/**
+ * Base success result with optional data
+ */
+export interface ActionSuccess<T = unknown> {
+  success: true
+  data?: T
+  id?: string
+}
+
+/**
+ * Error result with message and optional code
+ */
+export interface ActionError {
+  success: false
+  error: string
+  code?: string
+  statusCode?: number
+}
+
+/**
+ * Discriminated union for action results
+ * Use this for all server actions that can return data or errors
+ */
+export type ActionResult<T = unknown> = ActionSuccess<T> | ActionError
+
+/**
+ * Server action return type - extends ActionResult with undefined support
+ * This is the primary type to use for server action return types
+ */
+export type ServerActionResult<T = unknown> = ActionResult<T> | undefined
+
+/**
+ * Action result with ID (for create operations)
+ */
+export type ActionResultWithId<T = unknown> = (ActionSuccess<T> & { id: string }) | ActionError
+
+/**
+ * List action result for operations returning arrays
+ */
+export type ListResult<T = unknown> = ActionResult<T[]>
+
+/**
+ * Paginated action result
+ */
+export interface PaginatedResult<T = unknown> {
+  items: T[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+export type PaginatedActionResult<T = unknown> = ActionResult<PaginatedResult<T>>
+
+/**
+ * Legacy API response types (for backward compatibility)
+ * @deprecated Use ActionResult instead for new code
+ */
 export interface ApiResponse<T = unknown> {
-  success?: boolean;
-  data?: T;
-  error?: string;
+  success?: boolean
+  data?: T
+  error?: string
 }
 
 export interface PaginatedResponse<T> extends ApiResponse<T[]> {
-  total?: number;
-  page?: number;
-  pageSize?: number;
+  total?: number
+  page?: number
+  pageSize?: number
 }
 
 export interface SalesStats {

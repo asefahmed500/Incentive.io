@@ -3,6 +3,8 @@ import { handleError, getStatusCodeForError } from "@/lib/api-error";
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { requireAuth, requireFinanceOrAbove } from "@/lib/auth/role-guard";
+import { connectToDatabase } from "@/lib/mongodb";
+import { Wallet } from "@/lib/models/Wallet";
 
 const walletIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid wallet ID format");
 
@@ -27,23 +29,23 @@ export async function GET(
       return handleError(parsed.error);
     }
 
-    const wallet = await getWallet(parsed.data);
+    await connectToDatabase();
+    const wallet = await Wallet.findById(parsed.data).lean();
     if (!wallet) {
       return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
     }
 
-    // Convert ObjectId to string
-    const response = {
-      ...wallet,
-      _id: wallet._id.toString(),
-      employeeId: wallet.employeeId.toString(),
-      transactions: wallet.transactions?.map((t: { salesRecordId?: { toString: () => string }; [key: string]: unknown }) => ({
-        ...t,
-        salesRecordId: t.salesRecordId?.toString(),
-      })),
-    };
+    const walletEmployeeId = wallet.employeeId?.toString();
+    if (!walletEmployeeId) {
+      return NextResponse.json({ error: "Invalid wallet" }, { status: 400 });
+    }
 
-    return NextResponse.json(response);
+    const fullWallet = await getWallet(walletEmployeeId);
+    if (!fullWallet) {
+      return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
+    }
+
+    return NextResponse.json(fullWallet);
   } catch (error) {
     return handleError(error);
   }
@@ -72,17 +74,28 @@ export async function PUT(
 
     const { operation, amount, salesRecordId, description } = parsedBody.data;
 
+    await connectToDatabase();
+    const wallet = await Wallet.findById(parsedId.data).lean();
+    if (!wallet) {
+      return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
+    }
+
+    const employeeId = wallet.employeeId?.toString();
+    if (!employeeId) {
+      return NextResponse.json({ error: "Invalid wallet: no employee" }, { status: 400 });
+    }
+
     let result;
     if (operation === "credit") {
       result = await creditWallet({
-        employeeId: parsedId.data,
+        employeeId,
         amount,
         salesRecordId,
         description,
       }) as { success?: boolean; error?: string; newBalance?: number };
     } else {
       result = await debitWallet({
-        employeeId: parsedId.data,
+        employeeId,
         amount,
         salesRecordId,
         description,

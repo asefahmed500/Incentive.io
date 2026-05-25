@@ -250,6 +250,13 @@ async function checkEligibilityImpl(employeeId: string) {
 
   const user = await User.findById(parsed.data);
   if (!user || !user.targetAmount) {
+    if (user) {
+      await User.findByIdAndUpdate(parsed.data, { isEligible: false });
+      await SalesRecord.updateMany(
+        { employeeId: parsed.data, financeStatus: "Approved" },
+        { eligibilityStatus: "Not_Eligible" }
+      );
+    }
     return { eligible: false, achievement: 0, message: "No target set" };
   }
 
@@ -311,6 +318,10 @@ async function checkEligibilityImpl(employeeId: string) {
 
   if (!nowEligible && wasEligible) {
     await User.findByIdAndUpdate(parsed.data, { isEligible: false });
+    await SalesRecord.updateMany(
+      { employeeId: parsed.data, financeStatus: "Approved" },
+      { eligibilityStatus: "Not_Eligible" }
+    );
   }
 
   return {
@@ -353,6 +364,11 @@ export async function reevaluateIneligibleRecords(employeeId: string) {
     await SalesRecord.updateMany(
       { employeeId, financeStatus: "Approved", eligibilityStatus: { $ne: "Eligible" } },
       { eligibilityStatus: "Eligible" }
+    );
+  } else {
+    await SalesRecord.updateMany(
+      { employeeId, financeStatus: "Approved", eligibilityStatus: { $ne: "Not_Eligible" } },
+      { eligibilityStatus: "Not_Eligible" }
     );
   }
 

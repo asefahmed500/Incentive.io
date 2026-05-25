@@ -29,18 +29,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Wallet not found" }, { status: 404 });
     }
 
-    // Convert ObjectId to string
-    const response = {
-      ...wallet,
-      _id: wallet._id.toString(),
-      employeeId: wallet.employeeId.toString(),
-      transactions: wallet.transactions?.map((t: { salesRecordId?: { toString: () => string }; [key: string]: unknown }) => ({
-        ...t,
-        salesRecordId: t.salesRecordId?.toString(),
-      })),
-    };
-
-    return NextResponse.json(response);
+    return NextResponse.json(wallet);
   } catch (error) {
     return handleError(error);
   }

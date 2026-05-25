@@ -61,7 +61,7 @@ export async function PATCH(
     }
 
     const result = await updateProduct({ id, ...parsed.data }) as { success?: boolean; error?: string };
-    if (result.error) {
+    if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });
@@ -86,7 +86,7 @@ export async function DELETE(
     }
 
     const result = await deleteProduct(parsed.data.id) as { success?: boolean; error?: string };
-    if (result.error) {
+    if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });

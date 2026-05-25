@@ -18,9 +18,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 **Testing:**
 - Vitest tests: `npm test` for all tests. Run single test: `npm test -- --testNamePattern="test name"`
+- Vitest coverage: `npm run test:coverage` for coverage report
 - E2E tests: `npm run test:e2e` for Playwright E2E tests
 - E2E UI mode: `npm run test:e2e:ui`
 - E2E debug: `npm run test:e2e:debug`
+- E2E headed: `npm run test:e2e:headed` (shows browser window)
 - E2E report: `npm run test:e2e:report`
 
 **Production Debugging Scripts** (in `scripts/`):
@@ -379,7 +381,7 @@ useEffect(() => {
 15. **Client vs Server auth:** Use `signIn` from `"next-auth/react"` in client components only. For server-side operations, use `auth()` from `@/lib/auth/auth`. Server actions cannot call client-side `signIn`.
 16. **Edge Runtime auth:** Middleware uses `authConfig` from `lib/auth/auth.config.ts` (not full `auth()`) because Edge Runtime doesn't support Mongoose. Only use `auth()` in Node.js contexts (server components, API routes, server actions).
 17. **Recharts null-safety:** All tooltip `formatter` callbacks must handle undefined values: `formatter={(value) => (value || 0).toLocaleString()}`. Pie chart `label` callbacks also need `percent || 0`.
-18. **Monetary calculations:** Always use functions from `lib/utils/money.ts` for calculations involving money. Avoid direct arithmetic on floats to prevent precision errors. Use `calculatePercentage()`, `calculateProductTotal()`, `roundMoney()`.
+18. **Monetary calculations:** Always use functions from `lib/utils/money.ts` for JavaScript calculations involving money. MongoDB aggregation pipelines (`$multiply`, `$round`) are precise and safe for server-side calculations. Avoid direct JavaScript arithmetic on floats.
 19. **ObjectId type consistency:** Use `toObjectId()` from `lib/mongodb` when converting string IDs to ObjectId for database queries. This ensures consistent type handling.
 20. **Atomic transactions:** The commission approval + wallet credit flow uses MongoDB transactions (`lib/actions/approval.actions.ts:finalApproveByFinance`). Both operations succeed or both fail together.
 21. **Rate limiting:** Public endpoints (`/api/register`, `/api/auth/[...nextauth]`) have rate limiting. Use `rateLimit` from `lib/rate-limit.ts` for new public endpoints.
@@ -411,10 +413,11 @@ useEffect(() => {
 | `lib/actions/wallet.actions.ts` | Atomic credit/debit operations with MongoDB sessions + local MongoDB fallback |
 | `lib/actions/notification.actions.ts` | Notification creation, retrieval, role-based link validation + auto-approve notifications |
 | `lib/actions/auth.actions.ts` | Logout action (use for all signout flows) |
+| `lib/actions/analytics.actions.ts` | Dashboard analytics (sales trends, commission progress, team stats, deduction breakdown) |
 | `lib/utils/money.ts` | Precise monetary calculations (use for all currency operations) |
 | `lib/rate-limit.ts` | In-memory rate limiting for public API endpoints |
 | `lib/api-error.ts` | Standardized error handling with ApiError class and handleError |
-| `lib/validations/*.ts` | API-level Zod validation schemas (14 files: approval, audit, category, commission, commissions-api, common, notification, product, sales, settings, target, team, user, wallet) |
+| `lib/validations/*.ts` | API-level Zod validation schemas (14 validation files) |
 | `lib/sse.ts` | Server-Sent Events manager for real-time updates |
 | `lib/auth/role-guard.ts` | `requireAuth()`, `requireRole()`, `requireAdminOrAbove()`, `requireFinanceOrAbove()` helpers |
 | `middleware.ts` | Route-level RBAC enforcement using `authConfig` (Edge Runtime compatible) |
@@ -591,6 +594,12 @@ Run manually with `act` or automatically on push to main.
 - `components/home/social-proof.tsx` — Trust badges, certifications, company logos
 - `components/home/interactive-demo.tsx` — Tabbed dashboard preview for 3 roles (executive/manager/admin)
 - Dark mode toggle available via `ThemeToggle` component in homepage navigation (not in dashboard layouts)
+
+**Dashboard Analytics Pattern** (`lib/actions/analytics.actions.ts`):
+- Server-side aggregation pipelines for trend analysis
+- Functions: `getSalesTrends()`, `getCommissionProgress()`, `getTeamSalesTrends()`, `getDeductionBreakdown()`, `getFinanceApprovalTrends()`, `getSystemStats()`
+- Role-filtered access (executives see own data, managers see team data)
+- Used directly by dashboard pages (no API routes)
 
 **Dashboard Visualization Pattern (all 5 dashboards):**
 - Recharts with 30-second real-time polling

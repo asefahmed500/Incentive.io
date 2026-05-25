@@ -5,6 +5,7 @@ import { z } from "zod";
 import { rateLimit } from "@/lib/rate-limit";
 import { handleError, ErrorCodes } from "@/lib/api-error";
 import { hashPassword } from "@/lib/utils/password";
+import { passwordSchema } from "@/lib/validations/user.validation";
 
 // Rate limiter: 5 registration attempts per hour per IP
 const registerLimiter = rateLimit({
@@ -12,16 +13,11 @@ const registerLimiter = rateLimit({
   uniqueTokenPerInterval: 1000,
 });
 
+// Use shared password schema from user.validation.ts
 const registerSchema = z.object({
   name: z.string().min(1, "Name is required").max(200, "Name is too long"),
   email: z.string().email("Invalid email address"),
-  password: z
-    .string()
-    .min(12, "Password must be at least 12 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number")
-    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+  password: passwordSchema,
   phone: z.string().optional(),
 });
 

@@ -1,6 +1,9 @@
 import { auth } from "@/lib/auth/auth";
 import { sseManager } from "@/lib/sse";
 import { NextRequest } from "next/server";
+import type { AuthUser } from "@/types";
+import { connectToDatabase } from "@/lib/mongodb";
+import { User } from "@/lib/models/User";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -11,8 +14,18 @@ export async function GET(request: NextRequest) {
     return new Response("Unauthorized", { status: 401 });
   }
 
-  const userId = session.user.id as string;
-  const userRole = (session.user as any).role;
+  const userId = session.user.id;
+  const userRole = (session.user as AuthUser).role;
+
+  try {
+    await connectToDatabase();
+    const user = await User.findById(userId).select("isActive").lean();
+    if (!user || user.isActive === false) {
+      return new Response("Account deactivated", { status: 403 });
+    }
+  } catch {
+    return new Response("Unauthorized", { status: 401 });
+  }
 
   const clientId = `${userId}-${Date.now()}-${Math.random()}`;
 

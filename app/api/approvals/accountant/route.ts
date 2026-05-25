@@ -1,5 +1,5 @@
 import { processByAccountant } from "@/lib/actions/approval.actions";
-import { handleError } from "@/lib/api-error";
+import { handleError, getStatusCodeForError } from "@/lib/api-error";
 import { accountantProcessSchema } from "@/lib/validations/approval.validation";
 import { NextResponse } from "next/server";
 import { requireAccountantOrAbove } from "@/lib/auth/role-guard";
@@ -26,8 +26,8 @@ export async function POST(request: Request) {
       vatRate,
     }) as { success?: boolean; error?: string; netSales?: number };
 
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
 
 

@@ -32,6 +32,8 @@ export function useSSE(options: UseSSEOptions = {}) {
   const eventSourceRef = useRef<EventSource | null>(null);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef(0);
+  const optionsRef = useRef(options);
+  optionsRef.current = options;
   const MAX_RETRIES = 5;
   const RETRY_DELAY = 3000;
 
@@ -43,31 +45,31 @@ export function useSSE(options: UseSSEOptions = {}) {
         case "connected":
           const connectedPayload = message.payload as SSEConnectedPayload;
           setClientId(connectedPayload.clientId);
-          options.onConnected?.(connectedPayload.clientId);
+          optionsRef.current.onConnected?.(connectedPayload.clientId);
           break;
         case "notification.new":
-          options.onNotification?.(message.payload);
+          optionsRef.current.onNotification?.(message.payload);
           break;
         case "sale.created":
         case "sale.updated":
         case "sale.approved":
         case "sale.rejected":
-          options.onSaleUpdate?.(message.payload);
+          optionsRef.current.onSaleUpdate?.(message.payload);
           break;
         case "commission.calculated":
-          options.onCommissionUpdate?.(message.payload);
+          optionsRef.current.onCommissionUpdate?.(message.payload);
           break;
         case "wallet.updated":
-          options.onWalletUpdate?.(message.payload);
+          optionsRef.current.onWalletUpdate?.(message.payload);
           break;
         case "dashboard.refresh":
-          options.onDashboardRefresh?.(message.payload);
+          optionsRef.current.onDashboardRefresh?.(message.payload);
           break;
       }
     } catch (error) {
       console.error("Failed to parse SSE message:", error);
     }
-  }, [options]);
+  }, []);
 
   const connectRef = useRef<() => void>(() => {});
 
@@ -90,7 +92,7 @@ export function useSSE(options: UseSSEOptions = {}) {
     eventSource.onerror = () => {
       console.error("SSE connection error");
       setIsConnected(false);
-      options.onError?.(new Event("error"));
+      optionsRef.current.onError?.(new Event("error"));
 
       eventSourceRef.current?.close();
       eventSourceRef.current = null;
@@ -105,7 +107,7 @@ export function useSSE(options: UseSSEOptions = {}) {
     };
 
     eventSourceRef.current = eventSource;
-  }, [session?.user?.id, handleMessage, options]);
+  }, [session?.user?.id, handleMessage]);
 
   useEffect(() => {
     connectRef.current = connect;

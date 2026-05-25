@@ -94,8 +94,8 @@ export async function DELETE(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const id = searchParams.get("id")
 
-    if (!id) {
-      return NextResponse.json({ error: "Backup ID required" }, { status: 400 })
+    if (!id || !/^[a-f\d]{24}$/i.test(id)) {
+      return NextResponse.json({ error: "Invalid backup ID format" }, { status: 400 })
     }
 
     await connectToDatabase()

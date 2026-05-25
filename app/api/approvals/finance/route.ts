@@ -1,5 +1,5 @@
 import { finalApproveByFinance } from "@/lib/actions/approval.actions";
-import { handleError } from "@/lib/api-error";
+import { handleError, getStatusCodeForError } from "@/lib/api-error";
 import { financeApprovalSchema } from "@/lib/validations/approval.validation";
 import { NextResponse } from "next/server";
 import { requireFinanceOrAbove } from "@/lib/auth/role-guard";
@@ -20,8 +20,8 @@ export async function POST(request: Request) {
 
     const result = await finalApproveByFinance(id, paidBy) as { success?: boolean; error?: string };
 
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
 
     // Note: Notification is handled internally by finalApproveByFinance now

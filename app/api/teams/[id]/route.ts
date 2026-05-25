@@ -56,6 +56,11 @@ export async function PATCH(
 
   try {
     const { id } = await params;
+    const parsedId = objectIdSchema.safeParse(id);
+    if (!parsedId.success) {
+      return handleError(parsedId.error);
+    }
+
     const body = await request.json();
 
     const parsed = updateTeamApiSchema.safeParse(body);
@@ -64,7 +69,7 @@ export async function PATCH(
     }
 
     const result = await updateTeam({ id, ...parsed.data }) as { success?: boolean; error?: string };
-    if (result.error) {
+    if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });
@@ -89,7 +94,7 @@ export async function DELETE(
     }
 
     const result = await deleteTeam(parsed.data) as { success?: boolean; error?: string };
-    if (result.error) {
+    if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });

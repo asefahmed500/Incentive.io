@@ -26,8 +26,8 @@ const settingValueSchema = z.union([
 
 // Update single setting schema
 export const updateSettingSchema = z.object({
-  key: z.string().min(1).max(100).refine((key) => {
-    return VALID_SETTING_KEYS.includes(key as any) || key.startsWith("custom_");
+  key: z.string().min(1).max(100).refine((key): key is typeof VALID_SETTING_KEYS[number] => {
+    return VALID_SETTING_KEYS.includes(key as typeof VALID_SETTING_KEYS[number]) || key.startsWith("custom_");
   }, { message: "Invalid setting key. Must be a known setting or start with 'custom_'" }),
   value: settingValueSchema,
 });

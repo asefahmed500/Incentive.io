@@ -158,6 +158,9 @@ function isLinkAccessibleToRole(link: string, role: UserRole): boolean {
     admin: [
       /^\/admin/,
       /^\/sales-dashboard/,
+      /^\/sales-manager/,
+      /^\/accountant/,
+      /^\/finance/,
       /^\/profile/,
     ],
     salesManager: [

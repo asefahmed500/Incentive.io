@@ -64,9 +64,18 @@ export async function assignTarget({
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
+  const currentUser = await User.findById(parsed.data.userId);
+  if (!currentUser) return { error: "User not found" };
+
+  if (userRole === "salesManager" && currentUser.managerId?.toString() !== session.user.id) {
+    return { error: "Forbidden: You can only assign targets to your team members" };
+  }
+
+  const previousTargetAmount = currentUser.targetAmount || 0;
   await User.findByIdAndUpdate(parsed.data.userId, {
     targetAmount: parsed.data.targetAmount,
     targetPeriod: parsed.data.period || "monthly",
+    previousTargetAmount,
   });
 
   try {
@@ -91,9 +100,18 @@ export async function removeTarget(userId: string) {
     return { error: parsed.error.issues[0].message };
   }
   await connectToDatabase();
+  const currentUser = await User.findById(parsed.data.userId);
+  if (!currentUser) return { error: "User not found" };
+
+  if (userRole === "salesManager" && currentUser.managerId?.toString() !== session.user.id) {
+    return { error: "Forbidden: You can only remove targets from your team members" };
+  }
+
   await User.findByIdAndUpdate(parsed.data.userId, {
     targetAmount: 0,
     targetPeriod: null,
+    isEligible: false,
+    previousTargetAmount: currentUser.targetAmount || 0,
   });
   return { success: true };
 }

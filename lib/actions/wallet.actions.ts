@@ -43,6 +43,27 @@ function toObjectId(id: string) {
   return new mongoose.Types.ObjectId(id);
 }
 
+function serializeWallet(w: any) {
+  if (!w) return null;
+  return {
+    _id: w._id?.toString(),
+    employeeId: w.employeeId?.toString(),
+    balance: w.balance,
+    pendingBalance: w.pendingBalance,
+    totalEarned: w.totalEarned,
+    totalPaid: w.totalPaid,
+    transactions: Array.isArray(w.transactions)
+      ? w.transactions.map((t: any) => ({
+          ...t,
+          _id: t._id?.toString?.() || "",
+          salesRecordId: t.salesRecordId?.toString?.() || "",
+        }))
+      : [],
+    createdAt: w.createdAt,
+    updatedAt: w.updatedAt,
+  };
+}
+
 export async function getWallet(employeeId: string) {
   const session = await auth();
   if (!session?.user?.id) return null;
@@ -55,7 +76,7 @@ export async function getWallet(employeeId: string) {
   const wallet = await Wallet.findOne({
     employeeId: toObjectId(parsed.data),
   }).lean();
-  return wallet;
+  return serializeWallet(wallet);
 }
 
 export async function getOrCreateWallet(employeeId: string) {
@@ -74,7 +95,7 @@ export async function getOrCreateWallet(employeeId: string) {
     { $setOnInsert: { balance: 0, pendingBalance: 0, totalEarned: 0, totalPaid: 0, transactions: [] } },
     { upsert: true, returnDocument: "after" }
   ).lean();
-  return wallet;
+  return serializeWallet(wallet);
 }
 
 export async function creditWallet({

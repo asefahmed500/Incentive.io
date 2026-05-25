@@ -5,7 +5,7 @@ import { objectIdSchema, optionalObjectIdSchema } from "./common";
 const userRoleEnum = z.enum(["administrator", "admin", "salesManager", "salesExecutive", "accountant", "finance"]);
 
 // Password requirements: 12+ chars with uppercase, lowercase, number, special character
-const passwordSchema = z.string()
+export const passwordSchema = z.string()
   .min(12, "Password must be at least 12 characters")
   .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
   .regex(/[a-z]/, "Password must contain at least one lowercase letter")

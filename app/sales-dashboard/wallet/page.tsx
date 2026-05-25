@@ -43,7 +43,7 @@ export default function SalesWallet() {
       setLoading(true);
       try {
         const walletData = await getOrCreateWallet(session.user.id);
-        if (walletData) {
+        if (walletData && !("error" in walletData)) {
           setWallet({
             id: walletData._id?.toString() || "",
             balance: walletData.balance ?? 0,

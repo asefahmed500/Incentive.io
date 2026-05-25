@@ -5,6 +5,7 @@ import { NextResponse } from "next/server";
 import { requireAdminOrAbove } from "@/lib/auth/role-guard";
 import { CommissionRule } from "@/lib/models/CommissionRule";
 import { connectToDatabase } from "@/lib/mongodb";
+import { objectIdSchema } from "@/lib/validations/common";
 
 export async function GET(
   request: Request,
@@ -48,6 +49,11 @@ export async function PUT(
 
   try {
     const { id } = await params;
+    const parsedId = objectIdSchema.safeParse(id);
+    if (!parsedId.success) {
+      return handleError(parsedId.error);
+    }
+
     const body = await request.json();
 
     const parsed = updateCommissionRuleSchema.safeParse(body);
@@ -56,8 +62,8 @@ export async function PUT(
     }
 
     const result = await updateCommissionRule({ id, ...parsed.data }) as { success?: boolean; error?: string };
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -81,7 +87,7 @@ export async function DELETE(
     }
 
     const result = await deleteCommissionRule(parsed.data) as { success?: boolean; error?: string };
-    if (result.error) {
+    if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });

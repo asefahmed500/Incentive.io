@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { FileText, Target, Wallet, TrendingUp, DollarSign, Users, Building2, CheckCircle, XCircle, Clock, RefreshCw, ArrowRight } from "lucide-react";
+import { FileText, Target, Wallet, TrendingUp, DollarSign, Users, Building2, CheckCircle, XCircle, Clock, RefreshCw, ArrowRight, Plus } from "lucide-react";
 import { getSalesRecords } from "@/lib/actions/sales.actions";
 import { getCommissionsByEmployee, checkEligibility } from "@/lib/actions/commission.actions";
 import { getSalesTrends, getCommissionProgress } from "@/lib/actions/analytics.actions";
@@ -13,6 +13,8 @@ import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, BarChart, Ba
 import { useSSE } from "@/hooks/use-sse";
 import { DashboardSkeleton } from "@/components/loading/dashboard-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { ChartErrorBoundary } from "@/components/chart-error-boundary";
+import { EmptyState } from "@/components/ui/empty-state";
 
 const COLORS = ["#10b981", "#f59e0b", "#3b82f6"];
 
@@ -117,6 +119,40 @@ export default function SalesDashboard() {
 
    if (loading) return <DashboardSkeleton />;
 
+  // Show empty state when there are no sales records
+  if (stats.totalRecords === 0 && !loading) {
+    return (
+      <ErrorBoundary>
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Dashboard</h1>
+              <p className="text-muted-foreground">Welcome back, {session?.user?.name}</p>
+            </div>
+            <Button variant="outline" size="sm" onClick={fetchData} aria-label="Refresh dashboard data">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Refresh
+            </Button>
+          </div>
+
+          <Card className="mt-6">
+            <CardContent className="pt-6">
+              <EmptyState
+                icon={FileText}
+                title="No sales records yet"
+                description="Get started by creating your first sales record to track your performance and commissions."
+                action={{
+                  label: "Create Your First Sale",
+                  onClick: () => router.push("/sales-dashboard/add-record"),
+                }}
+              />
+            </CardContent>
+          </Card>
+        </div>
+      </ErrorBoundary>
+    );
+  }
+
    return (
      <ErrorBoundary>
        <div className="space-y-6">
@@ -184,22 +220,24 @@ export default function SalesDashboard() {
             <CardTitle>Records Status</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <PieChart>
-                <Pie
-                  data={recordsByStatus}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
-                >
-                  {recordsByStatus.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            <ChartErrorBoundary title="Records Status Chart" onRetry={fetchData}>
+              <ResponsiveContainer width="100%" height={200}>
+                <PieChart>
+                  <Pie
+                    data={recordsByStatus}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => `${name}: ${((percent || 0) * 100).toFixed(0)}%`}
+                  >
+                    {recordsByStatus.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            </ChartErrorBoundary>
           </CardContent>
         </Card>
 
@@ -208,18 +246,20 @@ export default function SalesDashboard() {
             <CardTitle>Sales vs Commission Trend</CardTitle>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={200}>
-              <AreaChart data={salesTrends}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value) => `৳${(value || 0).toLocaleString()}`}
-                />
-                <Area type="monotone" dataKey="sales" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} name="Sales" />
-                <Area type="monotone" dataKey="commission" stroke="#10b981" fill="#10b981" fillOpacity={0.3} name="Commission" />
-              </AreaChart>
-            </ResponsiveContainer>
+            <ChartErrorBoundary title="Sales vs Commission Trend" onRetry={fetchData}>
+              <ResponsiveContainer width="100%" height={200}>
+                <AreaChart data={salesTrends}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="month" />
+                  <YAxis />
+                  <Tooltip
+                    formatter={(value) => `৳${(value || 0).toLocaleString()}`}
+                  />
+                  <Area type="monotone" dataKey="sales" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.3} name="Sales" />
+                  <Area type="monotone" dataKey="commission" stroke="#10b981" fill="#10b981" fillOpacity={0.3} name="Commission" />
+                </AreaChart>
+              </ResponsiveContainer>
+            </ChartErrorBoundary>
           </CardContent>
         </Card>
       </div>
@@ -229,18 +269,20 @@ export default function SalesDashboard() {
           <CardTitle>Commission Progress vs Target</CardTitle>
         </CardHeader>
         <CardContent>
-          <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={commissionProgress}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="month" />
-              <YAxis />
-              <Tooltip
-                formatter={(value) => `৳${(value || 0).toLocaleString()}`}
-              />
-              <Bar dataKey="earned" fill="#10b981" name="Earned" />
-              <Bar dataKey="target" fill="#e5e7eb" name="Target" />
-            </BarChart>
-          </ResponsiveContainer>
+          <ChartErrorBoundary title="Commission Progress Chart" onRetry={fetchData}>
+            <ResponsiveContainer width="100%" height={200}>
+              <BarChart data={commissionProgress}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" />
+                <YAxis />
+                <Tooltip
+                  formatter={(value) => `৳${(value || 0).toLocaleString()}`}
+                />
+                <Bar dataKey="earned" fill="#10b981" name="Earned" />
+                <Bar dataKey="target" fill="#e5e7eb" name="Target" />
+              </BarChart>
+            </ResponsiveContainer>
+          </ChartErrorBoundary>
         </CardContent>
       </Card>
 
@@ -265,7 +307,7 @@ export default function SalesDashboard() {
                 <div className="mt-2">
                   <div className="flex items-center justify-between text-sm mb-1">
                     <span className="text-muted-foreground">Achievement</span>
-                    <span className="font-semibold">{eligibility?.achievement?.toFixed(1)}%</span>
+                    <span className="font-semibold">{(eligibility?.achievement ?? 0).toFixed(1)}%</span>
                   </div>
                   <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
                     <div

@@ -21,7 +21,14 @@ export async function GET(request: Request) {
       return handleError(parsed.error);
     }
 
-    const { userId, action, limit } = parsed.data;
+    let { userId } = parsed.data;
+    const { action, limit } = parsed.data;
+    const authenticatedUserId = authResult.session.user.id as string;
+    const userRole = (authResult.session.user as import("@/types").AuthUser).role as string;
+
+    if (!["admin", "administrator", "finance"].includes(userRole)) {
+      userId = authenticatedUserId;
+    }
 
     if (action === "unread-count") {
       const count = await getUnreadCount(userId);
@@ -45,7 +52,15 @@ export async function PATCH(request: Request) {
     // Try mark all as read schema first
     const markAllParsed = markAllAsReadSchema.safeParse(body);
     if (markAllParsed.success) {
-      const result = await markAllAsRead(markAllParsed.data.userId);
+      let targetUserId = markAllParsed.data.userId;
+      const authenticatedUserId = authResult.session.user.id as string;
+      const userRole = (authResult.session.user as import("@/types").AuthUser).role as string;
+
+      if (!["admin", "administrator", "finance"].includes(userRole)) {
+        targetUserId = authenticatedUserId;
+      }
+
+      const result = await markAllAsRead(targetUserId);
       if ("error" in result) {
         return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error as string) });
       }

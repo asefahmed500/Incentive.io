@@ -58,8 +58,8 @@ export async function PATCH(
     }
 
     const result = await updateUser({ id, ...parsed.data }) as { success?: boolean; error?: string };
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -83,7 +83,7 @@ export async function DELETE(
     }
 
     const result = await deleteUser(parsed.data) as { success?: boolean; error?: string };
-    if (result.error) {
+    if (result?.error) {
       return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });

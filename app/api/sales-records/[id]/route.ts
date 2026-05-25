@@ -1,6 +1,6 @@
 import { getSalesRecord, updateSalesRecord, deleteSalesRecord } from "@/lib/actions/sales.actions";
 import { NextResponse } from "next/server";
-import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
+import { requireAuth } from "@/lib/auth/role-guard";
 import { getStatusCodeForError, handleError } from "@/lib/api-error";
 import { z } from "zod";
 import { createSalesRecordApiSchema } from "@/lib/validations/sales.validation";
@@ -72,7 +72,7 @@ export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const authResult = await requireAdminOrAbove();
+  const authResult = await requireAuth();
   if ("error" in authResult) return NextResponse.json({ error: authResult.error }, { status: authResult.status });
 
   try {

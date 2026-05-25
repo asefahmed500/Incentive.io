@@ -36,3 +36,55 @@ export const searchQuerySchema = z.object({
 export const idParamSchema = z.object({
   id: objectIdSchema,
 });
+
+/**
+ * Date validation schemas
+ * Ensures consistent date format validation across the application
+ */
+export const dateSchema = z.string().refine(
+  (date) => !isNaN(Date.parse(date)),
+  { message: "Invalid date format. Use ISO 8601 format (YYYY-MM-DDTHH:mm:ss.sssZ)" }
+);
+
+export const optionalDateSchema = dateSchema.optional();
+
+/**
+ * ISO 8601 date string validation (strict format)
+ */
+export const isoDateSchema = z.string().regex(
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{3})?Z$/,
+  { message: "Invalid ISO 8601 date format" }
+);
+
+/**
+ * Monetary value validation schemas
+ * Prevents precision errors and invalid amounts
+ */
+export const moneySchema = z.number().min(0, "Amount cannot be negative").finite("Amount must be a valid number");
+
+export const positiveMoneySchema = z.number().positive("Amount must be positive").finite("Amount must be a valid number");
+
+export const optionalMoneySchema = moneySchema.optional();
+
+/**
+ * Maximum amount validation for large transactions
+ * Prevents overflow issues
+ */
+export const maxAmountSchema = z.number().max(1000000000, "Amount cannot exceed 1,000,000,000");
+
+/**
+ * Rate/percentage validation
+ * For commission rates, tax rates, etc.
+ */
+export const rateSchema = z.number().min(0, "Rate cannot be negative").max(100, "Rate cannot exceed 100%");
+
+export const optionalRateSchema = rateSchema.optional();
+
+/**
+ * Email validation with additional security checks
+ * Prevents NoSQL injection via email fields
+ */
+export const secureEmailSchema = z.string().email("Invalid email format").refine(
+  (email) => !email.startsWith("$") && !email.includes("{") && !email.includes("}"),
+  { message: "Invalid characters in email" }
+);

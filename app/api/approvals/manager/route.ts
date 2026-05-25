@@ -1,5 +1,5 @@
 import { approveSale, rejectSale } from "@/lib/actions/approval.actions";
-import { handleError } from "@/lib/api-error";
+import { handleError, getStatusCodeForError } from "@/lib/api-error";
 import { managerActionSchema } from "@/lib/validations/approval.validation";
 import { NextResponse } from "next/server";
 import { requireManagerOrAbove } from "@/lib/auth/role-guard";
@@ -21,8 +21,8 @@ export async function POST(request: Request) {
     if (action === "approve") {
       const result = await approveSale(id) as { success?: boolean; error?: string };
 
-      if (result.error) {
-        return NextResponse.json({ error: result.error }, { status: 400 });
+      if (result?.error) {
+        return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
       }
 
       return NextResponse.json({ success: true });
@@ -31,8 +31,8 @@ export async function POST(request: Request) {
     if (action === "reject") {
       const result = await rejectSale(id, reason || "", "manager") as { success?: boolean; error?: string };
 
-      if (result.error) {
-        return NextResponse.json({ error: result.error }, { status: 400 });
+      if (result?.error) {
+        return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
       }
 
       return NextResponse.json({ success: true });

@@ -372,19 +372,19 @@ function ManagerAddRecord() {
                   key={index}
                   className="flex items-center justify-between p-3 bg-gray-50 rounded-md border"
                 >
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-gray-500" />
-                    <div>
-                      <p className="text-sm font-medium">{file.fileName}</p>
+                  <div className="flex items-center gap-2 min-w-0">
+                    <FileText className="h-4 w-4 text-gray-500 shrink-0" />
+                    <a href={file.url} target="_blank" rel="noopener noreferrer" className="min-w-0">
+                      <p className="text-sm font-medium hover:text-sky-600 truncate">{file.fileName}</p>
                       <p className="text-xs text-muted-foreground">
-                        {(file.size / 1024).toFixed(2)} KB
+                        {file.size ? `${(file.size / 1024).toFixed(2)} KB` : "Existing file"}
                       </p>
-                    </div>
+                    </a>
                   </div>
                   <button
                     type="button"
                     onClick={() => removeFile(index)}
-                    className="p-1 hover:bg-gray-200 rounded"
+                    className="p-1 hover:bg-gray-200 rounded shrink-0"
                   >
                     <X className="h-4 w-4 text-gray-500" />
                   </button>

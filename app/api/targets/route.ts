@@ -1,5 +1,5 @@
 import { getTargets, assignTarget, removeTarget } from "@/lib/actions/target.actions";
-import { handleError } from "@/lib/api-error";
+import { handleError, getStatusCodeForError } from "@/lib/api-error";
 import { z } from "zod";
 import { NextResponse } from "next/server";
 import { requireAuth, requireAdminOrAbove } from "@/lib/auth/role-guard";
@@ -44,8 +44,8 @@ export async function POST(request: Request) {
       period: parsed.data.period,
     }) as { success?: boolean; error?: string };
 
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true }, { status: 201 });
   } catch (error) {
@@ -71,8 +71,8 @@ export async function DELETE(request: Request) {
     }
 
     const result = await removeTarget(parsed.data.userId) as { success?: boolean; error?: string };
-    if (result.error) {
-      return NextResponse.json({ error: result.error }, { status: 400 });
+    if (result?.error) {
+      return NextResponse.json({ error: result.error }, { status: getStatusCodeForError(result.error) });
     }
     return NextResponse.json({ success: true });
   } catch (error) {
