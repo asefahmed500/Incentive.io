@@ -18,13 +18,10 @@ const nextConfig = {
         modules: false,
       };
     } else {
-      config.externals = config.externals || [];
       if (!Array.isArray(config.externals)) {
-        config.externals = [config.externals];
+        config.externals = [];
       }
-      config.externals.push({
-        mongoose: 'commonjs mongoose',
-      });
+      config.externals.push({ mongoose: 'commonjs mongoose' });
     }
     return config;
   },

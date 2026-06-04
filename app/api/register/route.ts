@@ -7,9 +7,9 @@ import { handleError, ErrorCodes } from "@/lib/api-error";
 import { hashPassword } from "@/lib/utils/password";
 import { passwordSchema } from "@/lib/validations/user.validation";
 
-// Rate limiter: 5 registration attempts per hour per IP
+// Rate limiter: 20 registration attempts per 15 minutes per IP
 const registerLimiter = rateLimit({
-  interval: 60 * 60 * 1000, // 1 hour
+  interval: 15 * 60 * 1000, // 15 minutes
   uniqueTokenPerInterval: 1000,
 });
 
@@ -25,7 +25,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limiting check
     const ip = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? "anonymous";
-    const { isRateLimited, remaining, resetTime } = registerLimiter.check(5, ip);
+    const { isRateLimited, remaining, resetTime } = registerLimiter.check(20, ip);
 
     if (isRateLimited) {
       return NextResponse.json(

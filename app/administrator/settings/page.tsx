@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +24,7 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const saveSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [formData, setFormData] = useState<Record<string, any>>({});
 
   useEffect(() => {
@@ -40,6 +41,7 @@ export default function SettingsPage() {
       }
     };
     fetchSettings();
+    return () => { if (saveSuccessTimerRef.current) clearTimeout(saveSuccessTimerRef.current) };
   }, []);
 
   const saveSettings = async () => {
@@ -54,7 +56,7 @@ export default function SettingsPage() {
       const data = await res.json();
       if (data.success) {
         setSaveSuccess(true);
-        setTimeout(() => setSaveSuccess(false), 3000);
+        saveSuccessTimerRef.current = setTimeout(() => setSaveSuccess(false), 3000);
       }
     } catch (error) {
       console.error("Failed to save settings:", error);

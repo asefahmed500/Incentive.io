@@ -157,6 +157,46 @@ export default function ManagerApprovals() {
         </CardContent>
       </Card>
 
+      <Dialog open={!!selectedRecord && !rejectDialogOpen} onOpenChange={() => setSelectedRecord(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Sales Record Details</DialogTitle>
+            <DialogDescription>
+              {selectedRecord?.companyName} — {selectedRecord?.employeeName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Company</p>
+              <p className="font-medium">{selectedRecord?.companyName}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Employee</p>
+              <p className="font-medium">{selectedRecord?.employeeName}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Products</p>
+              <p className="font-medium">{selectedRecord?.productCount} products</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Total Amount</p>
+              <p className="font-medium">৳{selectedRecord?.totalAmount?.toLocaleString() || 0}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Commission</p>
+              <p className="font-medium">৳{selectedRecord?.commission?.toLocaleString() || 0}</p>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <Button variant="outline" onClick={() => setSelectedRecord(null)}>Close</Button>
+            <Button variant="destructive" onClick={() => {
+              setRejectDialogOpen(true);
+            }}>Reject</Button>
+            <Button onClick={() => handleApprove(selectedRecord?.id)} disabled={!selectedRecord?.id}>Approve</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       <Dialog key={selectedRecord?.id || "reject"} open={rejectDialogOpen} onOpenChange={setRejectDialogOpen}>
         <DialogContent>
           <DialogHeader>

@@ -48,6 +48,7 @@ export default function AdminTargets() {
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<any>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   const fetchTargets = () => {
     startTransition(async () => {
@@ -122,7 +123,7 @@ export default function AdminTargets() {
           <div className="flex items-center gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search users..." className="pl-8" />
+              <Input placeholder="Search users..." className="pl-8" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} />
             </div>
           </div>
         </CardHeader>
@@ -151,14 +152,18 @@ export default function AdminTargets() {
                   </TableCell>
                 </TableRow>
               ) : (
-                targets.map((t) => (
+                targets
+                  .filter((t: any) =>
+                    !searchQuery || t.name?.toLowerCase().includes(searchQuery.toLowerCase())
+                  )
+                  .map((t) => (
                   <TableRow key={t.id}>
                     <TableCell className="font-medium">{t.name}</TableCell>
                     <TableCell className="capitalize">
                       {t.role.replace(/([A-Z])/g, " $1").trim()}
                     </TableCell>
                     <TableCell>{t.managerName || "—"}</TableCell>
-                    <TableCell className="font-medium">৳{t.targetAmount.toLocaleString()}</TableCell>
+                    <TableCell className="font-medium">৳{(t.targetAmount ?? 0).toLocaleString()}</TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"

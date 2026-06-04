@@ -47,6 +47,7 @@ const ruleSchema = z.object({
 export default function AdminCommissionRules() {
   const [rules, setRules] = useState<any[]>([]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [isPending, startTransition] = useTransition();
   const [open, setOpen] = useState(false);
@@ -137,7 +138,7 @@ export default function AdminCommissionRules() {
           <div className="flex items-center gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground" />
-              <Input placeholder="Search rules..." className="pl-8" />
+              <Input placeholder="Search rules..." className="pl-8" value={search} onChange={(e) => setSearch(e.target.value)} />
             </div>
           </div>
         </CardHeader>
@@ -167,7 +168,9 @@ export default function AdminCommissionRules() {
                   </TableCell>
                 </TableRow>
               ) : (
-                rules.map((r) => (
+                rules.filter((r) =>
+                  !search || `${r.targetPercentageFrom}-${r.targetPercentageTo} ${r.commissionRate}%`.toLowerCase().includes(search.toLowerCase())
+                ).map((r) => (
                   <TableRow key={r.id}>
                     <TableCell>{r.targetPercentageFrom}%</TableCell>
                     <TableCell>{r.targetPercentageTo}%</TableCell>

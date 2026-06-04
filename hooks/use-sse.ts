@@ -33,9 +33,12 @@ export function useSSE(options: UseSSEOptions = {}) {
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const retryCountRef = useRef(0);
   const optionsRef = useRef(options);
-  optionsRef.current = options;
   const MAX_RETRIES = 5;
   const RETRY_DELAY = 3000;
+
+  useEffect(() => {
+    optionsRef.current = options;
+  }, [options]);
 
   const handleMessage = useCallback((event: MessageEvent) => {
     try {

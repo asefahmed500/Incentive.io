@@ -16,7 +16,7 @@ export default function FinanceSalesRecords() {
 
   const fetchRecords = async () => {
     setLoading(true);
-    const data = await getAllSalesRecords({});
+    const data = await getAllSalesRecords({ search: search || undefined, status: statusFilter !== "all" ? statusFilter : undefined });
     if (Array.isArray(data)) {
       setRecords(data);
     } else {
@@ -28,10 +28,10 @@ export default function FinanceSalesRecords() {
 
   useEffect(() => {
     fetchRecords();
-  }, []);
+  }, [search, statusFilter]);
 
   const filtered = records.filter((r: any) => {
-    if (statusFilter !== "all" && r.financeStatus !== statusFilter) {
+    if (statusFilter !== "all" && r.status !== statusFilter) {
       return false;
     }
     if (

@@ -4,9 +4,10 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Users, Target } from "lucide-react";
-import { getTeamMembers, getTeams } from "@/lib/actions/team.actions";
+import { Users, Target, UserPlus, UserMinus } from "lucide-react";
+import { getTeamMembers, getTeams, addMember, removeMember } from "@/lib/actions/team.actions";
 import { assignTarget } from "@/lib/actions/target.actions";
+import { getUsers } from "@/lib/actions/user.actions";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import {
@@ -15,6 +16,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export default function TeamPage() {
   const { data: session } = useSession();
@@ -26,6 +34,10 @@ export default function TeamPage() {
   const [targetDialogOpen, setTargetDialogOpen] = useState(false);
   const [selectedMember, setSelectedMember] = useState<any>(null);
   const [targetAmount, setTargetAmount] = useState("");
+  const [addMemberOpen, setAddMemberOpen] = useState(false);
+  const [unassignedUsers, setUnassignedUsers] = useState<any[]>([]);
+  const [selectedUserId, setSelectedUserId] = useState("");
+  const [addPending, setAddPending] = useState(false);
 
   const fetchTeam = async () => {
     if (!session?.user?.id) return;
@@ -52,6 +64,39 @@ export default function TeamPage() {
   useEffect(() => {
     fetchTeam();
   }, [session]);
+
+  const fetchUnassignedUsers = async () => {
+    const allUsers = await getUsers({ role: "salesExecutive", search: "" });
+    if (Array.isArray(allUsers)) {
+      const memberIds = new Set(teamMembers.map((m) => m.id));
+      const unassigned = allUsers.filter((u) => !memberIds.has(u.id));
+      setUnassignedUsers(unassigned);
+    }
+  };
+
+  const handleAddMember = async () => {
+    if (!teamId || !selectedUserId) return;
+    setAddPending(true);
+    const result = await addMember(teamId, selectedUserId);
+    if (result?.error) {
+      alert(result.error);
+    } else {
+      setAddMemberOpen(false);
+      setSelectedUserId("");
+      await fetchTeam();
+    }
+    setAddPending(false);
+  };
+
+  const handleRemoveMember = async (userId: string) => {
+    if (!confirm("Remove this member from the team?")) return;
+    const result = await removeMember(teamId, userId);
+    if (result?.error) {
+      alert(result.error);
+    } else {
+      await fetchTeam();
+    }
+  };
 
   const handleAssignTarget = async () => {
     if (selectedMember && targetAmount) {
@@ -94,8 +139,19 @@ export default function TeamPage() {
       </div>
 
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>Team Members</CardTitle>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              fetchUnassignedUsers();
+              setAddMemberOpen(true);
+            }}
+          >
+            <UserPlus className="h-4 w-4 mr-2" />
+            Add Member
+          </Button>
         </CardHeader>
         <CardContent>
           {teamMembers.length === 0 ? (
@@ -143,6 +199,14 @@ export default function TeamPage() {
                     >
                       View Sales
                     </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-red-500"
+                      onClick={() => handleRemoveMember(member.id)}
+                    >
+                      <UserMinus className="h-4 w-4" />
+                    </Button>
                   </div>
                 </div>
               ))}
@@ -167,6 +231,38 @@ export default function TeamPage() {
               />
             </div>
             <Button onClick={handleAssignTarget}>Set Target</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={addMemberOpen} onOpenChange={setAddMemberOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Team Member</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Select Executive</Label>
+              {unassignedUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground py-2">No unassigned executives available</p>
+              ) : (
+                <Select value={selectedUserId} onValueChange={setSelectedUserId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select an executive" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {unassignedUsers.map((u) => (
+                      <SelectItem key={u.id} value={u.id}>
+                        {u.name} ({u.email})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
+            </div>
+            <Button onClick={handleAddMember} disabled={addPending || !selectedUserId}>
+              {addPending ? "Adding..." : "Add to Team"}
+            </Button>
           </div>
         </DialogContent>
       </Dialog>

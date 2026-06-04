@@ -17,8 +17,9 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { NotificationBell } from "@/components/notification-bell";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
-import { logoutAction } from "@/lib/actions/auth.actions";
+import { signOut } from "next-auth/react";
 
 const sidebarItems = [
   { href: "/administrator", label: "Dashboard", icon: LayoutDashboard },
@@ -62,7 +63,7 @@ export default function AdministratorLayout({
         </SidebarContent>
         <SidebarFooter className="p-4">
           <button
-            onClick={() => logoutAction()}
+            onClick={() => signOut({ callbackUrl: "/", redirect: true })}
             className="flex items-center gap-3 px-3 py-2 w-full text-left text-red-500 hover:bg-red-50 rounded-md transition-colors"
           >
             <LogOut className="h-4 w-4" />
@@ -76,6 +77,7 @@ export default function AdministratorLayout({
           <Separator orientation="vertical" className="mr-2 h-4" />
           <div className="flex flex-1 items-center justify-end">
             <NotificationBell />
+            <ThemeToggle />
           </div>
         </header>
         <div className="p-6 flex-1 overflow-auto">{children}</div>

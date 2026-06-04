@@ -109,6 +109,7 @@ const updateSalesRecordDataSchema = z.object({
   taxEnabled: z.boolean().optional(),
   vatEnabled: z.boolean().optional(),
   date: z.string().optional(),
+  proofOfSale: z.array(z.string()).optional(),
 });
 
 const updateSalesRecordSchema = z.object({
@@ -327,7 +328,7 @@ export async function getAllSalesRecords({
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["admin", "administrator", "accountant", "finance", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["admin", "administrator", "accountant", "finance", "salesManager", "salesExecutive"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = getAllSalesRecordsSchema.safeParse({ status, search });
   if (!parsed.success) return [];
   await connectToDatabase();
@@ -352,9 +353,11 @@ export async function getAllSalesRecords({
     date: r.createdAt,
     companyName: r.companyName,
     companyEmail: r.companyEmail,
+    employeeId: typeof r.employeeId === "string" ? r.employeeId : String(r.employeeId || ""),
     employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
     employeeEmail: (r.employeeId as unknown as { email?: string })?.email || "",
     amount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0),
+    productCount: r.products?.length || 0,
     status: r.status,
     approvalStatus: r.approvalStatus,
     accountantStatus: r.accountantStatus,
@@ -594,13 +597,14 @@ export async function updateSalesRecord(id: string, data: unknown) {
   }
 
   const updateData: Record<string, unknown> = {};
-  const { companyName, companyEmail, products, taxEnabled, vatEnabled, date } = parsed.data.data;
+  const { companyName, companyEmail, products, taxEnabled, vatEnabled, date, proofOfSale } = parsed.data.data;
   if (companyName !== undefined) updateData.companyName = companyName;
   if (companyEmail !== undefined) updateData.companyEmail = companyEmail;
   if (products !== undefined) updateData.products = products;
   if (taxEnabled !== undefined) updateData.taxEnabled = taxEnabled;
   if (vatEnabled !== undefined) updateData.vatEnabled = vatEnabled;
   if (date !== undefined) updateData.date = date;
+  if (proofOfSale !== undefined) updateData.proofOfSale = proofOfSale;
 
   await SalesRecord.findByIdAndUpdate(parsed.data.id, updateData);
   return { success: true };

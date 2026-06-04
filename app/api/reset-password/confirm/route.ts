@@ -4,9 +4,9 @@ import { rateLimit } from "@/lib/rate-limit";
 import { resetPasswordWithToken } from "@/lib/actions/user.actions";
 import { handleError } from "@/lib/api-error";
 
-// Rate limiter: 5 attempts per hour per IP
+// Rate limiter: 15 attempts per 15 minutes per IP
 const resetConfirmLimiter = rateLimit({
-  interval: 60 * 60 * 1000, // 1 hour
+  interval: 15 * 60 * 1000, // 15 minutes
   uniqueTokenPerInterval: 100,
 });
 
@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
   try {
     // Rate limiting check
     const ip = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? "anonymous";
-    const { isRateLimited, remaining } = resetConfirmLimiter.check(5, ip);
+    const { isRateLimited, remaining } = resetConfirmLimiter.check(15, ip);
 
     if (isRateLimited) {
       return NextResponse.json(

@@ -5,6 +5,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -63,6 +64,7 @@ function ManagerAddRecord() {
     { productName: "", categoryId: "", unitPrice: "", quantity: "1", originalPrice: "", dealNotes: "" }
   ]);
   const [categories, setCategories] = useState<any[]>([]);
+  const [autoApproveCategories, setAutoApproveCategories] = useState<Set<string>>(new Set());
   const [isPending, startTransition] = useTransition();
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
   const [isUploading, setIsUploading] = useState(false);
@@ -73,6 +75,11 @@ function ManagerAddRecord() {
       const data = await getCategories();
       if (Array.isArray(data)) {
         setCategories(data);
+
+        const autoApproveIds = new Set(
+          data.filter((cat: any) => cat.autoApprove && cat.id).map((cat: any) => cat.id as string)
+        );
+        setAutoApproveCategories(autoApproveIds);
       }
     };
     loadCategories();
@@ -210,6 +217,8 @@ function ManagerAddRecord() {
       }
       if (result.success) {
         router.push("/sales-manager/records");
+      } else {
+        alert((result as any)?.error || "Failed to save record");
       }
     });
   };
@@ -222,15 +231,23 @@ function ManagerAddRecord() {
         if (result.success) {
           await submitSalesRecord(editId);
           router.push("/sales-manager/records");
+        } else {
+          alert((result as any)?.error || "Failed to update record");
         }
       } else {
         const record = await createSalesRecord(data);
         if (record.success && record.id) {
           await submitSalesRecord(record.id);
           router.push("/sales-manager/records");
+        } else {
+          alert((record as any)?.error || "Failed to create record");
         }
       }
     });
+  };
+
+  const allProductsAutoApprove = () => {
+    return products.length > 0 && products.every(p => p.categoryId && autoApproveCategories.has(p.categoryId));
   };
 
   const calculateTotal = () => {
@@ -304,7 +321,12 @@ function ManagerAddRecord() {
                   <SelectTrigger><SelectValue placeholder="Select category" /></SelectTrigger>
                   <SelectContent>
                     {categories.map((cat) => (
-                      <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                        {cat.autoApprove && (
+                          <span className="ml-2 inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-800">Auto-Approve</span>
+                        )}
+                      </SelectItem>
                     ))}
                   </SelectContent>
                 </Select>
@@ -395,15 +417,25 @@ function ManagerAddRecord() {
         </CardContent>
       </Card>
 
-      <div className="flex gap-4">
-        <Button variant="outline" onClick={handleSaveDraft} disabled={isPending}>
-          <Save className="h-4 w-4 mr-2" />
-          {isPending ? "Saving..." : "Save Draft"}
-        </Button>
-        <Button onClick={handleSubmit} disabled={isPending}>
-          <Send className="h-4 w-4 mr-2" />
-          Submit for Approval
-        </Button>
+      <div className="space-y-4">
+        {allProductsAutoApprove() && (
+          <div className="p-4 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md">
+            <p className="text-sm text-green-800 dark:text-green-200 font-medium">
+              <span className="inline-block mr-2">✓</span>
+              Auto-Approve: All products are from auto-approve categories. This sale will be automatically approved upon submission.
+            </p>
+          </div>
+        )}
+        <div className="flex gap-4">
+          <Button variant="outline" onClick={handleSaveDraft} disabled={isPending}>
+            <Save className="h-4 w-4 mr-2" />
+            {isPending ? "Saving..." : "Save Draft"}
+          </Button>
+          <Button onClick={handleSubmit} disabled={isPending}>
+            <Send className="h-4 w-4 mr-2" />
+            {allProductsAutoApprove() ? "Submit (Auto-Approve)" : "Submit for Approval"}
+          </Button>
+        </div>
       </div>
       </>
       )}

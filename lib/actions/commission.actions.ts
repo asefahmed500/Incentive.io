@@ -166,15 +166,41 @@ export async function getCommissions() {
 
   const employeeIds = [...new Set(records.map((r) => r.employeeId).filter(Boolean))];
   const userObjectIds = employeeIds.filter((id): id is string => !!id).map((id) => toObjectId(id));
-  const users = await User.find({ _id: { $in: userObjectIds } }, { isEligible: 1 }).lean();
+  const users = await User.find({ _id: { $in: userObjectIds } }, { isEligible: 1, targetAmount: 1 }).lean();
   const eligibilityMap = new Map(users.map((u) => [u._id.toString(), u.isEligible || false]));
+  const targetMap = new Map(users.map((u) => [u._id.toString(), u.targetAmount || 0]));
+
+  const employeeSalesTotals = new Map<string, number>();
+  for (const r of records) {
+    const empId = r.employeeId;
+    if (!empId) continue;
+    const amount = r.netSales !== undefined && r.netSales !== null
+      ? r.netSales
+      : r.products.reduce((s: number, p: { unitPrice: number; quantity: number }) =>
+          s + calculateProductTotal(p.unitPrice, p.quantity), 0);
+    employeeSalesTotals.set(empId, (employeeSalesTotals.get(empId) || 0) + amount);
+  }
+  const achievementMap = new Map<string, number>();
+  for (const [empId, total] of employeeSalesTotals) {
+    const target = targetMap.get(empId) || 0;
+    achievementMap.set(empId, target > 0 ? (total / target) * 100 : 0);
+  }
 
   return records.map((r) => {
     const empId = r.employeeId;
+    const grossAmount = r.products.reduce(
+      (sum: number, p: { unitPrice: number; quantity: number }) =>
+        sum + calculateProductTotal(p.unitPrice, p.quantity),
+      0
+    );
     return {
       id: r._id.toString(),
       employeeId: empId,
       employeeName: r.employeeName,
+      companyName: r.companyName,
+      achievementPercent: empId ? achievementMap.get(empId) || 0 : 0,
+      netAmount: r.netSales,
+      grossAmount,
       commission: r.commission,
       calculatedCommission: r.calculatedCommission,
       status: r.status,

@@ -76,7 +76,7 @@ export function rateLimit(options: RateLimitOptions) {
         entry.resetTime = Date.now() + options.interval;
       }
 
-      const isRateLimited = entry.count >= limit;
+      const isRateLimited = entry.count > limit;
       const remaining = Math.max(0, limit - entry.count);
 
       return {

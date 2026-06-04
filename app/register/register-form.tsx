@@ -1,21 +1,22 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { AlertCircle, Loader2, Check, X } from "lucide-react";
+import { AlertCircle, Loader2, Check, X, Eye, EyeOff } from "lucide-react";
 import Link from "next/link";
 
 export function RegisterForm() {
   const router = useRouter();
   const [error, setError] = useState<string | null>(null);
-  const [isPending, startTransition] = useTransition();
+  const [loading, setLoading] = useState(false);
   const [password, setPassword] = useState("");
   const [passwordTouched, setPasswordTouched] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   // Password requirements
   const requirements = [
@@ -30,8 +31,8 @@ export function RegisterForm() {
 
   async function register(formData: FormData) {
     setError(null);
-    startTransition(async () => {
-      try {
+    setLoading(true);
+    try {
         const data = {
           name: formData.get("name") as string,
           email: formData.get("email") as string,
@@ -77,8 +78,9 @@ export function RegisterForm() {
         }
       } catch (err) {
         setError("An error occurred. Please try again.");
+      } finally {
+        setLoading(false);
       }
-    });
   }
 
   return (
@@ -107,7 +109,7 @@ export function RegisterForm() {
               type="text"
               placeholder="Enter your name"
               required
-              disabled={isPending}
+              disabled={loading}
             />
           </div>
           <div className="space-y-2">
@@ -118,23 +120,34 @@ export function RegisterForm() {
               type="email"
               placeholder="Enter your email"
               required
-              disabled={isPending}
+              disabled={loading}
             />
           </div>
           <div className="space-y-2">
             <Label htmlFor="password">Password</Label>
-            <Input
-              id="password"
-              name="password"
-              type="password"
-              placeholder="Create a secure password"
-              required
-              disabled={isPending}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              onFocus={() => setPasswordTouched(true)}
-              onBlur={() => setPasswordTouched(false)}
-            />
+            <div className="relative">
+              <Input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                placeholder="Create a secure password"
+                required
+                disabled={loading}
+                className="pr-10"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                onFocus={() => setPasswordTouched(true)}
+                onBlur={() => setPasswordTouched(false)}
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                tabIndex={-1}
+              >
+                {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              </button>
+            </div>
             {passwordTouched && password && (
               <div className="mt-2 space-y-1 rounded-md border p-3 bg-muted/30">
                 <p className="text-xs font-medium text-muted-foreground mb-2">Password requirements:</p>
@@ -163,15 +176,15 @@ export function RegisterForm() {
               name="phone"
               type="tel"
               placeholder="Enter your phone"
-              disabled={isPending}
+              disabled={loading}
             />
           </div>
           <Button
             type="submit"
             className="w-full bg-gradient-to-r from-sky-500 to-blue-600 hover:from-sky-600 hover:to-blue-700 text-white"
-            disabled={isPending || Boolean(password && !allRequirementsMet)}
+            disabled={loading || Boolean(password && !allRequirementsMet)}
           >
-            {isPending ? (
+            {loading ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Creating account...

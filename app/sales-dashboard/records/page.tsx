@@ -54,7 +54,7 @@ export default function SalesRecords() {
 
   useEffect(() => {
     fetchRecords();
-  }, []);
+  }, [search, statusFilter]);
 
   const handleDelete = async (id: string) => {
     if (confirm("Delete this record? This cannot be undone.")) {

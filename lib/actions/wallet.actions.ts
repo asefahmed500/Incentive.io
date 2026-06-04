@@ -112,7 +112,7 @@ export async function creditWallet({
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["finance", "admin", "administrator", "accountant"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = creditWalletSchema.safeParse({ employeeId, amount, salesRecordId, description });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -279,7 +279,7 @@ export async function debitWallet({
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["finance", "admin", "administrator", "accountant"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = debitWalletSchema.safeParse({ employeeId, amount, salesRecordId, description });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -636,7 +636,7 @@ export async function markCommissionPaid({
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["finance", "admin", "administrator", "accountant"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = markCommissionPaidSchema.safeParse({ employeeId, amount, salesRecordId, paidBy });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -660,7 +660,7 @@ export async function getAllWallets() {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["finance", "admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["finance", "admin", "administrator", "accountant"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   await connectToDatabase();
   const wallets = await Wallet.find().populate("employeeId", "name email role").lean();
   return wallets.map((w: any) => ({

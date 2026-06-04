@@ -220,6 +220,8 @@ function AddSalesRecord() {
       }
       if (result.success) {
         router.push("/sales-dashboard/records");
+      } else {
+        alert((result as any)?.error || "Failed to save record");
       }
     });
   };
@@ -232,12 +234,16 @@ function AddSalesRecord() {
         if (result.success) {
           await submitSalesRecord(editId);
           router.push("/sales-dashboard/records");
+        } else {
+          alert((result as any)?.error || "Failed to update record");
         }
       } else {
         const result = await createSalesRecord(data);
         if (result.success && result.id) {
           await submitSalesRecord(result.id);
           router.push("/sales-dashboard/records");
+        } else {
+          alert((result as any)?.error || "Failed to create record");
         }
       }
     });

@@ -24,7 +24,7 @@ export default function SalesExecutiveApprovedSales() {
     fetchRecords();
   }, [session?.user?.id]);
 
-  const totalAmount = records.reduce((sum, r) => sum + (r.totalAmount || 0), 0);
+  const totalAmount = records.reduce((sum, r) => sum + (r.amount || 0), 0);
   const totalCommission = records.reduce((sum, r) => sum + (r.commission || 0), 0);
 
   return (
@@ -90,7 +90,7 @@ export default function SalesExecutiveApprovedSales() {
                   <TableRow key={record.id}>
                     <TableCell className="font-medium">{record.companyName}</TableCell>
                     <TableCell>{record.productCount || 0}</TableCell>
-                    <TableCell>৳{record.totalAmount?.toLocaleString() || 0}</TableCell>
+                    <TableCell>৳{record.amount?.toLocaleString() || 0}</TableCell>
                     <TableCell className="text-green-600">৳{record.commission?.toLocaleString() || 0}</TableCell>
                     <TableCell>
                       {record.createdAt

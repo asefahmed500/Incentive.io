@@ -201,7 +201,7 @@ export default function FinanceApprovals() {
                   <p className="font-medium">{selectedRecord.employeeName}</p>
                 </div>
                 <div>
-                  <Label className="text-muted-foreground">Gross Amount</Label>
+                  <Label className="text-muted-foreground">Net Sales</Label>
                     <p className="font-medium">৳{(selectedRecord.netSales || selectedRecord.totalAmount || selectedRecord.amount || 0)?.toLocaleString() || 0}</p>
                 </div>
                 <div>

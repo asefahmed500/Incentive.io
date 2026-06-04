@@ -77,21 +77,25 @@ const resetPasswordSchema = z.object({
 export async function getUsers({
   search,
   role,
+  page,
+  limit,
 }: {
   search?: string;
   role?: string;
+  page?: number;
+  limit?: number;
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = getUsersSchema.safeParse({ search, role });
   if (!parsed.success) return [];
   await connectToDatabase();
 
   const query: Record<string, unknown> = {};
   if (parsed.data.search) {
-    const escapedSearch = parsed.data.search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const escapedSearch = parsed.data.search.replace(/[.*+?^{}()|[\]\\]/g, "\\$&");
     query.$or = [
       { name: { $regex: escapedSearch, $options: "i" } },
       { email: { $regex: escapedSearch, $options: "i" } },
@@ -101,8 +105,7 @@ export async function getUsers({
     query.role = parsed.data.role;
   }
 
-  const users = await User.find(query).sort({ createdAt: -1 }).lean();
-  return users.map((u) => ({
+  const mapUser = (u: any) => ({
     id: u._id.toString(),
     name: u.name,
     email: u.email,
@@ -114,7 +117,25 @@ export async function getUsers({
     teamId: u.teamId?.toString(),
     targetAmount: u.targetAmount,
     createdAt: u.createdAt,
-  }));
+  });
+
+  if (page !== undefined && page > 0 && limit !== undefined && limit > 0) {
+    const skip = (page - 1) * limit;
+    const [users, total] = await Promise.all([
+      User.find(query).sort({ createdAt: -1 }).skip(skip).limit(limit).lean(),
+      User.countDocuments(query),
+    ]);
+    return {
+      users: users.map(mapUser),
+      total,
+      page,
+      limit,
+      totalPages: Math.ceil(total / limit),
+    } as any;
+  }
+
+  const users = await User.find(query).sort({ createdAt: -1 }).lean();
+  return users.map(mapUser);
 }
 
 export async function createUser({
@@ -133,7 +154,7 @@ export async function createUser({
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = createUserSchema.safeParse({ name, email, password, role, phone });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -214,7 +235,7 @@ export async function updateUser({
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = updateUserSchema.safeParse({ id, name, email, role, phone, isActive, managerId, teamId });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -238,7 +259,7 @@ export async function deleteUser(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = deleteUserSchema.safeParse({ id });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -319,7 +340,7 @@ export async function toggleUserStatus(id: string) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   if (id === session.user.id) return { error: "Cannot deactivate your own account" };
   const parsed = toggleUserStatusSchema.safeParse(id);
   if (!parsed.success) {
@@ -373,7 +394,7 @@ export async function resetPassword({
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
-  if (!["admin", "administrator"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
+  if (!["admin", "administrator", "salesManager"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
   const parsed = resetPasswordSchema.safeParse({ userId, newPassword });
   if (!parsed.success) {
     return { error: parsed.error.issues[0].message };
@@ -451,10 +472,16 @@ export async function requestPasswordReset(email: string) {
 
   // Send password reset email using the dedicated styled template
   try {
-    const resetUrl = `${process.env.NEXTAUTH_URL}/reset-password?token=${resetToken}`;
-    await sendPasswordResetEmail(user.email, user.name, resetUrl);
+    const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "";
+    const resetUrl = `${baseUrl}/reset-password?token=${resetToken}`;
+    const emailResult = await sendPasswordResetEmail(user.email, user.name, resetUrl);
+    if (!emailResult.success) {
+      console.error("❌ Password reset email failed to send:", emailResult.error);
+    } else {
+      console.log("✅ Password reset email sent to:", user.email);
+    }
   } catch (emailError) {
-    console.error("Failed to send password reset email:", emailError);
+    console.error("❌ Unexpected error sending password reset email:", emailError);
   }
 
   // Audit log
@@ -500,11 +527,10 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
   // Hash new password
   const hashedPassword = await hashPassword(parsed.data.newPassword);
 
-  // Update password and clear reset token
+  // Update password and clear reset token using MongoDB operators
   await User.findByIdAndUpdate(user._id, {
-    password: hashedPassword,
-    resetPasswordToken: undefined,
-    resetPasswordExpires: undefined,
+    $set: { password: hashedPassword },
+    $unset: { resetPasswordToken: 1, resetPasswordExpires: 1 },
   });
 
   // Send confirmation email

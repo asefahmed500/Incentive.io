@@ -8,6 +8,7 @@ import { PieChart, Pie, Cell, ResponsiveContainer, LineChart, Line, BarChart, Ba
 import { getPendingFinanceApprovals } from "@/lib/actions/approval.actions";
 import { getSalesStats } from "@/lib/actions/sales.actions";
 import { getCommissions } from "@/lib/actions/commission.actions";
+import { getFinanceApprovalTrends } from "@/lib/actions/analytics.actions";
 import { useRouter } from "next/navigation";
 import { useSession } from "next-auth/react";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -26,17 +27,25 @@ export default function FinanceDashboard() {
     pendingPayments: 0,
   });
   const [loading, setLoading] = useState(true);
+  const [commissionTrends, setCommissionTrends] = useState<
+    { month: string; approved: number; paid: number; pending: number }[]
+  >([]);
+  const [approvalTrends, setApprovalTrends] = useState<
+    { month: string; approvals: number; amount: number }[]
+  >([]);
 
   const fetchData = async () => {
-    const [pending, salesStats, commissions] = await Promise.all([
+    const [pending, salesStats, commissions, trends] = await Promise.all([
       getPendingFinanceApprovals(),
       getSalesStats(),
       getCommissions(),
+      getFinanceApprovalTrends(12),
     ]);
 
     const safePending = Array.isArray(pending) ? pending : [];
     const safeCommissions = Array.isArray(commissions) ? commissions : [];
     const safeSalesStats = salesStats && !("error" in salesStats) ? salesStats : { approvedToday: 0, approved: 0, pendingPayments: 0 };
+    const safeTrends = Array.isArray(trends) ? trends : [];
     if (!Array.isArray(pending)) console.error((pending as any)?.error || "Failed to fetch pending approvals");
     if (!Array.isArray(commissions)) console.error((commissions as any)?.error || "Failed to fetch commissions");
     if ("error" in salesStats) console.error((salesStats as any).error || "Failed to fetch sales stats");
@@ -50,6 +59,25 @@ export default function FinanceDashboard() {
       totalCommissions,
       pendingPayments: safeSalesStats.pendingPayments,
     });
+
+    // Compute trend data from real analytics
+    const recentTrends = safeTrends.slice(-5);
+    setCommissionTrends(
+      recentTrends.map((t: any) => ({
+        month: t.month,
+        approved: t.approvedAmount || 0,
+        paid: t.commissionPaid || 0,
+        pending: (t.approvedAmount || 0) - (t.commissionPaid || 0),
+      }))
+    );
+    setApprovalTrends(
+      recentTrends.map((t: any) => ({
+        month: t.month,
+        approvals: 0,
+        amount: t.approvedAmount || 0,
+      }))
+    );
+
     setLoading(false);
   };
 
@@ -68,22 +96,6 @@ export default function FinanceDashboard() {
     { name: "Approved", value: stats.totalApproved, color: "#10b981" },
     { name: "Pending", value: stats.pending, color: "#f59e0b" },
     { name: "Awaiting Payment", value: stats.pendingPayments, color: "#3b82f6" }
-  ];
-
-  const commissionTrends = [
-    { month: "Jan", paid: 45000, pending: 8000, approved: 53000 },
-    { month: "Feb", paid: 52000, pending: 12000, approved: 64000 },
-    { month: "Mar", paid: 38000, pending: 6000, approved: 44000 },
-    { month: "Apr", paid: 65000, pending: 15000, approved: 80000 },
-    { month: "May", paid: 58000, pending: 10000, approved: 68000 },
-  ];
-
-  const approvalTrends = [
-    { month: "Jan", approvals: 42, amount: 850000 },
-    { month: "Feb", approvals: 48, amount: 920000 },
-    { month: "Mar", approvals: 35, amount: 680000 },
-    { month: "Apr", approvals: 55, amount: 1150000 },
-    { month: "May", approvals: 50, amount: 1050000 },
   ];
 
   return (

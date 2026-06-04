@@ -2,10 +2,11 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Target, TrendingUp, Calendar, DollarSign } from "lucide-react";
+import { Target, TrendingUp, Calendar } from "lucide-react";
 import { getTargets } from "@/lib/actions/target.actions";
 import { useSession } from "next-auth/react";
 import { getSalesRecords } from "@/lib/actions/sales.actions";
+import { calculateProductTotal } from "@/lib/utils/money";
 
 export default function SalesTargets() {
   const { data: session } = useSession();
@@ -29,8 +30,13 @@ export default function SalesTargets() {
         const records = await getSalesRecords({ employeeId: session.user.id });
         const safeRecords = Array.isArray(records) ? records : [];
         if (!Array.isArray(records)) console.error((records as any)?.error || "Failed to fetch records");
-        const approvedSales = safeRecords.filter((r: any) => r.status === "Approved");
-        const totalSales = approvedSales.reduce((sum: number, r: any) => sum + (r.totalAmount || 0), 0);
+        const approvedSales = safeRecords.filter((r: any) => r.financeStatus === "Approved");
+        const totalSales = approvedSales.reduce((sum: number, r: any) => {
+          const productsTotal = Array.isArray(r.products)
+            ? r.products.reduce((ps: number, p: any) => ps + calculateProductTotal(p.unitPrice || 0, p.quantity || 0), 0)
+            : 0;
+          return sum + productsTotal;
+        }, 0);
         
         const ach = myTarget.targetAmount > 0 ? (totalSales / myTarget.targetAmount) * 100 : 0;
         setAchievement(ach);

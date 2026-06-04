@@ -32,7 +32,7 @@ export async function GET(
         "Content-Type": attachment.mimeType,
         "Content-Disposition": `inline; filename="${attachment.filename}"`,
         "Content-Length": attachment.size.toString(),
-        "Cache-Control": "private, max-age=3600",
+        "Cache-Control": "no-store, must-revalidate",
       },
     })
   } catch {

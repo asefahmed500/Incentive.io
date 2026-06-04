@@ -182,6 +182,8 @@ function AccountantApprovalsContent() {
                           setSelectedRecord(record);
                           setTaxRate("0");
                           setVatRate("0");
+                          setEoBpAmount("");
+                          setEoBpReason("");
                           setProcessDialogOpen(true);
                         }}
                       >
@@ -200,6 +202,7 @@ function AccountantApprovalsContent() {
                       <Button 
                         variant="ghost" 
                         size="sm"
+                        onClick={() => setSelectedRecord(record)}
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
@@ -304,6 +307,65 @@ function AccountantApprovalsContent() {
             <Button onClick={handleProcess} disabled={isPending}>
               {isPending ? "Processing..." : "Process & Forward"}
             </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!selectedRecord && !processDialogOpen && !rejectDialogOpen} onOpenChange={() => setSelectedRecord(null)}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Sales Record Details</DialogTitle>
+            <DialogDescription>
+              {selectedRecord?.companyName} — {selectedRecord?.employeeName}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <p className="text-sm text-muted-foreground">Company</p>
+              <p className="font-medium">{selectedRecord?.companyName}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Employee</p>
+              <p className="font-medium">{selectedRecord?.employeeName}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Gross Amount</p>
+              <p className="font-medium">৳{selectedRecord?.totalAmount?.toLocaleString() || 0}</p>
+            </div>
+            <div>
+              <p className="text-sm text-muted-foreground">Products</p>
+              <p className="font-medium">{selectedRecord?.productCount} products</p>
+            </div>
+            {selectedRecord?.products && (
+              <div className="col-span-2 mt-2">
+                <p className="text-sm text-muted-foreground mb-2">Product Lines</p>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Product</TableHead>
+                      <TableHead>Category</TableHead>
+                      <TableHead>Qty</TableHead>
+                      <TableHead className="text-right">Price</TableHead>
+                      <TableHead className="text-right">Total</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {selectedRecord.products.map((p: any, i: number) => (
+                      <TableRow key={i}>
+                        <TableCell>{p.productName}</TableCell>
+                        <TableCell>{p.category}</TableCell>
+                        <TableCell>{p.quantity}</TableCell>
+                        <TableCell className="text-right">৳{p.unitPrice?.toLocaleString()}</TableCell>
+                        <TableCell className="text-right">৳{((p.unitPrice || 0) * (p.quantity || 0)).toLocaleString()}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setSelectedRecord(null)}>Close</Button>
           </div>
         </DialogContent>
       </Dialog>

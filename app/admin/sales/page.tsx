@@ -54,7 +54,7 @@ export default function AdminSales() {
 
   useEffect(() => {
     fetchSales();
-  }, []);
+  }, [search, statusFilter]);
 
   const getStatusBadge = (status: string) => {
     const classes: Record<string, string> = {
@@ -77,8 +77,8 @@ export default function AdminSales() {
     const rows = sales.map((s) => ({
       Employee: s.employeeName || "",
       Company: s.companyName || "",
-      Amount: s.products?.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0) || 0,
-      Status: s.approvalStatus || s.status || "",
+      Amount: s.amount || 0,
+      Status: s.status || "",
       Commission: s.commission || s.calculatedCommission || 0,
       Date: s.date
         ? new Date(s.date).toLocaleDateString()
@@ -179,8 +179,8 @@ export default function AdminSales() {
                     <TableCell>{s.date ? new Date(s.date).toLocaleDateString() : "—"}</TableCell>
                     <TableCell className="font-medium">{s.companyName}</TableCell>
                     <TableCell>{s.employeeName}</TableCell>
-                    <TableCell>৳{(s.products?.reduce((sum: number, p: any) => sum + p.unitPrice * p.quantity, 0) || 0).toLocaleString()}</TableCell>
-                    <TableCell>{getStatusBadge(s.approvalStatus)}</TableCell>
+                    <TableCell>৳{(s.amount || 0).toLocaleString()}</TableCell>
+                    <TableCell>{getStatusBadge(s.status)}</TableCell>
                     <TableCell>
                       <Button
                         variant="ghost"

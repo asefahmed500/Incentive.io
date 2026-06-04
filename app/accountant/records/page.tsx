@@ -107,7 +107,7 @@ export default function AccountantRecords() {
                     <TableCell className="font-medium">{r.companyName}</TableCell>
                     <TableCell>{r.employeeName}</TableCell>
                     <TableCell>৳{r.amount?.toLocaleString() || 0}</TableCell>
-                    <TableCell>{getStatusBadge(r.approvalStatus)}</TableCell>
+                    <TableCell>{getStatusBadge(r.status)}</TableCell>
                     <TableCell>{r.createdAt ? new Date(r.createdAt).toLocaleDateString() : "—"}</TableCell>
                   </TableRow>
                 ))

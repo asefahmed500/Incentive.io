@@ -20,7 +20,7 @@ Exhaustive project context is in `CLAUDE.md` (812 lines). This file covers only 
 | Single Vitest test | `npm test -- -t "test name"` |
 | Vitest coverage | `npm run test:coverage` |
 
-**Both `dev` and `build` use `--webpack`** — Mongoose native bindings fail with Turbopack. `vercel.json` enforces this via `NEXT_PRIVATE_BUILD_WORKER=webpack`.
+**All Next.js commands use `--webpack`** — Mongoose native bindings fail with Turbopack. Both `npm run dev` and `npm run build` already include it; `npm run build:webpack` is an explicit alias. `vercel.json` enforces this via `NEXT_PRIVATE_BUILD_WORKER=webpack`.
 
 **For E2E testing, use production mode** (`npm run build:webpack && npm start`). Pages are precompiled — no lazy compilation delays. Dev mode pages compile on first access (5-20s per page), causing timeouts. Set `NODE_ENV=development` when starting production server on localhost to avoid `secure` cookie issues on HTTP.
 
@@ -112,6 +112,9 @@ Role names in DB are camelCase (`salesManager`, `salesExecutive`). Route prefixe
 15. **Middleware is Edge** — only import `auth.config.ts`, never `auth.ts` (Mongoose breaks Edge Runtime)
 16. **`lib/utils.ts` ≠ `lib/utils/`** — `lib/utils.ts` is the `cn()` classname utility (tailwind-merge + clsx). The `lib/utils/` directory contains specialized utilities: `money.ts`, `password.ts`, `serialization.ts`, `export.ts`, `type-guards.ts`.
 17. **Building for production** — 3 pages need `export const dynamic = "force-dynamic"` to avoid `useState` SSR crash: `/finance/analytics`, `/sales-dashboard/commissions`, `/admin/wallets`. If new client pages fail at build, add this export.
+18. **`getCommissions()` return shape** — the function in `lib/actions/commission.actions.ts` returns `companyName`, `achievementPercent`, `netAmount`, and `grossAmount` alongside the commission fields. Downstream pages in `app/finance/commissions/` and `app/sales-manager/commissions/` depend on these. Do not remove them.
+19. **`getAllWallets()` role access** — allows `finance`, `admin`, `administrator`, and `accountant` (4 occurrences in `wallet.actions.ts`). The accountant wallets page depends on this.
+20. **`calculateProductTotal` in targets page** — `app/sales-dashboard/targets/page.tsx` computes sales totals from the `products` array using `calculateProductTotal`, not a nonexistent `r.totalAmount`. Same pattern applies anywhere aggregating multi-product sales records.
 
 ## Testing
 

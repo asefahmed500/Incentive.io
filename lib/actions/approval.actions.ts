@@ -90,7 +90,7 @@ export async function approveSale(id: string, paidBy?: string) {
   const previousStatus = record.status;
   record.status = "Pending_Accountant";
   record.approvalStatus = "Approved";
-  record.approvedBy = record.managerId;
+  record.approvedBy = session.user.id;
   record.approvedAt = new Date();
 
   const commission = await calculateCommission(record);
@@ -100,7 +100,7 @@ export async function approveSale(id: string, paidBy?: string) {
   await record.save();
 
   await logAudit({
-    userId: record.managerId?.toString(),
+    userId: session.user.id,
     userRole: "salesManager",
     action: "APPROVE_SALE",
     entity: "SalesRecord",
@@ -681,6 +681,9 @@ interface ProductType {
  * with commission calculation and wallet credit
  */
 export async function processAutoApproval(saleId: string) {
+  const session = await auth();
+  if (!session?.user?.id) return { error: "Unauthorized" };
+
   await connectToDatabase();
   const record = await SalesRecord.findById(saleId);
   if (!record) return { error: "Record not found" };
@@ -968,7 +971,7 @@ async function calculateCommission(record: SalesRecordType): Promise<number> {
 
   const rule = await CommissionRule.findOne({
     targetPercentageFrom: { $lte: achievement },
-    targetPercentageTo: { $gte: achievement },
+    targetPercentageTo: { $gt: achievement },
     isActive: true,
   }).sort({ priority: -1 });
 

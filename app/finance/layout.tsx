@@ -17,8 +17,9 @@ import {
   SidebarInset,
 } from "@/components/ui/sidebar";
 import { NotificationBell } from "@/components/notification-bell";
+import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
-import { logoutAction } from "@/lib/actions/auth.actions";
+import { signOut } from "next-auth/react";
 
 const sidebarItems = [
   { href: "/finance", label: "Dashboard", icon: LayoutDashboard },
@@ -70,7 +71,7 @@ export default function FinanceLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => logoutAction()}>
+              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/", redirect: true })}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>
@@ -84,6 +85,7 @@ export default function FinanceLayout({
           <Separator orientation="vertical" className="mr-2 h-4" />
           <div className="flex flex-1 items-center justify-end">
             <NotificationBell />
+            <ThemeToggle />
           </div>
         </header>
         <div className="p-8 flex-1 overflow-auto">{children}</div>

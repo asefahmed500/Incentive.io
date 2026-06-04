@@ -135,7 +135,7 @@ export default function TeamCommissionsPage() {
                 filteredCommissions.map((c) => (
                   <TableRow key={c.id}>
                     <TableCell className="font-medium">{c.employeeName || "—"}</TableCell>
-                    <TableCell>—</TableCell>
+                    <TableCell>{c.companyName || "—"}</TableCell>
                     <TableCell className="text-green-600">
                       ৳{c.calculatedCommission?.toLocaleString() || 0}
                     </TableCell>

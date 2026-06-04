@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Plus, Search, Edit, Trash2, ToggleLeft, ToggleRight, RefreshCw } from "lucide-react";
+import { Plus, Search, Edit, Trash2, ToggleLeft, ToggleRight, RefreshCw, Download, ChevronLeft, ChevronRight } from "lucide-react";
+import { exportToCSV } from "@/lib/utils/export";
 import { getUsers, createUser, updateUser, deleteUser, toggleUserStatus, resetPassword } from "@/lib/actions/user.actions";
 import { getTeams } from "@/lib/actions/team.actions";
 import { useSession } from "next-auth/react";
@@ -31,6 +32,8 @@ export default function SuperAdminUsers() {
   const [roleFilter, setRoleFilter] = useState("all");
   const [openDialog, setOpenDialog] = useState(false);
   const [editingUser, setEditingUser] = useState<any>(null);
+  const [page, setPage] = useState(1);
+  const [totalPages, setTotalPages] = useState(1);
 
   const [formData, setFormData] = useState({
     name: "",
@@ -57,9 +60,13 @@ export default function SuperAdminUsers() {
   const fetchUsers = () => {
     startTransition(async () => {
       setLoading(true);
-      const data = await getUsers({ search, role: roleFilter !== "all" ? roleFilter : undefined });
-      if (Array.isArray(data)) {
+      const data = await getUsers({ search, role: roleFilter !== "all" ? roleFilter : undefined, page, limit: 20 });
+      if (data && typeof data === "object" && "users" in data) {
+        setUsers((data as any).users);
+        setTotalPages((data as any).totalPages || 1);
+      } else if (Array.isArray(data)) {
         setUsers(data);
+        setTotalPages(1);
       } else {
         setUsers([]);
         console.error((data as any)?.error || "Failed to fetch users");
@@ -71,8 +78,15 @@ export default function SuperAdminUsers() {
   useEffect(() => {
     fetchManagers();
     fetchTeamsData();
-    fetchUsers();
+  }, []);
+
+  useEffect(() => {
+    setPage(1);
   }, [search, roleFilter]);
+
+  useEffect(() => {
+    fetchUsers();
+  }, [search, roleFilter, page]);
 
   const handleSubmit = async () => {
     startTransition(async () => {
@@ -140,6 +154,17 @@ export default function SuperAdminUsers() {
     setOpenDialog(true);
   };
 
+  const handleExportCSV = () => {
+    exportToCSV(users, "users", [
+      { key: "name", header: "Name" },
+      { key: "email", header: "Email" },
+      { key: "role", header: "Role" },
+      { key: "phone", header: "Phone" },
+      { key: "isActive", header: "Status" },
+      { key: "createdAt", header: "Created" },
+    ] as any);
+  };
+
   const getRoleBadge = (role: string) => {
     const colors: Record<string, string> = {
       administrator: "bg-purple-100 text-purple-700",
@@ -159,6 +184,11 @@ export default function SuperAdminUsers() {
           <h1 className="text-3xl font-bold">Users</h1>
           <p className="text-muted-foreground">Full user management (SuperAdmin)</p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleExportCSV} disabled={users.length === 0}>
+            <Download className="h-4 w-4 mr-2" />
+            Export CSV
+          </Button>
         <Dialog open={openDialog} onOpenChange={setOpenDialog}>
           <DialogTrigger asChild>
             <Button onClick={() => { setEditingUser(null); setFormData({ name: "", email: "", password: "", role: "salesExecutive", phone: "", teamId: "", managerId: "" }); }}>
@@ -232,6 +262,7 @@ export default function SuperAdminUsers() {
             </DialogFooter>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Card>
@@ -301,6 +332,32 @@ export default function SuperAdminUsers() {
           </Table>
         </CardContent>
       </Card>
+
+      {totalPages > 1 && (
+        <div className="flex items-center justify-center gap-4">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => Math.max(1, p - 1))}
+            disabled={page <= 1}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Previous
+          </Button>
+          <span className="text-sm text-muted-foreground">
+            Page {page} of {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setPage((p) => p + 1)}
+            disabled={page >= totalPages}
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

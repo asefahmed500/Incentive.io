@@ -9,18 +9,19 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#039;");
 }
 
+const isSecure = process.env.EMAIL_SECURE === "true";
 const transporter = nodemailer.createTransport({
   host: process.env.EMAIL_HOST || "smtp.gmail.com",
   port: parseInt(process.env.EMAIL_PORT || "587"),
-  secure: process.env.EMAIL_SECURE === "true",
+  secure: isSecure,
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS,
   },
-  connectionTimeout: 1500, // 1.5s connection timeout (fail-fast in sandbox environments)
-  greetingTimeout: 1500,   // 1.5s greeting timeout
-  socketTimeout: 3000,     // 3s socket timeout
-});
+  connectionTimeout: 15000,
+  greetingTimeout: 10000,
+  socketTimeout: 45000,
+} as Parameters<typeof nodemailer.createTransport>[0]);;
 
 const baseUrl = process.env.NEXTAUTH_URL || process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
 
@@ -38,8 +39,9 @@ interface SendEmailParams {
 
 export async function sendEmail({ to, subject, html }: SendEmailParams): Promise<EmailResult> {
   try {
+    const from = process.env.EMAIL_FROM || process.env.EMAIL_USER || "Incentive.io <noreply@incentive.io>";
     const info = await transporter.sendMail({
-      from: process.env.EMAIL_FROM || "Incentive.io <noreply@incentive.io>",
+      from,
       to,
       subject,
       html,
@@ -47,7 +49,7 @@ export async function sendEmail({ to, subject, html }: SendEmailParams): Promise
     return { success: true, messageId: info.messageId };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : "Unknown error";
-    console.error("Email error:", errorMessage);
+    console.error("⚠ SMTP send failed:", errorMessage);
     return { success: false, error: errorMessage };
   }
 }

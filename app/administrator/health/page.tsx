@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { Activity, Server, Database, Zap, Clock, Users, FileText, Wallet, AlertCircle, CheckCircle } from "lucide-react";
+import { Activity, Server, Database, Zap, Users, AlertCircle, CheckCircle, Loader2 } from "lucide-react";
 
 interface HealthMetric {
   name: string;
@@ -19,26 +19,125 @@ interface ApiEndpoint {
   status: "healthy" | "slow" | "down";
 }
 
+interface HealthData {
+  timestamp: string;
+  database: { connected: boolean; message: string };
+  overall: string;
+}
+
+const ENDPOINTS_TO_CHECK = [
+  { path: "/api/health", method: "GET" },
+  { path: "/api/auth/session", method: "GET" },
+  { path: "/api/sales-records", method: "GET" },
+  { path: "/api/users", method: "GET" },
+];
+
+function getEpStatus(ms: number): "healthy" | "slow" | "down" {
+  if (ms === 0) return "down";
+  if (ms > 500) return "slow";
+  return "healthy";
+}
+
 export default function SuperAdminHealth() {
+  const [healthData, setHealthData] = useState<HealthData | null>(null);
+  const [healthError, setHealthError] = useState(false);
   const [metrics, setMetrics] = useState<HealthMetric[]>([
-    { name: "CPU Usage", value: "23%", status: "healthy", description: "Server CPU utilization" },
-    { name: "Memory Usage", value: "45%", status: "healthy", description: "RAM utilization" },
-    { name: "Disk Usage", value: "67%", status: "warning", description: "Disk space used" },
-    { name: "API Latency", value: "145ms", status: "healthy", description: "Average API response time" },
+    { name: "API Uptime", value: "99.9%", status: "healthy", description: "Last 30 days" },
+    { name: "Avg Response", value: "--ms", status: "healthy", description: "Last poll" },
+    { name: "DB Latency", value: "--ms", status: "healthy", description: "MongoDB ping" },
   ]);
 
-  const [endpoints, setEndpoints] = useState<ApiEndpoint[]>([
-    { path: "/api/auth/session", method: "GET", avgResponse: 45, status: "healthy" },
-    { path: "/api/sales-records", method: "GET", avgResponse: 120, status: "healthy" },
-    { path: "/api/users", method: "GET", avgResponse: 85, status: "healthy" },
-    { path: "/api/commissions", method: "GET", avgResponse: 95, status: "healthy" },
-  ]);
+  const [endpoints, setEndpoints] = useState<ApiEndpoint[]>(
+    ENDPOINTS_TO_CHECK.map((ep) => ({
+      path: ep.path,
+      method: ep.method,
+      avgResponse: 0,
+      status: "healthy" as const,
+    }))
+  );
 
-  const [sessions, setSessions] = useState([
-    { user: "iomadmin@iomltd.com", role: "admin", started: "2026-05-03 09:00", duration: "2h 30m", ip: "192.168.1.100" },
-    { user: "jamal.hassan@iomltd.com", role: "salesExecutive", started: "2026-05-03 08:30", duration: "3h 00m", ip: "192.168.1.105" },
-    { user: "iommanager@iomltd.com", role: "salesManager", started: "2026-05-03 09:15", duration: "2h 15m", ip: "192.168.1.110" },
-  ]);
+  const [loading, setLoading] = useState(true);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const measureEndpoint = useCallback(
+    async (path: string): Promise<number> => {
+      try {
+        const start = performance.now();
+        const res = await fetch(path);
+        const elapsed = Math.round(performance.now() - start);
+        return res.ok ? elapsed : 0;
+      } catch {
+        return 0;
+      }
+    },
+    []
+  );
+
+  const fetchHealth = useCallback(async () => {
+    const dbStart = performance.now();
+    try {
+      const res = await fetch("/api/health");
+      const dbElapsed = Math.round(performance.now() - dbStart);
+      if (res.ok) {
+        const data: HealthData = await res.json();
+        setHealthData(data);
+        setHealthError(false);
+
+        setMetrics([
+          {
+            name: "API Uptime",
+            value: data.overall === "healthy" ? "100%" : "Degraded",
+            status: data.overall === "healthy" ? "healthy" : "critical",
+            description: "Current status",
+          },
+          {
+            name: "Health Check",
+            value: `${dbElapsed}ms`,
+            status: dbElapsed > 500 ? "warning" : "healthy",
+            description: "/api/health response",
+          },
+          {
+            name: "Database",
+            value: data.database.connected ? "Connected" : "Disconnected",
+            status: data.database.connected ? "healthy" : "critical",
+            description: data.database.message,
+          },
+        ]);
+      } else {
+        setHealthError(true);
+      }
+    } catch {
+      setHealthError(true);
+      setHealthData(null);
+    }
+
+    // Measure endpoint latencies in parallel
+    const endpointResults = await Promise.all(
+      ENDPOINTS_TO_CHECK.map(async (ep) => {
+        const ms = await measureEndpoint(ep.path);
+        return { path: ep.path, method: ep.method, ms };
+      })
+    );
+
+    setEndpoints(
+      endpointResults.map(({ path, method, ms }) => ({
+        path,
+        method,
+        avgResponse: ms,
+        status: getEpStatus(ms),
+      }))
+    );
+
+    setLoading(false);
+  }, [measureEndpoint]);
+
+  useEffect(() => {
+    fetchHealth();
+    pollingRef.current = setInterval(fetchHealth, 15000);
+    return () => {
+      if (pollingRef.current) clearInterval(pollingRef.current);
+    };
+  }, [fetchHealth]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -58,40 +157,107 @@ export default function SuperAdminHealth() {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "healthy":
-        return <span className="px-2 py-1 rounded text-xs bg-green-100 text-green-700 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Healthy</span>;
+        return (
+          <span className="flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-xs text-green-700">
+            <CheckCircle className="h-3 w-3" /> Healthy
+          </span>
+        );
       case "warning":
-        return <span className="px-2 py-1 rounded text-xs bg-yellow-100 text-yellow-700 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> Warning</span>;
+      case "slow":
+        return (
+          <span className="flex items-center gap-1 rounded bg-yellow-100 px-2 py-1 text-xs text-yellow-700">
+            <AlertCircle className="h-3 w-3" /> {status === "slow" ? "Slow" : "Warning"}
+          </span>
+        );
       default:
-        return <span className="px-2 py-1 rounded text-xs bg-red-100 text-red-700 flex items-center gap-1"><AlertCircle className="h-3 w-3" /> {status}</span>;
+        return (
+          <span className="flex items-center gap-1 rounded bg-red-100 px-2 py-1 text-xs text-red-700">
+            <AlertCircle className="h-3 w-3" /> {status}
+          </span>
+        );
     }
   };
 
+  const getHealthStatusBadge = (overall: string) => {
+    if (overall === "healthy") {
+      return (
+        <span className="flex items-center gap-1 rounded bg-green-100 px-2 py-1 text-xs text-green-700">
+          <CheckCircle className="h-3 w-3" /> Healthy
+        </span>
+      );
+    }
+    return (
+      <span className="flex items-center gap-1 rounded bg-red-100 px-2 py-1 text-xs text-red-700">
+        <AlertCircle className="h-3 w-3" /> Unhealthy
+      </span>
+    );
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-16">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">System Health</h1>
-        <p className="text-muted-foreground">Monitor API performance and system resources (SuperAdmin)</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">System Health</h1>
+          <p className="text-muted-foreground">
+            Monitor API performance and system resources (SuperAdmin)
+          </p>
+        </div>
+        {healthData && getHealthStatusBadge(healthData.overall)}
       </div>
 
       <div className="grid gap-4 md:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">API Uptime</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium">System Status</CardTitle>
+            {healthData?.overall === "healthy" ? (
+              <CheckCircle className="h-4 w-4 text-green-600" />
+            ) : (
+              <AlertCircle className="h-4 w-4 text-red-600" />
+            )}
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">99.9%</div>
-            <p className="text-xs text-muted-foreground">Last 30 days</p>
+            <div className="text-2xl font-bold">
+              {healthData
+                ? healthData.overall === "healthy"
+                  ? "Healthy"
+                  : "Unhealthy"
+                : healthError
+                  ? "Unreachable"
+                  : "--"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {healthData?.timestamp
+                ? `Last checked: ${new Date(healthData.timestamp).toLocaleTimeString()}`
+                : "Polling..."}
+            </p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Sessions</CardTitle>
-            <Users className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Database</CardTitle>
+            <Database
+              className={`h-4 w-4 ${
+                healthData?.database.connected
+                  ? "text-green-600"
+                  : "text-red-600"
+              }`}
+            />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">{sessions.length}</div>
-            <p className="text-xs text-muted-foreground">Currently logged in</p>
+            <div className="text-2xl font-bold">
+              {healthData?.database.connected ? "Connected" : "Disconnected"}
+            </div>
+            <p className="text-xs text-muted-foreground">
+              {healthData?.database.message || "MongoDB"}
+            </p>
           </CardContent>
         </Card>
         <Card>
@@ -100,18 +266,25 @@ export default function SuperAdminHealth() {
             <Zap className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">145ms</div>
-            <p className="text-xs text-muted-foreground">Last hour</p>
+            <div className="text-2xl font-bold">
+              {endpoints.length > 0
+                ? `${Math.round(
+                    endpoints.reduce((s, e) => s + e.avgResponse, 0) /
+                      endpoints.filter((e) => e.avgResponse > 0).length || 0
+                  )}ms`
+                : "--ms"}
+            </div>
+            <p className="text-xs text-muted-foreground">Measured on poll</p>
           </CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Database</CardTitle>
-            <Database className="h-4 w-4 text-green-600" />
+            <CardTitle className="text-sm font-medium">API Endpoints</CardTitle>
+            <Activity className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">Connected</div>
-            <p className="text-xs text-muted-foreground">MongoDB</p>
+            <div className="text-2xl font-bold">{endpoints.length}</div>
+            <p className="text-xs text-muted-foreground">Monitored</p>
           </CardContent>
         </Card>
       </div>
@@ -121,25 +294,46 @@ export default function SuperAdminHealth() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Server className="h-5 w-5" />
-              Resource Usage
+              System Metrics
             </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {metrics.map((metric) => (
-                <div key={metric.name}>
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-sm font-medium">{metric.name}</span>
-                    <span className={`text-sm ${getStatusColor(metric.status)}`}>{metric.value}</span>
+              {metrics.map((metric) => {
+                const numericVal =
+                  metric.name === "API Uptime"
+                    ? metric.value === "100%"
+                      ? 100
+                      : 0
+                    : metric.name === "Health Check"
+                      ? parseInt(metric.value) > 500
+                        ? 100
+                        : Math.min((parseInt(metric.value) / 500) * 100, 100)
+                      : metric.status === "healthy"
+                        ? 100
+                        : metric.status === "warning"
+                          ? 67
+                          : 33;
+                return (
+                  <div key={metric.name}>
+                    <div className="mb-1 flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        {metric.name}
+                      </span>
+                      <span className={`text-sm ${getStatusColor(metric.status)}`}>
+                        {metric.value}
+                      </span>
+                    </div>
+                    <Progress
+                      value={numericVal}
+                      className="h-2"
+                    />
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {metric.description}
+                    </p>
                   </div>
-                  <Progress
-                    value={parseInt(metric.value)}
-                    className={`h-2 ${
-                      metric.status === "healthy" ? "" : metric.status === "warning" ? "[--variant-destructive:theme(colors.yellow.500)]" : "[--variant-destructive:theme(colors.red.500)]"
-                    }`}
-                  />
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CardContent>
         </Card>
@@ -154,13 +348,18 @@ export default function SuperAdminHealth() {
           <CardContent>
             <div className="space-y-3">
               {endpoints.map((ep) => (
-                <div key={ep.path} className="flex items-center justify-between p-3 rounded-md border">
+                <div
+                  key={ep.path}
+                  className="flex items-center justify-between rounded-md border p-3"
+                >
                   <div>
-                    <p className="font-medium text-sm">{ep.path}</p>
+                    <p className="text-sm font-medium">{ep.path}</p>
                     <p className="text-xs text-muted-foreground">{ep.method}</p>
                   </div>
                   <div className="text-right">
-                    <p className="text-sm font-mono">{ep.avgResponse}ms</p>
+                    <p className="font-mono text-sm">
+                      {ep.avgResponse > 0 ? `${ep.avgResponse}ms` : "Error"}
+                    </p>
                     {getStatusBadge(ep.status)}
                   </div>
                 </div>
@@ -169,31 +368,6 @@ export default function SuperAdminHealth() {
           </CardContent>
         </Card>
       </div>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Users className="h-5 w-5" />
-            Active Sessions
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {sessions.map((session, i) => (
-              <div key={i} className="flex items-center justify-between p-3 rounded-md border">
-                <div>
-                  <p className="font-medium">{session.user}</p>
-                  <p className="text-xs text-muted-foreground">{session.role} · {session.ip}</p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm">{session.duration}</p>
-                  <p className="text-xs text-muted-foreground">Started {session.started}</p>
-                </div>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
     </div>
   );
 }

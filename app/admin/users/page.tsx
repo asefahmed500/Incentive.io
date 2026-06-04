@@ -464,7 +464,7 @@ function UserForm({ onSuccess }: { onSuccess: () => void }) {
           name="role"
           control={control}
           render={({ field }) => (
-            <Select onValueChange={field.onChange} defaultValue={field.value}>
+            <Select onValueChange={field.onChange} value={field.value}>
               <SelectTrigger>
                 <SelectValue placeholder="Select role" />
               </SelectTrigger>
