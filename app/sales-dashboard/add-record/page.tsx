@@ -305,14 +305,14 @@ function AddSalesRecord() {
                 checked={taxEnabled}
                 onCheckedChange={(checked) => setTaxEnabled(!!checked)}
               />
-              Include Tax (5%)
+              Include Tax 
             </Label>
             <Label className="flex items-center gap-2">
               <Checkbox 
                 checked={vatEnabled}
                 onCheckedChange={(checked) => setVatEnabled(!!checked)}
               />
-              Include VAT (10%)
+              Include VAT 
             </Label>
           </div>
         </CardContent>

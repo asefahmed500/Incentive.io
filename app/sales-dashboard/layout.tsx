@@ -20,10 +20,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SSEConnectionIndicator } from "@/components/sse-connection-indicator";
 import { Separator } from "@/components/ui/separator";
-const handleSignOut = async () => {
-  await fetch("/api/auth/signout", { method: "POST" });
-  window.location.href = "/";
-};
+import { logoutAction } from "@/lib/actions/auth.actions";
 
 const sidebarItems = [
   { href: "/sales-dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -75,7 +72,7 @@ export default function SalesDashboardLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => { handleSignOut(); }}>
+              <SidebarMenuButton onClick={() => logoutAction()}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>
