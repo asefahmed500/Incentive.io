@@ -3,6 +3,7 @@ import { Poppins, Merriweather, Roboto_Mono } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
 import { SessionRecheck } from "@/components/session-recheck";
+import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
 const fontSans = Poppins({
@@ -37,8 +38,10 @@ export default function RootLayout({
     <html lang="en" suppressHydrationWarning>
       <body className={`${fontSans.variable} ${fontSerif.variable} ${fontMono.variable} antialiased`}>
         <SessionProvider>
-          <SessionRecheck interval={60000} />
-          {children}
+          <ThemeProvider>
+            <SessionRecheck interval={60000} />
+            {children}
+          </ThemeProvider>
         </SessionProvider>
         <Toaster />
       </body>

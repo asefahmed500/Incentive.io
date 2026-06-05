@@ -19,7 +19,10 @@ import {
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
-import { signOut } from "next-auth/react";
+const handleSignOut = async () => {
+  await fetch("/api/auth/signout", { method: "POST" });
+  window.location.href = "/";
+};
 
 const sidebarItems = [
   { href: "/admin", label: "Dashboard", icon: LayoutDashboard },
@@ -75,7 +78,7 @@ export default function AdminLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/", redirect: true })}>
+              <SidebarMenuButton onClick={() => { handleSignOut(); }}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>

@@ -213,7 +213,7 @@ export default function AdminWallets() {
       </Card>
 
       <Dialog open={!!selectedWallet} onOpenChange={() => setSelectedWallet(null)}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl">
           <DialogHeader>
             <DialogTitle>
               Wallet Details - {selectedWallet?.employeeName}
@@ -261,7 +261,7 @@ export default function AdminWallets() {
                 ) : transactions.length === 0 ? (
                   <p className="text-sm text-muted-foreground">No transactions yet</p>
                 ) : (
-                  <div className="max-h-64 overflow-y-auto border rounded-md">
+                  <div className="max-h-64 overflow-auto border rounded-md">
                     <Table>
                       <TableHeader>
                         <TableRow>
@@ -275,12 +275,12 @@ export default function AdminWallets() {
                       <TableBody>
                         {transactions.map((t) => (
                           <TableRow key={t.id}>
-                            <TableCell className="text-xs">
+                            <TableCell className="text-xs whitespace-nowrap">
                               {new Date(t.createdAt).toLocaleDateString()}
                             </TableCell>
                             <TableCell>
                               <span
-                                className={`text-xs px-2 py-0.5 rounded ${
+                                className={`text-xs px-2 py-0.5 rounded whitespace-nowrap ${
                                   t.type === "credit"
                                     ? "bg-green-100 text-green-800"
                                     : "bg-red-100 text-red-800"
@@ -290,19 +290,19 @@ export default function AdminWallets() {
                               </span>
                             </TableCell>
                             <TableCell
-                              className={
+                              className={`text-xs whitespace-nowrap ${
                                 t.type === "credit"
                                   ? "text-green-600"
                                   : "text-red-600"
-                              }
+                              }`}
                             >
                               {t.type === "credit" ? "+" : "-"}৳
                               {t.amount.toLocaleString()}
                             </TableCell>
-                            <TableCell className="text-xs">
+                            <TableCell className="text-xs max-w-[250px] truncate">
                               {t.description}
                             </TableCell>
-                            <TableCell className="text-xs">
+                            <TableCell className="text-xs whitespace-nowrap">
                               ৳{t.balanceAfter.toLocaleString()}
                             </TableCell>
                           </TableRow>
