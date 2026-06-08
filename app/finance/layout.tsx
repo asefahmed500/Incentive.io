@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { LayoutDashboard, FileText, Wallet, BarChart3, LogOut, User, Percent, Clock, TrendingUp, DollarSign } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -19,17 +20,6 @@ import {
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
-
-const handleSignOut = async () => {
-  const r = await fetch("/api/auth/csrf");
-  const { csrfToken } = await r.json();
-  await fetch("/api/auth/signout", {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: `csrfToken=${csrfToken}`,
-  });
-  window.location.href = "/";
-};
 
 const sidebarItems = [
   { href: "/finance", label: "Dashboard", icon: LayoutDashboard },
@@ -81,7 +71,7 @@ export default function FinanceLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => handleSignOut()}>
+              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>
