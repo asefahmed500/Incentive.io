@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { signOut } from "next-auth/react";
 import { LayoutDashboard, Users, FileText, Wallet, BarChart3, Settings, LogOut, User, Percent, CheckCircle } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -69,7 +70,7 @@ export default function SalesManagerLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => { fetch("/api/auth/signout", { method: "POST" }).then(() => { window.location.href = "/login" }) }}>
+              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>
