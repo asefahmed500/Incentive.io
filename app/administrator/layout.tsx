@@ -19,7 +19,7 @@ import {
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
-import { logoutAction } from "@/lib/actions/auth.actions";
+import { signOut } from "next-auth/react";
 
 const sidebarItems = [
   { href: "/administrator", label: "Dashboard", icon: LayoutDashboard },
@@ -62,9 +62,8 @@ export default function AdministratorLayout({
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
-          <form action={logoutAction}>
             <button
-              type="submit"
+              onClick={() => signOut({ callbackUrl: "/login" })}
               className="flex items-center gap-3 px-3 py-2 w-full text-left text-red-500 hover:bg-red-50 rounded-md transition-colors"
             >
               <LogOut className="h-4 w-4" />

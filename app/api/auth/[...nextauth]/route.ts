@@ -7,6 +7,13 @@ const loginLimiter = rateLimit({
   uniqueTokenPerInterval: 1000,
 });
 
+const SESSION_COOKIE_NAMES = [
+  "next-auth.session-token",
+  "__Secure-next-auth.session-token",
+  "authjs.session-token",
+  "__Secure-authjs.session-token",
+];
+
 export async function GET(request: NextRequest) {
   return handlers.GET(request);
 }
@@ -18,7 +25,18 @@ export async function POST(request: NextRequest) {
     url.pathname.endsWith("/signout") ||
     url.searchParams.get("nextauth") === "signout"
   ) {
-    return handlers.POST(request);
+    const response = await handlers.POST(request);
+    for (const name of SESSION_COOKIE_NAMES) {
+      response.headers.append(
+        "Set-Cookie",
+        `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`
+      );
+      response.headers.append(
+        "Set-Cookie",
+        `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure`
+      );
+    }
+    return response;
   }
 
   const ip =

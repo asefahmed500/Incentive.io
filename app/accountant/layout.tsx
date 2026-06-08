@@ -19,7 +19,7 @@ import {
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
-import { logoutAction } from "@/lib/actions/auth.actions";
+import { signOut } from "next-auth/react";
 
 const sidebarItems = [
   { href: "/accountant", label: "Dashboard", icon: LayoutDashboard },
@@ -70,11 +70,7 @@ export default function AccountantLayout({
           <SidebarMenu>
             <SidebarMenuItem>
               <form action={logoutAction}>
-                <SidebarMenuButton type="submit">
-                  <LogOut className="mr-2 h-4 w-4" />
-                  Sign Out
-                </SidebarMenuButton>
-              </form>
+                <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

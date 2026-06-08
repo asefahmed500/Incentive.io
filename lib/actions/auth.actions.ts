@@ -1,7 +1,7 @@
 "use server"
 
-import { signOut } from "@/lib/auth/auth"
+import { redirect } from "next/navigation"
 
 export async function logoutAction() {
-  await signOut({ redirectTo: "/login" })
+  redirect("/api/auth/signout?callbackUrl=/login")
 }
