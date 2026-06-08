@@ -56,15 +56,12 @@ export const { handlers, auth, signOut, signIn } = NextAuth({
       
       // Add DB-recheck logic only when NOT in Edge Runtime
       // This trigger/user check is a safe bet for non-edge cases
-      if (trigger === "update" || (!user && token.id)) {
+      if (trigger === "update") {
         try {
-          // Note: In Next.js middleware, this might still trigger a Mongoose import
-          // but if we use authConfig in middleware, we avoids this file entirely.
           await connectToDatabase();
           const dbUser = await User.findById(token.id).lean();
           token.isActive = !!(dbUser && dbUser.isActive);
         } catch {
-          // If DB fails (e.g. in Edge), we assume previous state
         }
       }
       return token;

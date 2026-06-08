@@ -1,30 +1,35 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { useSession, signOut } from "next-auth/react";
 
 export function SessionRecheck({ interval = 60000 }: { interval?: number }) {
   const { data: session, update } = useSession();
-  useEffect(() => {
-    if (!session) return;
+  const sessionRef = useRef(session);
+  const updateRef = useRef(update);
 
+  useEffect(() => {
+    sessionRef.current = session;
+    updateRef.current = update;
+  });
+
+  useEffect(() => {
     const checkSession = async () => {
+      if (!sessionRef.current) return;
       try {
-        const result = await update();
+        const result = await updateRef.current();
         if (result && (result as any)?.user?.isActive === false) {
           signOut({ callbackUrl: "/login" });
-          return;
         }
       } catch (error) {
         console.error("Session re-check failed:", error);
       }
     };
 
-    checkSession();
+    if (session) checkSession();
     const timer = setInterval(checkSession, interval);
-
     return () => clearInterval(timer);
-  }, [session, update, interval]);
+  }, [interval]);
 
   return null;
 }

@@ -75,8 +75,10 @@ export default function AdminLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <form action={logoutAction}>
-                <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
+              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
+                <LogOut className="mr-2 h-4 w-4" />
+                Sign Out
+              </SidebarMenuButton>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>

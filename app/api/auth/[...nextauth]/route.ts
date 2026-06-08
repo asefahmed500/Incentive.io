@@ -7,12 +7,6 @@ const loginLimiter = rateLimit({
   uniqueTokenPerInterval: 1000,
 });
 
-const SESSION_COOKIE_NAMES = [
-  "next-auth.session-token",
-  "__Secure-next-auth.session-token",
-  "authjs.session-token",
-  "__Secure-authjs.session-token",
-];
 
 export async function GET(request: NextRequest) {
   return handlers.GET(request);
@@ -25,18 +19,33 @@ export async function POST(request: NextRequest) {
     url.pathname.endsWith("/signout") ||
     url.searchParams.get("nextauth") === "signout"
   ) {
-    const response = await handlers.POST(request);
-    for (const name of SESSION_COOKIE_NAMES) {
-      response.headers.append(
-        "Set-Cookie",
-        `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`
-      );
-      response.headers.append(
-        "Set-Cookie",
-        `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax; Secure`
-      );
-    }
-    return response;
+    await handlers.POST(request);
+
+    const isProd = process.env.NODE_ENV === "production";
+    const sessionName = isProd
+      ? "__Secure-next-auth.session-token"
+      : "next-auth.session-token";
+    const secure = isProd ? "; Secure" : "";
+
+    const headers = new Headers();
+    headers.set("Content-Type", "application/json");
+    headers.append(
+      "Set-Cookie",
+      `${sessionName}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${secure}`
+    );
+    headers.append(
+      "Set-Cookie",
+      `next-auth.csrf-token=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`
+    );
+    headers.append(
+      "Set-Cookie",
+      `next-auth.callback-url=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax`
+    );
+
+    return new Response(JSON.stringify({ url: "/login" }), {
+      status: 200,
+      headers,
+    });
   }
 
   const ip =

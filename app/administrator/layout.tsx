@@ -69,7 +69,6 @@ export default function AdministratorLayout({
               <LogOut className="h-4 w-4" />
               <span>Logout</span>
             </button>
-          </form>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>
