@@ -19,14 +19,7 @@ import {
 import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
-
-function signOutAndRedirect() {
-  const form = document.createElement("form")
-  form.method = "POST"
-  form.action = "/api/signout"
-  document.body.appendChild(form)
-  form.submit()
-}
+import { logoutAction } from "@/lib/actions/auth.actions";
 
 const sidebarItems = [
   { href: "/administrator", label: "Dashboard", icon: LayoutDashboard },
@@ -69,13 +62,15 @@ export default function AdministratorLayout({
           </SidebarMenu>
         </SidebarContent>
         <SidebarFooter className="p-4">
-          <button
-            onClick={() => signOutAndRedirect()}
-            className="flex items-center gap-3 px-3 py-2 w-full text-left text-red-500 hover:bg-red-50 rounded-md transition-colors"
-          >
-            <LogOut className="h-4 w-4" />
-            <span>Logout</span>
-          </button>
+          <form action={logoutAction}>
+            <button
+              type="submit"
+              className="flex items-center gap-3 px-3 py-2 w-full text-left text-red-500 hover:bg-red-50 rounded-md transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Logout</span>
+            </button>
+          </form>
         </SidebarFooter>
       </Sidebar>
       <SidebarInset>

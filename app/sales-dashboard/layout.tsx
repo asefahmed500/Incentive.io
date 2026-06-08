@@ -20,14 +20,7 @@ import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SSEConnectionIndicator } from "@/components/sse-connection-indicator";
 import { Separator } from "@/components/ui/separator";
-
-function signOutAndRedirect() {
-  const form = document.createElement("form")
-  form.method = "POST"
-  form.action = "/api/signout"
-  document.body.appendChild(form)
-  form.submit()
-}
+import { logoutAction } from "@/lib/actions/auth.actions";
 
 const sidebarItems = [
   { href: "/sales-dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -79,10 +72,12 @@ export default function SalesDashboardLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => signOutAndRedirect()}>
-                <LogOut className="mr-2 h-4 w-4" />
-                Sign Out
-              </SidebarMenuButton>
+              <form action={logoutAction}>
+                <SidebarMenuButton type="submit">
+                  <LogOut className="mr-2 h-4 w-4" />
+                  Sign Out
+                </SidebarMenuButton>
+              </form>
             </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
