@@ -21,9 +21,11 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { Separator } from "@/components/ui/separator";
 
 function signOutAndRedirect() {
-  fetch("/api/signout", { method: "POST", credentials: "include" }).finally(() => {
-    window.location.href = "/login";
-  });
+  const form = document.createElement("form")
+  form.method = "POST"
+  form.action = "/api/signout"
+  document.body.appendChild(form)
+  form.submit()
 }
 
 const sidebarItems = [

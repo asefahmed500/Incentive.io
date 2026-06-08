@@ -12,8 +12,11 @@ export function SessionRecheck({ interval = 60000 }: { interval?: number }) {
       try {
         const result = await update();
         if (result && (result as any)?.user?.isActive === false) {
-          await fetch("/api/signout", { method: "POST", credentials: "include" });
-          window.location.href = "/login";
+          const form = document.createElement("form")
+          form.method = "POST"
+          form.action = "/api/signout"
+          document.body.appendChild(form)
+          form.submit()
           return;
         }
       } catch (error) {

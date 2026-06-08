@@ -1,11 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
 
-const COOKIE_BASE = {
-  path: "/",
-  httpOnly: true,
-  sameSite: "lax" as const,
-}
-
 const SESSION_NAMES = [
   "next-auth.session-token",
   "__Secure-next-auth.session-token",
@@ -24,17 +18,22 @@ const OTHER_NAMES = [
   "__Secure-authjs.csrf-token",
 ]
 
+function cookieHeader(name: string, secure: boolean) {
+  const suffix = secure ? "; Secure" : ""
+  return `${name}=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax${suffix}`
+}
+
 export async function POST(request: NextRequest) {
-  const response = NextResponse.json({ success: true })
+  const response = NextResponse.redirect(new URL("/login", request.url))
 
   for (const name of SESSION_NAMES) {
-    response.cookies.set(name, "", { ...COOKIE_BASE, maxAge: 0, secure: false })
-    response.cookies.set(name, "", { ...COOKIE_BASE, maxAge: 0, secure: true })
+    response.headers.append("Set-Cookie", cookieHeader(name, false))
+    response.headers.append("Set-Cookie", cookieHeader(name, true))
   }
 
   for (const name of OTHER_NAMES) {
-    response.cookies.set(name, "", { ...COOKIE_BASE, maxAge: 0, secure: false })
-    response.cookies.set(name, "", { ...COOKIE_BASE, maxAge: 0, secure: true })
+    response.headers.append("Set-Cookie", cookieHeader(name, false))
+    response.headers.append("Set-Cookie", cookieHeader(name, true))
   }
 
   return response
