@@ -13,7 +13,7 @@ export function SessionRecheck({ interval = 60000 }: { interval?: number }) {
         const result = await update();
         if (result && (result as any)?.user?.isActive === false) {
           await fetch("/api/signout", { method: "POST", credentials: "include" });
-          window.location.href = "/login?signout=1";
+          window.location.href = "/login";
           return;
         }
       } catch (error) {

@@ -23,7 +23,7 @@ import { Separator } from "@/components/ui/separator";
 
 function signOutAndRedirect() {
   fetch("/api/signout", { method: "POST", credentials: "include" }).finally(() => {
-    window.location.href = "/login?signout=1";
+    window.location.href = "/login";
   });
 }
 
