@@ -4,10 +4,15 @@ import Link from "next/link";
 import { LoginForm } from "./login-form";
 import { AuthBackground } from "@/components/home/auth-background";
 
-export default async function LoginPage() {
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ signout?: string }>;
+}) {
+  const { signout } = await searchParams;
   const session = await auth();
 
-  if (session?.user) {
+  if (session?.user && signout !== "1") {
     const roleRedirects: Record<string, string> = {
       administrator: "administrator",
       admin: "admin",

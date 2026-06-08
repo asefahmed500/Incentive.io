@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { LayoutDashboard, FileText, Target, Wallet, Users, LogOut, User, Plus, CheckCircle, Percent } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -21,6 +20,12 @@ import { NotificationBell } from "@/components/notification-bell";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SSEConnectionIndicator } from "@/components/sse-connection-indicator";
 import { Separator } from "@/components/ui/separator";
+
+function signOutAndRedirect() {
+  fetch("/api/signout", { method: "POST", credentials: "include" }).finally(() => {
+    window.location.href = "/login?signout=1";
+  });
+}
 
 const sidebarItems = [
   { href: "/sales-dashboard", label: "Dashboard", icon: LayoutDashboard },
@@ -72,7 +77,7 @@ export default function SalesDashboardLayout({
         <SidebarFooter>
           <SidebarMenu>
             <SidebarMenuItem>
-              <SidebarMenuButton onClick={() => signOut({ callbackUrl: "/login" })}>
+              <SidebarMenuButton onClick={() => signOutAndRedirect()}>
                 <LogOut className="mr-2 h-4 w-4" />
                 Sign Out
               </SidebarMenuButton>
