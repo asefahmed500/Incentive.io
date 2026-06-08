@@ -2,9 +2,8 @@ import { handlers } from "@/lib/auth/auth";
 import { rateLimit } from "@/lib/rate-limit";
 import { NextRequest } from "next/server";
 
-// Rate limiter: 20 login attempts per 15 minutes per IP
 const loginLimiter = rateLimit({
-  interval: 15 * 60 * 1000, // 15 minutes
+  interval: 15 * 60 * 1000,
   uniqueTokenPerInterval: 1000,
 });
 
@@ -13,8 +12,19 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
-  // Get IP from headers for rate limiting
-  const ip = request.headers.get("x-forwarded-for") ?? request.headers.get("x-real-ip") ?? "anonymous";
+  const url = new URL(request.url);
+
+  if (
+    url.pathname.endsWith("/signout") ||
+    url.searchParams.get("nextauth") === "signout"
+  ) {
+    return handlers.POST(request);
+  }
+
+  const ip =
+    request.headers.get("x-forwarded-for") ??
+    request.headers.get("x-real-ip") ??
+    "anonymous";
   const { isRateLimited, remaining, resetTime } = loginLimiter.check(20, ip);
 
   if (isRateLimited) {

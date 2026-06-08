@@ -2,7 +2,6 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { signOut } from "next-auth/react";
 import { LayoutDashboard, Users, Building2, Tag, Percent, Target, FileText, Wallet, BarChart3, Settings, LogOut, User, HardDrive, Bell, RefreshCw, Database, Activity, ClipboardList } from "lucide-react";
 import { cn } from "@/lib/utils";
 import {
@@ -63,7 +62,7 @@ export default function AdministratorLayout({
         </SidebarContent>
         <SidebarFooter className="p-4">
           <button
-            onClick={() => signOut({ callbackUrl: "/login" })}
+            onClick={() => { fetch("/api/auth/signout", { method: "POST" }).then(() => { window.location.href = "/login" }) }}
             className="flex items-center gap-3 px-3 py-2 w-full text-left text-red-500 hover:bg-red-50 rounded-md transition-colors"
           >
             <LogOut className="h-4 w-4" />

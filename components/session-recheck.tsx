@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { useSession, signOut } from "next-auth/react";
+import { useSession } from "next-auth/react";
 
 export function SessionRecheck({ interval = 60000 }: { interval?: number }) {
   const { data: session, update } = useSession();
@@ -12,7 +12,8 @@ export function SessionRecheck({ interval = 60000 }: { interval?: number }) {
       try {
         const result = await update();
         if (result && (result as any)?.user?.isActive === false) {
-          signOut({ callbackUrl: "/login" });
+          await fetch("/api/auth/signout", { method: "POST" });
+          window.location.href = "/login";
           return;
         }
       } catch (error) {
