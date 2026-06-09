@@ -36,12 +36,72 @@ Sales commission management system. Next.js 16 (App Router), MongoDB/Mongoose 9,
 - `lib/auth/auth.config.ts` — Pure NextAuth config, no DB. Used by middleware.
 - `lib/auth/auth.ts` — Full NextAuth with DB recheck. Used by server components/actions.
 - **Never import `auth()` from `auth.ts` in middleware** — Mongoose is Edge-incompatible.
-- **Logout**: always use `logoutAction()` from `lib/actions/auth.actions.ts`. Never call `signOut()` directly from a server action.
+- **Logout (client)**: `signOut({ callbackUrl: "/login" })` from `next-auth/react` in client components. Properly clears cookies + redirects.
+- **Logout (server action)**: `logoutAction()` from `lib/actions/auth.actions.ts`. Never call `signOut()` directly from a server action.
 - **Client auth**: `signIn` from `next-auth/react` in client components only.
 
 ## Middleware (`middleware.ts`)
 
 Edge Runtime via `auth.config.ts`. Public paths: `/`, `/login`, `/register`, `/reset-password`, `/api/auth`, `/api/health`, `/api/register`, `/api/reset-password`. CORS on `/api/*` via `ALLOWED_ORIGINS` env var. HTTPS redirect in production.
+
+## Auth API Route (`app/api/auth/[...nextauth]/route.ts`)
+
+Delegates to `handlers` from `lib/auth/auth.ts`. **Rate limiter** applies to ALL POSTs — must skip for signout:
+
+```typescript
+const url = new URL(request.url);
+if (url.pathname.endsWith("/signout") || url.searchParams.get("nextauth") === "signout") {
+  return handlers.POST(request); // bypass rate limit
+}
+```
+
+Without this, signout returns 429, session cookie never cleared, user stays logged in.
+
+### Signout Bug — SessionRecheck Infinite Loop (FIXED)
+
+**Symptom:** Clicking "Sign Out" navigates to `/login` briefly, then redirects back to dashboard. Session cookie persists after signout POST returns 200.
+
+**Root cause chain:**
+
+```
+SessionRecheck useEffect deps: [session, update, interval]
+    ↓
+update() calls GET /api/auth/session
+    ↓
+jwt callback checks: trigger === "update" || (!user && token.id)
+                        ↑                        ↑
+                   (explicit call)        (matches EVERY session request!)
+    ↓
+Callback always modifies token (sets isActive), causing JWT re-issuance
+    ↓
+Set-Cookie header in response → session state changes in SessionProvider
+    ↓
+session dependency fires effect again → update() → loop (every ~100ms)
+```
+
+**Race condition during signout:**
+
+```
+T=0:   SessionRecheck sends GET /api/auth/session (with JWT cookie)    ← in-flight
+T=100: User clicks Sign Out
+T=160: signOut() → POST /api/auth/signout → Set-Cookie clears cookie  ✓
+T=200: window.location.href = "/login" queued
+T=220: IN-FLIGHT session request returns → Set-Cookie RE-ISSUES JWT   ✗ ← UNDOES SIGNOUT
+T=300: Browser navigates to /login with re-set cookie → redirects back to dashboard
+```
+
+See logs for evidence: `GET /api/auth/session 200` every 85-130ms (infinite loop), followed by more session calls after `POST /api/auth/signout 200`.
+
+**Three-part fix:**
+
+| File | Change |
+|------|--------|
+| `components/session-recheck.tsx` | Use `useRef` for `session`/`update`, effect deps only `[interval]` |
+| `lib/auth/auth.ts` | Change condition to `trigger === "update"` only — no DB recheck on passive session reads |
+| `app/api/auth/[...nextauth]/route.ts` | Signout returns fresh `Response` with clean `Set-Cookie` headers (session, csrf, callback-url). Don't rely on `handlers.POST()` response headers |
+
+**Why the route handler fix matters:** `@auth/core`'s `Auth()` function wraps the signout response via `Response.json({ url }, { headers: response.headers })`. Copying a `Headers` object with multiple `Set-Cookie` entries into a new `Response` can lose headers depending on runtime behavior. Building a fresh response avoids this entirely.
+
 
 ## Role-Based Access
 
@@ -111,6 +171,10 @@ Draft → Pending_Manager → Pending_Accountant → Pending_Finance → Approve
 16. **`force-dynamic` pages** — `/finance/analytics`, `/sales-dashboard/commissions`, `/admin/wallets` need `export const dynamic = "force-dynamic"` or SSR crashes. Add to new client pages if build fails.
 17. **`getCommissions()` return shape** — returns `companyName`, `achievementPercent`, `netAmount`, `grossAmount` alongside commission fields. `app/finance/commissions/` and `app/sales-manager/commissions/` depend on these.
 18. **`calculateProductTotal` everywhere** — `app/sales-dashboard/targets/page.tsx` computes totals from `products` array. No `r.totalAmount` exists anywhere. Same pattern for all multi-product aggregation.
+19. **Signout must use `signOut()` from `next-auth/react`** — client components call `signOut({ callbackUrl: "/login" })`; never use custom `fetch("/api/auth/signout")` + redirect (race condition, cookies not cleared). Server actions use `logoutAction()` from `lib/actions/auth.actions.ts`.
+20. **Rate limiter on `[...nextauth]` blocks signout POSTs** — `app/api/auth/[...nextauth]/route.ts` must skip rate limiting for signout requests (`url.pathname.endsWith("/signout")`), otherwise 429 prevents cookie clearing and user stays logged in.
+21. **SessionRecheck: no `session` in useEffect deps** — `components/session-recheck.tsx` uses `useRef` for `session`/`update`, effect depends only on `interval` (constant). Putting `session` in the deps array causes an infinite loop: `update()` → `GET /api/auth/session` → JWT re-issued → session changes → effect re-runs → `update()` again.
+22. **jwt callback: only DB recheck on `trigger === "update"`** — `lib/auth/auth.ts` must check only `trigger === "update"`, NOT `(!user && token.id)`. The broader condition matches EVERY `GET /api/auth/session` request (not just explicit `update()` calls), causing JWT re-issuance on every session poll. This was the root cause of the signout race condition (see Signout Bug below).
 
 ## Testing
 
