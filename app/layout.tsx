@@ -1,15 +1,16 @@
 import type { Metadata } from "next";
-import { Poppins, Merriweather, Roboto_Mono } from "next/font/google";
+import { Inter, Merriweather, Roboto_Mono } from "next/font/google";
 import { SessionProvider } from "next-auth/react";
 import { Toaster } from "sonner";
 import { SessionRecheck } from "@/components/session-recheck";
 import { ThemeProvider } from "@/components/theme-provider";
 import "./globals.css";
 
-const fontSans = Poppins({
+const fontSans = Inter({
   subsets: ["latin"],
   weight: ["400", "500", "600", "700"],
   variable: "--font-sans",
+  display: "swap",
 });
 
 const fontSerif = Merriweather({

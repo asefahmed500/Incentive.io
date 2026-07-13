@@ -6,19 +6,15 @@ import {
   Menu,
   ChevronDown,
   TrendingUp,
-  Users,
   CheckCircle,
   ArrowRight,
   BarChart3,
   Wallet,
   Target,
-  Shield,
-  Zap,
   Mail,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
+import { Card } from "@/components/ui/card";
 import {
   Sheet,
   SheetContent,
@@ -78,7 +74,7 @@ function FloatingNav() {
   return (
     <header className="fixed top-0 left-0 right-0 z-50 bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg border-b border-gray-100 dark:border-gray-800">
       <nav
-        className="max-w-7xl mx-auto px-4 sm:px-6"
+        className="max-w-[1200px] mx-auto px-6"
         aria-label="Main navigation"
       >
         <div className="flex items-center justify-between h-16">
@@ -175,84 +171,307 @@ function Hero() {
   return <EnhancedHero />
 }
 
-function FeatureCard({
-  icon: Icon,
-  title,
-  description,
-}: {
-  icon: React.ElementType;
+function MockupFrame({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
+      <div className="flex items-center gap-1.5 px-4 py-3 border-b border-gray-100 dark:border-gray-800">
+        <span className="w-2.5 h-2.5 rounded-full bg-gray-200 dark:bg-gray-700" />
+        <span className="w-2.5 h-2.5 rounded-full bg-gray-200 dark:bg-gray-700" />
+        <span className="w-2.5 h-2.5 rounded-full bg-gray-200 dark:bg-gray-700" />
+      </div>
+      <div className="p-5 sm:p-6">{children}</div>
+    </div>
+  );
+}
+
+function TrackingMockup() {
+  const stats = [
+    { l: "Revenue", v: "$84.2k", d: "+12%" },
+    { l: "Records", v: "1,284", d: "+8%" },
+    { l: "Pending", v: "42", d: "-3%" },
+  ];
+  return (
+    <MockupFrame>
+      <div className="grid grid-cols-3 gap-3">
+        {stats.map((s) => (
+          <div
+            key={s.l}
+            className="rounded-lg border border-gray-100 dark:border-gray-800 p-3"
+          >
+            <p className="text-[11px] text-gray-500">{s.l}</p>
+            <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">
+              {s.v}
+            </p>
+            <p className="text-[11px] text-sky-600">{s.d}</p>
+          </div>
+        ))}
+      </div>
+      <div className="mt-4 h-32 rounded-lg border border-gray-100 dark:border-gray-800 p-3">
+        <svg
+          viewBox="0 0 300 100"
+          className="w-full h-full"
+          preserveAspectRatio="none"
+        >
+          <defs>
+            <linearGradient id="trackFill" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor="#0ea5e9" stopOpacity="0.18" />
+              <stop offset="100%" stopColor="#0ea5e9" stopOpacity="0" />
+            </linearGradient>
+          </defs>
+          <polyline
+            fill="url(#trackFill)"
+            stroke="none"
+            points="0,80 40,60 80,65 120,40 160,50 200,25 240,30 280,12 300,15 300,100 0,100"
+          />
+          <polyline
+            fill="none"
+            stroke="#0ea5e9"
+            strokeWidth="2"
+            points="0,80 40,60 80,65 120,40 160,50 200,25 240,30 280,12 300,15"
+          />
+        </svg>
+      </div>
+    </MockupFrame>
+  );
+}
+
+function WalletMockup() {
+  const txns = [
+    { n: "Commission payout", t: "Today", a: "+$2,480" },
+    { n: "Batch transfer", t: "Mon", a: "+$5,120" },
+    { n: "Bonus credit", t: "Fri", a: "+$980" },
+  ];
+  return (
+    <MockupFrame>
+      <div className="rounded-xl border border-gray-100 dark:border-gray-800 p-4">
+        <p className="text-xs text-gray-500">Available balance</p>
+        <p className="mt-1 text-3xl font-semibold tracking-tight text-gray-900 dark:text-white">
+          $48,920.50
+        </p>
+        <div className="mt-3 flex gap-2">
+          <span className="rounded-md bg-sky-600 px-3 py-1 text-xs font-medium text-white">
+            Withdraw
+          </span>
+          <span className="rounded-md border border-gray-200 dark:border-gray-700 px-3 py-1 text-xs font-medium text-gray-700 dark:text-gray-200">
+            History
+          </span>
+        </div>
+      </div>
+      <div className="mt-4 divide-y divide-gray-100 dark:divide-gray-800">
+        {txns.map((t) => (
+          <div
+            key={t.n}
+            className="flex items-center justify-between py-3"
+          >
+            <div>
+              <p className="text-sm font-medium text-gray-900 dark:text-white">
+                {t.n}
+              </p>
+              <p className="text-xs text-gray-500">{t.t}</p>
+            </div>
+            <p className="text-sm font-semibold text-sky-600">{t.a}</p>
+          </div>
+        ))}
+      </div>
+    </MockupFrame>
+  );
+}
+
+function TargetsMockup() {
+  const rows = [
+    { l: "Q1 Revenue", v: 78, amt: "$78k / $100k" },
+    { l: "New Accounts", v: 100, amt: "56 / 50" },
+    { l: "Retention", v: 64, amt: "64% / 100%" },
+  ];
+  return (
+    <MockupFrame>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">
+          Quarterly targets
+        </p>
+        <span className="rounded-full bg-sky-50 dark:bg-sky-900/30 px-2.5 py-0.5 text-xs font-medium text-sky-700 dark:text-sky-300">
+          On track
+        </span>
+      </div>
+      <div className="mt-5 space-y-5">
+        {rows.map((r) => (
+          <div key={r.l}>
+            <div className="flex items-center justify-between text-sm">
+              <span className="text-gray-700 dark:text-gray-200">{r.l}</span>
+              <span className="text-gray-500">{r.amt}</span>
+            </div>
+            <div className="mt-2 h-2 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+              <div
+                className="h-full rounded-full bg-sky-500"
+                style={{ width: `${r.v}%` }}
+              />
+            </div>
+          </div>
+        ))}
+      </div>
+    </MockupFrame>
+  );
+}
+
+function AnalyticsMockup() {
+  const bars = [40, 65, 50, 82, 55, 92, 70];
+  const days = ["M", "T", "W", "T", "F", "S", "S"];
+  return (
+    <MockupFrame>
+      <div className="flex items-center justify-between">
+        <p className="text-sm font-medium text-gray-900 dark:text-white">
+          Performance
+        </p>
+        <p className="text-xs text-gray-500">Last 7 days</p>
+      </div>
+      <div className="mt-6 flex items-end justify-between gap-2 h-40">
+        {bars.map((b, i) => (
+          <div
+            key={i}
+            className="flex-1 flex flex-col items-center gap-2 h-full justify-end"
+          >
+            <div
+              className="w-full rounded-t-md bg-sky-500"
+              style={{ height: `${b}%` }}
+            />
+            <span className="text-[10px] text-gray-400">{days[i]}</span>
+          </div>
+        ))}
+      </div>
+    </MockupFrame>
+  );
+}
+
+interface FeatureRowProps {
+  eyebrow: string;
   title: string;
   description: string;
-}) {
+  icon: React.ElementType;
+  bullets: string[];
+  mockup: React.ReactNode;
+  reversed: boolean;
+}
+
+function FeatureRow({
+  eyebrow,
+  title,
+  description,
+  icon: Icon,
+  bullets,
+  mockup,
+  reversed,
+}: FeatureRowProps) {
   return (
-    <Card className="h-full border-2 border-transparent hover:border-sky-100 dark:hover:border-sky-900 transition-colors">
-      <CardContent className="pt-6">
-        <div className="w-12 h-12 bg-sky-100 dark:bg-sky-900/30 rounded-xl flex items-center justify-center mb-4">
-          <Icon className="w-6 h-6 text-sky-600 dark:text-sky-400" />
+    <div className="grid grid-cols-1 lg:grid-cols-2 gap-10 lg:gap-20 items-center">
+      <div className={reversed ? "lg:order-2" : "lg:order-1"}>
+        <div className="inline-flex items-center gap-2 rounded-full border border-gray-200 dark:border-gray-800 px-3 py-1">
+          <Icon className="w-4 h-4 text-sky-600 dark:text-sky-400" />
+          <span className="text-sm font-medium text-gray-700 dark:text-gray-200">
+            {eyebrow}
+          </span>
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-2">{title}</h3>
-        <p className="text-gray-600 dark:text-gray-300 leading-relaxed">{description}</p>
-      </CardContent>
-    </Card>
+        <h3 className="mt-5 text-3xl sm:text-4xl font-semibold tracking-[-0.01em] text-gray-900 dark:text-white">
+          {title}
+        </h3>
+        <p className="mt-4 text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
+          {description}
+        </p>
+        <ul className="mt-6 space-y-3">
+          {bullets.map((b) => (
+            <li
+              key={b}
+              className="flex items-start gap-3 text-gray-700 dark:text-gray-200"
+            >
+              <CheckCircle className="w-5 h-5 text-sky-600 dark:text-sky-400 mt-0.5 shrink-0" />
+              <span>{b}</span>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className={reversed ? "lg:order-1" : "lg:order-2"}>{mockup}</div>
+    </div>
   );
 }
 
 function Features() {
   const features = [
     {
+      eyebrow: "Live dashboards",
       icon: TrendingUp,
-      title: "Real-time Tracking",
+      title: "Track every sale in real time",
       description:
-        "Monitor sales performance in real-time with intuitive dashboards and detailed analytics.",
+        "Monitor team performance with live dashboards that update the moment a record is submitted \u2014 no refresh, no waiting.",
+      bullets: [
+        "Instant status updates across the approval pipeline",
+        "Per-team and per-rep breakdowns",
+        "Drill into any record in one click",
+      ],
+      mockup: <TrackingMockup />,
     },
     {
-      icon: Target,
-      title: "Target Management",
-      description:
-        "Set and track team targets with achievement percentages and progress indicators.",
-    },
-    {
-      icon: BarChart3,
-      title: "Smart Analytics",
-      description:
-        "AI-powered insights to help you understand patterns and optimize your commission structure.",
-    },
-    {
+      eyebrow: "Automated payouts",
       icon: Wallet,
-      title: "Automated Payouts",
+      title: "Commissions paid on autopilot",
       description:
-        "Streamline commission payments with automatic calculations and batch processing.",
+        "Calculated, approved, and credited to each rep\u2019s wallet automatically the moment finance signs off.",
+      bullets: [
+        "Atomic wallet credits \u2014 no race conditions",
+        "Batch or single payments",
+        "Full payout history and audit trail",
+      ],
+      mockup: <WalletMockup />,
     },
     {
-      icon: Shield,
-      title: "Secure & Compliant",
+      eyebrow: "Goals & targets",
+      icon: Target,
+      title: "Targets that motivate, not guess",
       description:
-        "Enterprise-grade security with role-based access control and audit trails.",
+        "Set quarterly targets and watch achievement percentages update live as approved sales roll in.",
+      bullets: [
+        "Tiered commission rates by achievement",
+        "Automatic eligibility at the 50% threshold",
+        "Re-evaluation when thresholds are crossed",
+      ],
+      mockup: <TargetsMockup />,
     },
     {
-      icon: Users,
-      title: "Team Management",
+      eyebrow: "Smart analytics",
+      icon: BarChart3,
+      title: "Insights that shape your strategy",
       description:
-        "Manage multiple teams with hierarchical approval workflows and reporting.",
+        "Understand patterns across teams, categories, and periods with analytics built for sales leaders.",
+      bullets: [
+        "Trends by product category",
+        "Team-vs-team benchmarking",
+        "Exportable reports",
+      ],
+      mockup: <AnalyticsMockup />,
     },
   ];
 
   return (
-    <section id="features" className="py-20 sm:py-24 bg-gray-50 dark:bg-gray-900/50">
-      <div className="max-w-6xl mx-auto px-4">
-        <div className="text-center mb-12 sm:mb-16">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+    <section id="features" className="py-20">
+      <div className="max-w-[1200px] mx-auto px-6">
+        <div className="max-w-2xl mb-16 sm:mb-24">
+          <p className="text-sm font-medium text-sky-600 dark:text-sky-400">
+            Features
+          </p>
+          <h2 className="mt-3 text-4xl sm:text-5xl font-semibold tracking-[-0.02em] text-gray-900 dark:text-white">
             Everything you need to manage commissions
           </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
-            Powerful features designed to simplify your commission management workflow
-            and maximize your team&apos;s performance.
+          <p className="mt-5 text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
+            Powerful features designed to simplify your commission management
+            workflow and maximize your team&apos;s performance.
           </p>
         </div>
 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-          {features.map((feature) => (
-            <FeatureCard key={feature.title} {...feature} />
+        <div className="space-y-20 sm:space-y-28">
+          {features.map((feature, i) => (
+            <FeatureRow
+              key={feature.title}
+              {...feature}
+              reversed={i % 2 === 1}
+            />
           ))}
         </div>
       </div>
@@ -331,40 +550,45 @@ function FAQ() {
   };
 
   return (
-    <section id="faq" className="py-20 sm:py-24 bg-gray-50 dark:bg-gray-900/50">
-      <div className="max-w-3xl mx-auto px-4">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl sm:text-4xl font-bold text-gray-900 dark:text-white mb-4">
+    <section id="faq" className="py-20 border-t border-gray-100 dark:border-gray-900">
+      <div className="max-w-[1200px] mx-auto px-6">
+        <div className="max-w-2xl mb-12">
+          <p className="text-sm font-medium text-sky-600 dark:text-sky-400">
+            FAQ
+          </p>
+          <h2 className="mt-3 text-4xl sm:text-5xl font-semibold tracking-[-0.02em] text-gray-900 dark:text-white">
             Frequently Asked Questions
           </h2>
-          <p className="text-lg text-gray-600 dark:text-gray-300">
+          <p className="mt-5 text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
             Have questions? We&apos;ve got answers.
           </p>
         </div>
 
-        <Card>
-          {faqs.map((faq, index) => (
-            <FAQItem
-              key={index}
-              index={index}
-              question={faq.q}
-              answer={faq.a}
-              isOpen={openIndex === index}
-              onToggle={() => handleToggle(index)}
-            />
-          ))}
-        </Card>
+        <div className="max-w-3xl">
+          <Card>
+            {faqs.map((faq, index) => (
+              <FAQItem
+                key={index}
+                index={index}
+                question={faq.q}
+                answer={faq.a}
+                isOpen={openIndex === index}
+                onToggle={() => handleToggle(index)}
+              />
+            ))}
+          </Card>
 
-        <div className="text-center mt-8">
-          <p className="text-gray-600 dark:text-gray-300">
-            Still have questions?{" "}
-            <a
-              href="mailto:support@incentive.io"
-              className="text-sky-600 dark:text-sky-400 hover:underline font-medium"
-            >
-              Contact our support team
-            </a>
-          </p>
+          <div className="text-center mt-8">
+            <p className="text-gray-600 dark:text-gray-300">
+              Still have questions?{" "}
+              <a
+                href="mailto:support@incentive.io"
+                className="text-sky-600 dark:text-sky-400 hover:underline font-medium"
+              >
+                Contact our support team
+              </a>
+            </p>
+          </div>
         </div>
       </div>
     </section>
@@ -373,21 +597,20 @@ function FAQ() {
 
 function CTASection() {
   return (
-    <section className="py-20 sm:py-24 bg-gradient-to-br from-sky-500 to-blue-600">
-      <div className="max-w-4xl mx-auto px-4 text-center">
-        <h2 className="text-3xl sm:text-4xl font-bold text-white mb-4">
+    <section className="py-20 border-t border-gray-100 dark:border-gray-900">
+      <div className="max-w-[1200px] mx-auto px-6 text-center">
+        <h2 className="text-4xl sm:text-5xl font-semibold tracking-[-0.02em] text-gray-900 dark:text-white">
           Ready to streamline your commissions?
         </h2>
-        <p className="text-lg text-sky-100 mb-8 max-w-2xl mx-auto">
+        <p className="mt-5 text-lg text-gray-600 dark:text-gray-300 max-w-2xl mx-auto leading-relaxed">
           Join thousands of sales teams already using Incentive.io to manage
           their commissions effectively.
         </p>
-        <div className="flex flex-col sm:flex-row gap-3 justify-center">
+        <div className="mt-10 flex flex-col sm:flex-row gap-3 justify-center">
           <Link href="/register">
             <Button
               size="lg"
-              variant="secondary"
-              className="rounded-full px-8 text-base min-h-[48px]"
+              className="rounded-full px-8 text-base min-h-[48px] bg-sky-600 hover:bg-sky-700 text-white"
             >
               Start Free Trial
               <ArrowRight className="ml-2 w-4 h-4" />
@@ -397,7 +620,7 @@ function CTASection() {
             <Button
               size="lg"
               variant="outline"
-              className="rounded-full px-8 text-base text-white border-white hover:bg-white/10 min-h-[48px]"
+              className="rounded-full px-8 text-base min-h-[48px]"
             >
               Request Demo
             </Button>
@@ -438,7 +661,7 @@ function Footer() {
 
   return (
     <footer className="bg-gray-900 dark:bg-black text-gray-400 py-16">
-      <div className="max-w-6xl mx-auto px-4">
+      <div className="max-w-[1200px] mx-auto px-6">
         <div className="grid grid-cols-2 md:grid-cols-6 gap-8 mb-12">
           <div className="col-span-2">
             <Link

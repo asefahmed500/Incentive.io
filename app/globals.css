@@ -35,7 +35,7 @@
   --sidebar-accent-foreground: oklch(0.2050 0 0);
   --sidebar-border: oklch(0.9220 0.0050 217);
   --sidebar-ring: oklch(0.5700 0.1600 217);
-  --font-sans: Poppins, ui-sans-serif, sans-serif, system-ui;
+  --font-sans: Inter, ui-sans-serif, sans-serif, system-ui;
   --font-serif: Merriweather, ui-serif, serif;
   --font-mono: Roboto Mono, ui-monospace, monospace;
   --radius: 0.625rem;
@@ -90,7 +90,7 @@
   --sidebar-accent-foreground: oklch(0.9850 0 0);
   --sidebar-border: oklch(0.2750 0.0100 217);
   --sidebar-ring: oklch(0.6500 0.1500 217);
-  --font-sans: Poppins, ui-sans-serif, sans-serif, system-ui;
+  --font-sans: Inter, ui-sans-serif, sans-serif, system-ui;
   --font-serif: Merriweather, ui-serif, serif;
   --font-mono: Roboto Mono, ui-monospace, monospace;
   --radius: 0.625rem;
@@ -169,5 +169,8 @@
   }
   body {
     @apply bg-background text-foreground;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
   }
 }
