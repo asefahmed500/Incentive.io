@@ -10,6 +10,7 @@ import { Team } from "@/lib/models/Team";
 import { sendWelcomeEmail, sendNotificationEmail, sendPasswordResetEmail } from "@/lib/email";
 import { notifyUserCreated } from "@/lib/actions/notification.actions";
 import { logAudit } from "@/lib/actions/audit.actions";
+import { passwordSchema } from "@/lib/validations/user.validation";
 import { hashPassword, verifyPassword, generateSecureToken } from "@/lib/utils/password";
 import type { AuthUser, UserRole } from "@/types";
 
@@ -23,12 +24,7 @@ const getUsersSchema = z.object({
 const createUserSchema = z.object({
   name: z.string().min(1, "Name is required").max(200),
   email: z.string().email("Invalid email format"),
-  password: z.string()
-    .min(12, "Password must be at least 12 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number")
-    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+  password: passwordSchema,
   role: z.enum(["admin", "administrator", "salesManager", "salesExecutive", "accountant", "finance"]),
   phone: z.string().max(50).optional(),
 });
@@ -56,22 +52,12 @@ const toggleUserStatusSchema = objectIdSchema;
 
 const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, "Current password is required"),
-  newPassword: z.string()
-    .min(12, "Password must be at least 12 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number")
-    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+  newPassword: passwordSchema,
 });
 
 const resetPasswordSchema = z.object({
   userId: objectIdSchema,
-  newPassword: z.string()
-    .min(12, "Password must be at least 12 characters")
-    .regex(/[A-Z]/, "Password must contain at least one uppercase letter")
-    .regex(/[a-z]/, "Password must contain at least one lowercase letter")
-    .regex(/[0-9]/, "Password must contain at least one number")
-    .regex(/[^A-Za-z0-9]/, "Password must contain at least one special character"),
+  newPassword: passwordSchema,
 });
 
 export async function getUsers({

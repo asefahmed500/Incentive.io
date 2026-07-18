@@ -263,14 +263,13 @@ export async function getPendingAccountantApprovals() {
     status: "Pending_Accountant",
     approvalStatus: "Approved"
   })
-    .populate("employeeId", "name")
     .lean();
 
   return records.map((r) => ({
     id: r._id.toString(),
     status: r.status,
-    employeeId: (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString(),
-    employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
+    employeeId: r.employeeId,
+    employeeName: r.employeeName,
     companyName: r.companyName,
     products: r.products.map((p: { categoryId?: { toString?: () => string }; productName?: string; unitPrice?: number; quantity?: number; originalPrice?: number; dealNotes?: string }) => ({
       productName: p.productName,
@@ -431,7 +430,6 @@ export async function getPendingFinanceApprovals() {
     status: "Pending_Finance",
     accountantStatus: "Approved"
   })
-    .populate("employeeId", "name")
     .lean();
 
   return records.map((r) => {
@@ -439,8 +437,8 @@ export async function getPendingFinanceApprovals() {
     return {
       id: r._id.toString(),
       status: r.status,
-      employeeId: (r.employeeId as unknown as { _id?: { toString: () => string } })?._id?.toString(),
-      employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
+      employeeId: r.employeeId,
+      employeeName: r.employeeName,
       companyName: r.companyName,
       amount: grossAmount,
       netSales: r.netSales || grossAmount,
@@ -971,7 +969,7 @@ async function calculateCommission(record: SalesRecordType): Promise<number> {
 
   const rule = await CommissionRule.findOne({
     targetPercentageFrom: { $lte: achievement },
-    targetPercentageTo: { $gt: achievement },
+    targetPercentageTo: { $gte: achievement },
     isActive: true,
   }).sort({ priority: -1 });
 

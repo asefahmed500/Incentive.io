@@ -7,7 +7,12 @@ import { createSalesRecordApiSchema } from "@/lib/validations/sales.validation";
 
 const objectIdSchema = z.string().regex(/^[a-f\d]{24}$/i, "Invalid ID format");
 
-const updateSalesRecordApiSchema = createSalesRecordApiSchema.partial().omit({});
+const updateSalesRecordApiSchema = createSalesRecordApiSchema
+  .partial()
+  .extend({
+    proofOfSale: z.array(z.string()).optional(),
+    date: z.string().optional(),
+  });
 
 export async function GET(
   request: Request,

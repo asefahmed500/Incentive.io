@@ -11,11 +11,6 @@ import { z } from "zod";
 
 const syncTypeSchema = z.enum(["commissions", "targets", "teams", "wallets", "eligibility", "all"]);
 
-interface EmployeeWithTarget {
-  _id: string;
-  targetAmount: number;
-}
-
 interface SalesRecordProduct {
   unitPrice: number;
   quantity: number;
@@ -31,15 +26,19 @@ async function syncCommissions() {
     approvalStatus: "Approved",
     accountantStatus: "Approved",
     financeStatus: "Approved",
-  }).populate("employeeId", "targetAmount").lean();
+  }).lean();
+
+  const employeeIds = [...new Set(records.map(r => r.employeeId))];
+  const users = await User.find({ _id: { $in: employeeIds } }).select("targetAmount").lean();
+  const targetMap = new Map(users.map(u => [u._id.toString(), u.targetAmount]));
 
   let updated = 0;
   for (const record of records) {
-    const employee = record.employeeId as EmployeeWithTarget | null;
-    if (!employee?.targetAmount) continue;
+    const targetAmount = targetMap.get(record.employeeId);
+    if (!targetAmount) continue;
 
     const recordAmount = record.products.reduce((sum: number, p: SalesRecordProduct) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0);
-    const achievement = (recordAmount / employee.targetAmount) * 100;
+    const achievement = (recordAmount / targetAmount) * 100;
     
     const rule = await CommissionRule.findOne({
       targetPercentageFrom: { $lte: achievement },

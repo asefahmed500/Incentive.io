@@ -172,5 +172,19 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+  h1 {
+    letter-spacing: -0.02em;
+    font-weight: 600;
+  }
+  h2 {
+    letter-spacing: -0.01em;
+    font-weight: 600;
   }
 }

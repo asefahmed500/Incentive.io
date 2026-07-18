@@ -300,7 +300,7 @@ export async function debitWallet({
 
       try {
         const wallet = await Wallet.findOneAndUpdate(
-          { employeeId: empOid, balance: { $gte: parsed.data.amount } },
+          { employeeId: empOid, balance: { $gte: parsed.data.amount }, pendingBalance: { $gte: parsed.data.amount } },
           { $inc: { balance: -parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount } },
           { returnDocument: "after", session: dbSession }
         );
@@ -373,7 +373,7 @@ export async function debitWallet({
       if (isTransient || errorMessage.includes("retryable writes") || errorMessage.includes("replica set") || errorMessage.includes("Transaction numbers")) {
         // Fall back to non-transactional operation
         const wallet = await Wallet.findOneAndUpdate(
-          { employeeId: empOid, balance: { $gte: parsed.data.amount } },
+          { employeeId: empOid, balance: { $gte: parsed.data.amount }, pendingBalance: { $gte: parsed.data.amount } },
           { $inc: { balance: -parsed.data.amount, totalPaid: parsed.data.amount, pendingBalance: -parsed.data.amount } },
           { returnDocument: "after" }
         );

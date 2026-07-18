@@ -81,6 +81,8 @@ const getSalesRecordsSchema = z.object({
 const getAllSalesRecordsSchema = z.object({
   status: z.string().optional(),
   search: z.string().optional(),
+  page: z.coerce.number().int().positive().optional().default(1),
+  limit: z.coerce.number().int().positive().max(100).optional().default(20),
 });
 
 const createSalesRecordSchema = z.object({
@@ -321,15 +323,19 @@ export const getSalesRecordsByManagerId = cache(getSalesRecordsByManagerIdImpl);
 export async function getAllSalesRecords({
   status,
   search,
+  page,
+  limit,
 }: {
   status?: string;
   search?: string;
+  page?: number;
+  limit?: number;
 }) {
   const session = await auth();
   if (!session?.user?.id) return { error: "Unauthorized" };
   const userRole = (session.user as AuthUser).role;
   if (!["admin", "administrator", "accountant", "finance", "salesManager", "salesExecutive"].includes(userRole)) return { error: "Forbidden: Insufficient permissions" };
-  const parsed = getAllSalesRecordsSchema.safeParse({ status, search });
+  const parsed = getAllSalesRecordsSchema.safeParse({ status, search, page, limit });
   if (!parsed.success) return [];
   await connectToDatabase();
 
@@ -344,18 +350,17 @@ export async function getAllSalesRecords({
   }
 
   const records = await SalesRecord.find(query)
-    .populate("employeeId", "name email")
     .sort({ createdAt: -1 })
     .lean();
 
-  return records.map((r) => ({
+  const items = records.map((r) => ({
     id: r._id.toString(),
     date: r.createdAt,
     companyName: r.companyName,
     companyEmail: r.companyEmail,
-    employeeId: typeof r.employeeId === "string" ? r.employeeId : String(r.employeeId || ""),
-    employeeName: (r.employeeId as unknown as { name?: string })?.name || r.employeeName,
-    employeeEmail: (r.employeeId as unknown as { email?: string })?.email || "",
+    employeeId: r.employeeId,
+    employeeName: r.employeeName,
+    employeeEmail: "",
     amount: r.products.reduce((sum: number, p: { unitPrice: number; quantity: number }) => sum + calculateProductTotal(p.unitPrice, p.quantity), 0),
     productCount: r.products?.length || 0,
     status: r.status,
@@ -365,6 +370,8 @@ export async function getAllSalesRecords({
     commission: r.commission,
     createdAt: r.createdAt,
   }));
+
+  return items;
 }
 
 export async function createSalesRecord({

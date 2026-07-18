@@ -5,7 +5,7 @@ export interface IUser extends Document {
   email: string;
   password: string;
   role: "admin" | "administrator" | "salesManager" | "salesExecutive" | "accountant" | "finance";
-  employeeId: string;
+  employeeId?: string;
   phone: string;
   isActive: boolean;
   isEligible: boolean;

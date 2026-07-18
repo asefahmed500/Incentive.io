@@ -24,11 +24,12 @@ export const submitActionSchema = z.object({
 export const createSalesRecordApiSchema = z.object({
   employeeId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid employee ID format").optional(),
   employeeName: z.string().min(1, "Employee name is required").max(200, "Employee name is too long"),
-  companyName: z.string().min(1, "Company name is required").max(200, "Company name is too long"),
+  companyName: z.string().min(1, "Company name is required").max(500, "Company name is too long"),
   companyEmail: z.string().email("Invalid company email format").max(200, "Email is too long"),
   products: z.array(productSchema).min(1, "At least one product is required").max(20, "Cannot add more than 20 products at once"),
   taxEnabled: z.boolean().optional(),
   vatEnabled: z.boolean().optional(),
+  proofOfSale: z.array(z.string()).optional(),
 });
 
 // Delete action validation

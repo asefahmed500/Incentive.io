@@ -2,7 +2,7 @@ import mongoose, { Schema, Document } from "mongoose";
 
 export interface ISystemSettings extends Document {
   key: string;
-  value: any;
+  value: Record<string, unknown> | string | number | boolean;
   category: "commission" | "user" | "system" | "notification";
   description?: string;
   deletedAt?: Date;

@@ -10,7 +10,7 @@ export const createCommissionRuleSchema = z.object({
   targetPercentageTo: z.number().max(999).nonnegative("Target percentage to must be non-negative").finite("Target percentage to must be a valid number"),
   commissionRate: z.number().min(0).max(100).nonnegative("Commission rate must be between 0 and 100").finite("Commission rate must be a valid number"),
   categoryId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid category ID format").optional(),
-  priority: z.number().int("Priority must be a whole number").positive("Priority must be positive").finite("Priority must be a valid number"),
+  priority: z.number().int("Priority must be a whole number").min(0, "Priority must be non-negative").finite("Priority must be a valid number"),
   isActive: z.boolean().optional(),
 });
 
@@ -20,7 +20,7 @@ export const updateCommissionRuleSchema = z.object({
   targetPercentageTo: z.number().max(999).nonnegative("Target percentage to must be non-negative").finite("Target percentage to must be a valid number").optional(),
   commissionRate: z.number().min(0).max(100).nonnegative("Commission rate must be between 0 and 100").finite("Commission rate must be a valid number").optional(),
   categoryId: z.string().regex(/^[a-f\d]{24}$/i, "Invalid category ID format").optional(),
-  priority: z.number().int("Priority must be a whole number").positive("Priority must be positive").finite("Priority must be a valid number").optional(),
+  priority: z.number().int("Priority must be a whole number").min(0, "Priority must be non-negative").finite("Priority must be a valid number").optional(),
   isActive: z.boolean().optional(),
 });
 
