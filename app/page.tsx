@@ -596,6 +596,7 @@ function FAQ() {
 }
 
 function DashboardPreview() {
+  const [activeNav, setActiveNav] = useState("Dashboard");
   const sidebarItems = [
     { icon: BarChart3, label: "Dashboard", active: true },
     { icon: TrendingUp, label: "Records" },
@@ -604,11 +605,24 @@ function DashboardPreview() {
     { icon: BarChart3, label: "Analytics" },
   ];
 
-  const recentActivity = [
-    { name: "Acme Corp", amount: "$12,400", status: "Approved" },
-    { name: "Globex Inc", amount: "$8,200", status: "Pending" },
-    { name: "Initech", amount: "$5,600", status: "Approved" },
+  const stats = [
+    { label: "Total Revenue", value: "$284.5k", change: "+12.5%", color: "text-emerald-600 dark:text-emerald-400" },
+    { label: "Active Deals", value: "1,284", change: "+8.2%", color: "text-sky-600 dark:text-sky-400" },
+    { label: "Pending", value: "23", change: "-3.1%", color: "text-amber-600 dark:text-amber-400" },
+    { label: "Commissions", value: "$48.9k", change: "+18.7%", color: "text-violet-600 dark:text-violet-400" },
   ];
+
+  const recentActivity = [
+    { name: "Acme Corp", amount: "$12,400", rep: "Sarah Chen", status: "Approved" as const, date: "Today" },
+    { name: "Globex Inc", amount: "$8,200", rep: "Mike Torres", status: "Pending" as const, date: "Today" },
+    { name: "Initech", amount: "$5,600", rep: "Lisa Park", status: "Approved" as const, date: "Yesterday" },
+    { name: "Stark Industries", amount: "$15,800", rep: "James Wilson", status: "Pending" as const, date: "2 days ago" },
+  ];
+
+  const statusStyles: Record<string, string> = {
+    Approved: "bg-green-100 dark:bg-emerald-500/10 text-green-700 dark:text-emerald-400",
+    Pending: "bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-400",
+  };
 
   return (
     <section id="dashboard" className="py-20 bg-gray-50 dark:bg-gray-900/50">
@@ -621,17 +635,17 @@ function DashboardPreview() {
             Your command center
           </h2>
           <p className="mt-5 text-lg text-gray-600 dark:text-gray-300 leading-relaxed">
-            Everything you need at a glance — pipeline, performance, and payouts.
+            Everything you need at a glance &mdash; pipeline, performance, and payouts.
           </p>
         </div>
 
-        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-sm overflow-hidden">
+        <div className="rounded-2xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg shadow-black/5 dark:shadow-black/20 overflow-hidden">
           {/* Window chrome */}
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-800">
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-100 dark:border-gray-800 bg-gray-50 dark:bg-gray-900/80">
             <div className="flex items-center gap-1.5">
-              <span className="w-2.5 h-2.5 rounded-full bg-gray-200 dark:bg-gray-700" />
-              <span className="w-2.5 h-2.5 rounded-full bg-gray-200 dark:bg-gray-700" />
-              <span className="w-2.5 h-2.5 rounded-full bg-gray-200 dark:bg-gray-700" />
+              <span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700" />
+              <span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700" />
+              <span className="w-2.5 h-2.5 rounded-full bg-gray-300 dark:bg-gray-700" />
             </div>
             <span className="text-xs text-gray-400 dark:text-gray-500 font-mono">app.incentive.io</span>
             <div className="w-14" />
@@ -640,81 +654,115 @@ function DashboardPreview() {
           {/* Dashboard layout: sidebar + main */}
           <div className="flex flex-col sm:flex-row min-h-[400px]">
             {/* Sidebar */}
-            <aside className="w-full sm:w-56 shrink-0 border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/50 p-4">
-              <div className="flex items-center gap-2 mb-6">
-                <div className="w-7 h-7 bg-gradient-to-br from-sky-500 to-blue-600 rounded-lg flex items-center justify-center">
+            <aside className="w-full sm:w-52 shrink-0 border-b sm:border-b-0 sm:border-r border-gray-100 dark:border-gray-800 bg-gray-50/80 dark:bg-gray-900/50 p-4">
+              <div className="flex items-center gap-2 mb-8">
+                <div className="w-7 h-7 bg-gradient-to-br from-sky-500 to-blue-600 rounded-lg flex items-center justify-center shrink-0">
                   <span className="text-white text-xs font-bold">I</span>
                 </div>
                 <span className="font-semibold text-sm text-gray-900 dark:text-white">Incentive.io</span>
               </div>
               <nav className="space-y-1">
-                {sidebarItems.map((item) => (
-                  <button
-                    key={item.label}
-                    className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
-                      item.active
-                        ? "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-medium"
-                        : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
-                    }`}
-                  >
-                    <item.icon className="w-4 h-4" />
-                    {item.label}
-                  </button>
-                ))}
+                {sidebarItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeNav === item.label;
+                  return (
+                    <button
+                      key={item.label}
+                      onClick={() => setActiveNav(item.label)}
+                      className={`w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-all ${
+                        isActive
+                          ? "bg-sky-100 dark:bg-sky-900/30 text-sky-700 dark:text-sky-300 font-medium"
+                          : "text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800"
+                      }`}
+                    >
+                      <Icon className="w-4 h-4" />
+                      {item.label}
+                    </button>
+                  );
+                })}
               </nav>
+
+              <div className="mt-8 pt-6 border-t border-gray-100 dark:border-gray-800 space-y-2">
+                <Link href="/login">
+                  <button className="w-full text-left px-3 py-2 rounded-lg text-sm text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-all">
+                    Sign In
+                  </button>
+                </Link>
+                <Link href="/register">
+                  <button className="w-full text-left px-3 py-2 rounded-lg text-sm bg-sky-500 hover:bg-sky-600 text-white transition-all font-medium">
+                    Get Started
+                  </button>
+                </Link>
+              </div>
             </aside>
 
             {/* Main content */}
-            <div className="flex-1 p-4 sm:p-6">
+            <div className="flex-1 p-5 sm:p-6">
               {/* Stats row */}
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-                {[
-                  { l: "Total Sales", v: "$128.4k", c: "text-sky-600" },
-                  { l: "Commissions", v: "$6.2k", c: "text-emerald-600" },
-                  { l: "Pending", v: "23", c: "text-amber-600" },
-                  { l: "Team", v: "12", c: "text-gray-600 dark:text-gray-400" },
-                ].map((s) => (
-                  <div key={s.l} className="rounded-lg border border-gray-100 dark:border-gray-800 p-3">
-                    <p className="text-[11px] text-gray-500 dark:text-gray-400">{s.l}</p>
-                    <p className={`mt-1 text-lg font-semibold text-gray-900 dark:text-white ${s.c}`}>{s.v}</p>
+                {stats.map((s) => (
+                  <div key={s.label} className="rounded-lg border border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900/50 p-3">
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400">{s.label}</p>
+                    <p className="mt-1 text-lg font-semibold text-gray-900 dark:text-white">{s.value}</p>
+                    <p className={"text-[11px] mt-0.5 " + s.color}>{s.change}</p>
                   </div>
                 ))}
               </div>
 
-              {/* Title */}
-              <div className="flex items-center justify-between mb-3">
-                <h3 className="text-sm font-medium text-gray-900 dark:text-white">Recent activity</h3>
-                <span className="text-xs text-sky-600 dark:text-sky-400 cursor-pointer">View all</span>
+              {/* Chart area */}
+              <div className="rounded-lg border border-gray-100 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30 p-4 mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200">Weekly Performance</h3>
+                  <span className="text-[11px] text-gray-400 dark:text-gray-500">Last 7 days</span>
+                </div>
+                <div className="flex items-end justify-between gap-2 h-32">
+                  {[40, 65, 50, 82, 55, 75, 45].map((h, i) => {
+                    const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+                    return (
+                      <div key={i} className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end">
+                        <div
+                          className="w-full max-w-[32px] rounded-t-md bg-gradient-to-t from-sky-500 to-sky-400/60 dark:from-sky-400 dark:to-sky-500/60"
+                          style={{ height: `${h}%` }}
+                        />
+                        <span className="text-[10px] text-gray-400 dark:text-gray-600">{days[i]}</span>
+                      </div>
+                    );
+                  })}
+                </div>
               </div>
 
               {/* Activity table */}
-              <div className="rounded-lg border border-gray-100 dark:border-gray-800 overflow-hidden">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="bg-gray-50 dark:bg-gray-900/50">
-                      <th className="text-left px-4 py-2.5 text-gray-500 dark:text-gray-400 font-medium text-[11px] uppercase tracking-wider">Company</th>
-                      <th className="text-left px-4 py-2.5 text-gray-500 dark:text-gray-400 font-medium text-[11px] uppercase tracking-wider">Amount</th>
-                      <th className="text-left px-4 py-2.5 text-gray-500 dark:text-gray-400 font-medium text-[11px] uppercase tracking-wider">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {recentActivity.map((row) => (
-                      <tr key={row.name} className="border-t border-gray-100 dark:border-gray-800">
-                        <td className="px-4 py-2.5 text-gray-900 dark:text-white font-medium">{row.name}</td>
-                        <td className="px-4 py-2.5 text-gray-700 dark:text-gray-300">{row.amount}</td>
-                        <td className="px-4 py-2.5">
-                          <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${
-                            row.status === "Approved"
-                              ? "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-300"
-                              : "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300"
-                          }`}>
-                            {row.status}
-                          </span>
-                        </td>
+              <div>
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-medium text-gray-900 dark:text-gray-200">Recent sales</h3>
+                  <span className="text-xs text-sky-600 dark:text-sky-400 cursor-pointer hover:underline">View all</span>
+                </div>
+                <div className="rounded-lg border border-gray-100 dark:border-gray-800 overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="bg-gray-50 dark:bg-gray-900/50">
+                        <th className="text-left px-3 py-2.5 text-gray-500 dark:text-gray-400 font-medium text-[11px] uppercase tracking-wider">Company</th>
+                        <th className="text-left px-3 py-2.5 text-gray-500 dark:text-gray-400 font-medium text-[11px] uppercase tracking-wider">Amount</th>
+                        <th className="text-left px-3 py-2.5 text-gray-500 dark:text-gray-400 font-medium text-[11px] uppercase tracking-wider">Rep</th>
+                        <th className="text-left px-3 py-2.5 text-gray-500 dark:text-gray-400 font-medium text-[11px] uppercase tracking-wider">Status</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {recentActivity.map((row) => (
+                        <tr key={row.name} className="border-t border-gray-100 dark:border-gray-800 hover:bg-gray-50 dark:hover:bg-gray-900/30 transition-colors">
+                          <td className="px-3 py-2.5 text-gray-900 dark:text-white font-medium">{row.name}</td>
+                          <td className="px-3 py-2.5 text-gray-700 dark:text-gray-300">{row.amount}</td>
+                          <td className="px-3 py-2.5 text-gray-500 dark:text-gray-400">{row.rep}</td>
+                          <td className="px-3 py-2.5">
+                            <span className={"inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium " + statusStyles[row.status]}>
+                              {row.status}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           </div>
